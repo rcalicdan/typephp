@@ -21,15 +21,21 @@ final class StreamWrapper
 
     private static string $baseDir = '';
 
+    private static bool $isInitialized = false;
+
     public static function register(array $config = []): void
     {
-        self::$baseDir = rtrim(str_replace('\\', '/', getcwd()), '/');
+        if (!self::$isInitialized || !empty($config)) {
+            self::$baseDir = rtrim(str_replace('\\', '/', getcwd()), '/');
 
-        $includes = $config['include'] ?? ['**'];
-        $excludes = $config['exclude'] ?? ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+            $includes = $config['include'] ?? ['**'];
+            $excludes = $config['exclude'] ?? ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
-        self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
-        self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
+            self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
+            self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
+
+            self::$isInitialized = true;
+        }
 
         stream_wrapper_unregister('file');
         stream_wrapper_register('file', self::class);
@@ -74,7 +80,7 @@ final class StreamWrapper
 
             // Don't instrument TypePHP internal engine files
             if (! str_starts_with($normalizedPath, $libSrcDir)) {
-                
+
                 // 1. Check Exclusions first
                 $isExcluded = false;
                 foreach (self::$excludePatterns as $pattern) {
