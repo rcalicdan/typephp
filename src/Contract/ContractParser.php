@@ -121,12 +121,12 @@ final class ContractParser
                         $type = new ArrayTypeNode($type);
                     }
 
-                    $types[$paramName] = $type;
+                    $types[$paramName] = SpecialTypeResolver::resolve($type, $function);
                 }
 
                 $returnTags = $phpDocNode->getReturnTagValues();
                 if (count($returnTags) > 0) {
-                    $returnType = $returnTags[0]->type;
+                    $returnType = SpecialTypeResolver::resolve($returnTags[0]->type, $function);
                 }
             }
 

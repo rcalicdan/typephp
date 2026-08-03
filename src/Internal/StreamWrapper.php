@@ -8,6 +8,7 @@ use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\CloningVisitor;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 final class StreamWrapper implements StreamWrapperInterface
 {
@@ -109,7 +110,7 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     private static function silent(callable $callback): mixed
     {
-        set_error_handler(fn () => true);
+        set_error_handler(fn() => true);
 
         try {
             return $callback();
@@ -121,7 +122,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         self::unregister();
-        $exists = self::silent(fn () => file_exists($path));
+        $exists = self::silent(fn() => file_exists($path));
         $resolvedPath = $exists ? realpath($path) : '';
         self::register();
 
@@ -159,7 +160,7 @@ final class StreamWrapper implements StreamWrapperInterface
             $targetFile = ($resolvedPath !== false && $resolvedPath !== '') ? $resolvedPath : $path;
 
             /** @var resource|false $handle */
-            $handle = self::silent(fn () => fopen($targetFile, $mode));
+            $handle = self::silent(fn() => fopen($targetFile, $mode));
 
             $this->handle = $handle !== false ? $handle : null;
             self::register();
@@ -177,7 +178,7 @@ final class StreamWrapper implements StreamWrapperInterface
                 return false;
             }
 
-            $transformed = self::transformSource($source);
+            $transformed = self::transformSource($source, $resolvedPath);
 
             $memHandle = fopen('php://memory', 'r+');
             if ($memHandle !== false) {
@@ -192,7 +193,7 @@ final class StreamWrapper implements StreamWrapperInterface
         }
 
         if (! is_dir(self::$cacheDir)) {
-            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
+            self::silent(fn() => mkdir(self::$cacheDir, 0777, true));
         }
 
         $mtime = filemtime($resolvedPath);
@@ -204,7 +205,7 @@ final class StreamWrapper implements StreamWrapperInterface
         if (! file_exists($cachedFile)) {
             $source = file_get_contents($resolvedPath);
             if ($source !== false) {
-                $transformed = self::transformSource($source);
+                $transformed = self::transformSource($source, $resolvedPath);
                 file_put_contents($cachedFile, $transformed);
             }
         }
@@ -216,13 +217,53 @@ final class StreamWrapper implements StreamWrapperInterface
         return $this->handle !== null;
     }
 
-    private static function transformSource(string $source): string
+    private static function transformSource(string $source, string $filePath = ''): string
     {
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
 
         $oldStmts = $parser->parse($source);
         if ($oldStmts === null) {
             return $source;
+        }
+
+        // Extract namespace & use imports in the same pass and seed SpecialTypeResolver
+        if ($filePath !== '') {
+            $namespace = '';
+            $imports = [];
+
+            $nodesToScan = $oldStmts;
+            foreach ($oldStmts as $stmt) {
+                if ($stmt instanceof \PhpParser\Node\Stmt\Namespace_) {
+                    $namespace = $stmt->name ? $stmt->name->toString() : '';
+                    $nodesToScan = $stmt->stmts;
+                    break;
+                }
+            }
+
+            foreach ($nodesToScan as $stmt) {
+                if ($stmt instanceof \PhpParser\Node\Stmt\Use_) {
+                    if ($stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
+                        continue;
+                    }
+                    foreach ($stmt->uses as $use) {
+                        $fqcn = $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                } elseif ($stmt instanceof \PhpParser\Node\Stmt\GroupUse) {
+                    $prefix = $stmt->prefix->toString();
+                    foreach ($stmt->uses as $use) {
+                        if ($use->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL && $use->type !== \PhpParser\Node\Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
+                            continue;
+                        }
+                        $fqcn = $prefix . '\\' . $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                }
+            }
+
+            SpecialTypeResolver::seedFileMetadata($filePath, $namespace, $imports);
         }
 
         $oldTokens = $parser->getTokens();
@@ -360,7 +401,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var array<int|string, int>|false $result */
-        $result = self::silent(fn () => stat($path));
+        $result = self::silent(fn() => stat($path));
         self::register();
 
         return $result;
@@ -375,11 +416,11 @@ final class StreamWrapper implements StreamWrapperInterface
             $valueArray = is_array($value) ? $value : [];
             $time = $valueArray[0] ?? time();
             $atime = $valueArray[1] ?? $time;
-            $result = (bool) self::silent(fn () => touch($path, (int) $time, (int) $atime));
+            $result = (bool) self::silent(fn() => touch($path, (int) $time, (int) $atime));
         } elseif ($option === STREAM_META_ACCESS) {
             /** @var int $mode */
             $mode = is_int($value) ? $value : 0777;
-            $result = (bool) self::silent(fn () => chmod($path, $mode));
+            $result = (bool) self::silent(fn() => chmod($path, $mode));
         }
         self::register();
 
@@ -390,7 +431,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var resource|false $dh */
-        $dh = self::silent(fn () => opendir($path));
+        $dh = self::silent(fn() => opendir($path));
         $this->dirHandle = $dh !== false ? $dh : null;
         self::register();
 
@@ -430,7 +471,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function mkdir(string $path, int $mode, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
+        $result = (bool) self::silent(fn() => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
         self::register();
 
         return $result;
@@ -439,7 +480,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rmdir(string $path, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => rmdir($path));
+        $result = (bool) self::silent(fn() => rmdir($path));
         self::register();
 
         return $result;
@@ -448,7 +489,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function unlink(string $path): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => unlink($path));
+        $result = (bool) self::silent(fn() => unlink($path));
         self::register();
 
         return $result;
@@ -457,7 +498,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rename(string $pathFrom, string $pathTo): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => rename($pathFrom, $pathTo));
+        $result = (bool) self::silent(fn() => rename($pathFrom, $pathTo));
         self::register();
 
         return $result;

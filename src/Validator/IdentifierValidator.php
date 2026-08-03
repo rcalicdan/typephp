@@ -24,7 +24,7 @@ final class IdentifierValidator implements TypeValidatorInterface
             'bool', 'boolean' => \is_bool($value),
             'array' => \is_array($value),
             'list' => \is_array($value) && (count($value) === 0 || array_is_list($value)),
-            'object' => \is_object($value),
+            'object', 'self', 'static', 'parent', '$this' => \is_object($value),
             'callable' => is_callable($value),
             'iterable' => is_iterable($value),
             'resource' => \is_resource($value),
