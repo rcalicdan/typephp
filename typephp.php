@@ -22,6 +22,7 @@ return [
         'src/**',
         'app/**',
         'internals/**',
+        'tests/**',
     ],
 
     /*
