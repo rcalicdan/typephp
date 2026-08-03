@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace TypePHP\Validator;
+
+use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use TypePHP\ErrorFactory;
+use TypePHP\TypeFormatter;
+
+final class IdentifierValidator implements TypeValidatorInterface
+{
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    {
+        /** @var IdentifierTypeNode $node */
+        $lower = strtolower($node->name);
+
+        $ok = match ($lower) {
+            'int', 'integer' => \is_int($value),
+            'string' => \is_string($value),
+            'float', 'double' => \is_float($value) || \is_int($value),
+            'bool', 'boolean' => \is_bool($value),
+            'array' => \is_array($value),
+            'list' => \is_array($value) && (empty($value) || array_is_list($value)),
+            'object' => \is_object($value),
+            'callable' => is_callable($value),
+            'iterable' => is_iterable($value),
+            'resource' => \is_resource($value),
+            'null' => $value === null,
+            'true' => $value === true,
+            'false' => $value === false,
+            'mixed' => true,
+            'scalar' => \is_scalar($value),
+            'void' => $value === null,
+            'positive-int' => is_int($value) && $value > 0,
+            'negative-int' => is_int($value) && $value < 0,
+            'non-positive-int' => is_int($value) && $value <= 0,
+            'non-negative-int' => is_int($value) && $value >= 0,
+            'non-zero-int' => is_int($value) && $value !== 0,
+            'unsigned-int' => is_int($value) && $value >= 0,
+            'class-string' => \is_string($value) && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
+            'callable-string' => \is_string($value) && is_callable($value),
+            'numeric-string' => \is_string($value) && is_numeric($value),
+            'non-empty-string' => \is_string($value) && $value !== '',
+            'lowercase-string' => is_string($value) && strtolower($value) === $value,
+            'non-empty-lowercase-string' => is_string($value) && $value !== '' && strtolower($value) === $value,
+            'literal-string' => is_string($value),
+            'non-empty-array' => is_array($value) && ! empty($value),
+            'non-empty-list' => is_array($value) && ! empty($value) && array_is_list($value),
+            'number', 'numeric' => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)),
+            'truthy' => (bool)$value === true,
+            'falsy', 'falsey' => (bool)$value === false,
+
+            default => \is_object($value) && is_a($value, $node->name),
+        };
+
+        if (! $ok) {
+            return ErrorFactory::createError($context . ' must be of type ' . $node->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+        }
+
+        return null;
+    }
+}

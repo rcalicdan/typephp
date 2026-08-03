@@ -1,0 +1,55 @@
+#!/usr/bin/env php
+<?php
+
+$autoloadFiles = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php'
+];
+
+foreach ($autoloadFiles as $file) {
+    if (file_exists($file)) {
+        require $file;
+        break;
+    }
+}
+
+// Clean Exception Handler for CLI: filters out TypePHP internal frames
+set_exception_handler(function (\Throwable $e) {
+    $cleanTrace = array_filter($e->getTrace(), function ($frame) {
+        return !str_starts_with($frame['class'] ?? '', 'TypePHP\\');
+    });
+
+    fwrite(STDERR, sprintf(
+        "Fatal error: Uncaught %s: %s in %s:%d\nStack trace:\n",
+        get_class($e),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine()
+    ));
+
+    $i = 0;
+    foreach ($cleanTrace as $frame) {
+        $file = $frame['file'] ?? '[internal function]';
+        $line = isset($frame['line']) ? "({$frame['line']})" : '';
+        $class = $frame['class'] ?? '';
+        $type = $frame['type'] ?? '';
+        $func = $frame['function'] ?? '';
+        
+        fwrite(STDERR, sprintf("#%d %s%s: %s%s%s()\n", $i++, $file, $line, $class, $type, $func));
+    }
+    
+    fwrite(STDERR, sprintf("  thrown in %s on line %d\n\n", $e->getFile(), $e->getLine()));
+    exit(255);
+});
+
+$target = $argv[1] ?? null;
+if (!$target || !file_exists($target)) {
+    die("Usage: vendor/bin/typephp <script.php>\n");
+}
+
+$configFile = getcwd() . '/typephp.json';
+$config = file_exists($configFile) ? json_decode(file_get_contents($configFile), true) : [];
+
+\TypePHP\TypePHP::boot($config);
+
+require realpath($target);
