@@ -69,12 +69,12 @@ final class RuntimeTypeChecker
                 // Fetch all template tags and their declared variances
                 $templates = [];
                 $classVariances = [];
-                
+
                 foreach ($classPhpDocNode->getTags() as $tagNode) {
                     if ($tagNode->value instanceof TemplateTagValueNode) {
                         $templates[] = $tagNode->value;
                         $tagName = strtolower($tagNode->name);
-                        
+
                         if (str_contains($tagName, 'covariant')) {
                             $classVariances[$tagNode->value->name] = GenericTypeNode::VARIANCE_COVARIANT;
                         } elseif (str_contains($tagName, 'contravariant')) {
@@ -95,12 +95,12 @@ final class RuntimeTypeChecker
                 foreach ($templates as $index => $templateTag) {
                     if (isset($typeNode->genericTypes[$index])) {
                         $expectedTypeNode = $typeNode->genericTypes[$index];
-                        
+
                         // Class declared variance takes precedence, fallback to usage site variance
-                        $variance = $classVariances[$templateTag->name] 
-                            ?? $typeNode->variances[$index] 
+                        $variance = $classVariances[$templateTag->name]
+                            ?? $typeNode->variances[$index]
                             ?? GenericTypeNode::VARIANCE_INVARIANT;
-                            
+
                         $templateName = $templateTag->name;
 
                         if (isset(self::$instanceTemplateBindings[$instance][$templateName])) {
@@ -147,7 +147,7 @@ final class RuntimeTypeChecker
             return true;
         }
 
-        $isSubclass = function(string $sub, string $super): bool {
+        $isSubclass = function (string $sub, string $super): bool {
             if ((class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
                 return is_a($sub, $super, true);
             }
@@ -239,10 +239,10 @@ final class RuntimeTypeChecker
             if ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name])) {
                 $templateName = $typeNode->name;
                 $templateNode = $templates[$templateName];
-                
+
                 $alreadyBound = false;
                 $expectedTypeNode = null;
-                
+
                 if ($isInstanceMethod) {
                     if (!isset(self::$instanceTemplateBindings[$thisObj])) {
                         self::$instanceTemplateBindings[$thisObj] = [];
@@ -403,6 +403,63 @@ final class RuntimeTypeChecker
 
             return $result;
         };
+    }
+
+    /**
+     * Wraps a Traversable/Generator parameter in a lazy-validating generator wrapper
+     * that validates items item-by-item as they are yielded.
+     */
+    public static function wrapIterable(string $function, string $paramName, mixed $iterable): mixed
+    {
+        if (! is_iterable($iterable) || is_array($iterable)) {
+            return $iterable;
+        }
+
+        $contract = self::extractContract($function);
+        $typeNode = $contract['types'][$paramName] ?? null;
+        $aliases = $contract['aliases'] ?? [];
+
+        if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
+            $typeNode = $aliases[$typeNode->name];
+        }
+
+        if (self::$registry === null) {
+            self::$registry = new TypeValidatorRegistry();
+        }
+
+        $registry = self::$registry;
+
+        return (function () use ($iterable, $typeNode, $registry, $function, $paramName) {
+            $itemTypeNode = null;
+            $keyTypeNode = null;
+
+            if ($typeNode instanceof GenericTypeNode) {
+                $typesCount = count($typeNode->genericTypes);
+                if ($typesCount === 1) {
+                    $itemTypeNode = $typeNode->genericTypes[0];
+                } elseif ($typesCount >= 2) {
+                    $keyTypeNode = $typeNode->genericTypes[0];
+                    $itemTypeNode = $typeNode->genericTypes[1];
+                }
+            } elseif ($typeNode instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
+                $itemTypeNode = $typeNode->type;
+            }
+
+            foreach ($iterable as $key => $value) {
+                if ($keyTypeNode !== null) {
+                    if ($err = $registry->validate($key, $keyTypeNode, "$function(): Iterator \$$paramName key")) {
+                        throw $err;
+                    }
+                }
+                if ($itemTypeNode !== null) {
+                    if ($err = $registry->validate($value, $itemTypeNode, "$function(): Iterator \$$paramName value")) {
+                        throw $err;
+                    }
+                }
+
+                yield $key => $value;
+            }
+        })();
     }
 
     /**

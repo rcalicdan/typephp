@@ -74,6 +74,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                 ]
             );
 
+            // Callable wrapping
             if (str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
                 foreach ($node->params as $param) {
                     if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
@@ -94,24 +95,46 @@ final class ContractVisitor extends NodeVisitorAbstract
                     }
                 }
             }
+
+            // Lazy Iterable/Generator wrapping
+            if (str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
+                foreach ($node->params as $param) {
+                    if ($param->var instanceof Node\Expr\Variable && \is_string($param->var->name)) {
+                        $paramName = $param->var->name;
+                        $injectedStmts[] = new Node\Stmt\Expression(
+                            new Node\Expr\Assign(
+                                new Node\Expr\Variable($paramName),
+                                new Node\Expr\FuncCall(
+                                    new Node\Name('\TypePHP\RuntimeTypeChecker::wrapIterable'),
+                                    [
+                                        new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                        new Node\Arg(new Node\Scalar\String_($paramName)),
+                                        new Node\Arg(new Node\Expr\Variable($paramName)),
+                                    ]
+                                )
+                            )
+                        );
+                    }
+                }
+            }
         }
 
         if ($hasReturn) {
             $traverser = new NodeTraverser();
-            $traverser->addVisitor(new class($thisArg) extends NodeVisitorAbstract {
-                public function __construct(private Node $thisArg) {}
+            $traverser->addVisitor(new class ($thisArg) extends NodeVisitorAbstract {
+                public function __construct(private Node $thisArg)
+                {
+                }
 
                 public function enterNode(Node $n)
                 {
-                    // Do not traverse into nested functions/closures
                     if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                         return NodeTraverser::DONT_TRAVERSE_CHILDREN;
                     }
 
-                    // Fix #1: Handle both `return $expr;` and `return;`
                     if ($n instanceof Node\Stmt\Return_) {
                         $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
-
+                        
                         $n->expr = new Node\Expr\FuncCall(
                             new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
                             [
@@ -128,7 +151,6 @@ final class ContractVisitor extends NodeVisitorAbstract
 
             $node->stmts = $traverser->traverse($node->stmts);
 
-            //  Catch implicit fall-throughs by appending a return check at the very end
             $lastStmt = end($node->stmts);
             if (! $lastStmt instanceof Node\Stmt\Return_ && ! $lastStmt instanceof Node\Stmt\Throw_) {
                 $node->stmts[] = new Node\Stmt\Return_(

@@ -21,7 +21,7 @@ final class GenericValidator implements TypeValidatorInterface
         return match ($baseType) {
             'class-string' => $this->validateClassString($value, $node, $context),
             'list' => $this->validateList($value, $node, $context, $registry),
-            'array', 'iterable' => $this->validateArray($value, $node, $context, $registry),
+            'array', 'iterable', 'traversable', 'generator', 'iterator' => $this->validateArray($value, $node, $context, $registry),
             default => $this->validateObjectGeneric($value, $node, $context),
         };
     }
@@ -49,7 +49,6 @@ final class GenericValidator implements TypeValidatorInterface
         $valueTypeNode = $node->genericTypes[0] ?? null;
         if ($valueTypeNode) {
             foreach ($value as $k => $v) {
-                // If it's a GenericTypeNode (like Collection<int>), validate it as an ObjectGeneric!
                 if ($valueTypeNode instanceof GenericTypeNode && ! in_array(strtolower($valueTypeNode->type->name), ['class-string', 'list', 'array', 'iterable'], true)) {
                     if ($err = $this->validateObjectGeneric($v, $valueTypeNode, $context . '[' . $k . ']')) {
                         return $err;
@@ -67,6 +66,12 @@ final class GenericValidator implements TypeValidatorInterface
     {
         if (! is_array($value) && ! ($value instanceof \Traversable)) {
             return ErrorFactory::createError($context . ' must be of type ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+        }
+
+        // Do not iterate non-array Traversables/Generators during upfront validation.
+        // They are lazily validated item-by-item by RuntimeTypeChecker::wrapIterable().
+        if (! is_array($value)) {
+            return null;
         }
 
         $typesCount = count($node->genericTypes);
@@ -112,7 +117,6 @@ final class GenericValidator implements TypeValidatorInterface
             return ErrorFactory::createError($context . ' must be an instance of ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
-        // Validate or pre-bind instance template generics (e.g. Collection<int>)
         return RuntimeTypeChecker::bindInstanceFromNode($value, $node, $context);
     }
 }
