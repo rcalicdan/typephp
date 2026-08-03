@@ -2,24 +2,8 @@
 
 declare(strict_types=1);
 
-class FluentService
-{
-    /**
-     * @return $this
-     */
-    public function setValidSelf(): self
-    {
-        return $this;
-    }
+use TypePHP\Tests\Fixtures\Services\FluentService;
 
-    /**
-     * @return $this
-     */
-    public function setInvalidSelf(): self
-    {
-        return new self(); 
-    }
-}
 
 /**
  * @return array{status: 'success'|'error', code: positive-int}
@@ -27,7 +11,7 @@ class FluentService
 function testReturnShape(int $code): array
 {
     if ($code < 0) {
-        return ['status' => 'error', 'code' => $code]; 
+        return ['status' => 'error', 'code' => $code]; // Invalid code -5
     }
 
     return ['status' => 'success', 'code' => $code];
@@ -55,7 +39,6 @@ function testConditionalTemplateReturn(mixed $input, mixed $value): mixed
 {
     return $value;
 }
-
 
 describe('Return Type Contracts & Shapes', function () {
     test('accepts valid return shape', function () {
