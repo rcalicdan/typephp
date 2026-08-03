@@ -16,6 +16,7 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 final class TemplateManager
 {
@@ -25,18 +26,28 @@ final class TemplateManager
     private static ?\WeakMap $instanceTemplateBindings = null;
 
     /**
-     * @var array<string, TypeNode>
+     * @var array<string, list<array<string, TypeNode>>>
      */
-    private static array $callTemplateBindings = [];
+    private static array $callStackBindings = [];
+
+    public static function pushCallFrame(string $function): void
+    {
+        self::$callStackBindings[$function][] = [];
+    }
+
+    public static function popCallFrame(string $function): void
+    {
+        if (! empty(self::$callStackBindings[$function])) {
+            array_pop(self::$callStackBindings[$function]);
+        }
+    }
 
     /**
      * @param array<string, TemplateTagValueNode> $templates
      */
     public static function clearCallBindings(string $function, array $templates): void
     {
-        foreach ($templates as $templateName => $_) {
-            unset(self::$callTemplateBindings["{$function}:{$templateName}"]);
-        }
+        self::pushCallFrame($function);
     }
 
     /**
@@ -46,19 +57,17 @@ final class TemplateManager
      */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
     {
-        $bound = [];
         if ($thisObj !== null && isset(self::$instanceTemplateBindings[$thisObj])) {
             return self::$instanceTemplateBindings[$thisObj];
         }
 
-        foreach ($templates as $templateName => $_) {
-            $callKey = "{$function}:{$templateName}";
-            if (isset(self::$callTemplateBindings[$callKey])) {
-                $bound[$templateName] = self::$callTemplateBindings[$callKey];
-            }
+        if (! empty(self::$callStackBindings[$function])) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return $topFrame !== false ? $topFrame : [];
         }
 
-        return $bound;
+        return [];
     }
 
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool
@@ -67,7 +76,13 @@ final class TemplateManager
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
         }
 
-        return isset(self::$callTemplateBindings["{$function}:{$templateName}"]);
+        if (! empty(self::$callStackBindings[$function])) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return isset($topFrame[$templateName]);
+        }
+
+        return false;
     }
 
     public static function getBoundType(string $function, ?object $thisObj, string $templateName): ?TypeNode
@@ -76,7 +91,13 @@ final class TemplateManager
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
         }
 
-        return self::$callTemplateBindings["{$function}:{$templateName}"] ?? null;
+        if (! empty(self::$callStackBindings[$function])) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return $topFrame[$templateName] ?? null;
+        }
+
+        return null;
     }
 
     public static function bindTemplate(string $function, ?object $thisObj, string $templateName, TypeNode $inferredType): void
@@ -89,7 +110,11 @@ final class TemplateManager
             $bindings[$templateName] = $inferredType;
             self::$instanceTemplateBindings[$thisObj] = $bindings;
         } else {
-            self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
+            if (empty(self::$callStackBindings[$function])) {
+                self::$callStackBindings[$function][] = [];
+            }
+            $lastIndex = count(self::$callStackBindings[$function]) - 1;
+            self::$callStackBindings[$function][$lastIndex][$templateName] = $inferredType;
         }
     }
 
@@ -98,10 +123,6 @@ final class TemplateManager
         $className = $typeNode->type->name;
         if (in_array(strtolower($className), ['self', 'static', '$this'], true)) {
             $className = get_class($instance);
-        }
-
-        if (! is_a($instance, $className)) {
-            return null;
         }
 
         if (! is_a($instance, $className)) {

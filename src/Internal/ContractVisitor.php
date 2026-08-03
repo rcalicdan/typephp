@@ -43,10 +43,8 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         $isGen = false;
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
-            public function __construct(private bool &$isGen)
-            {
-            }
+        $traverser->addVisitor(new class($isGen) extends NodeVisitorAbstract {
+            public function __construct(private bool &$isGen) {}
 
             public function enterNode(Node $n): ?int
             {
@@ -172,7 +170,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             if ($isGeneratorFunc) {
                 // For generator functions, wrap yield/yield from expressions lazily
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class () extends NodeVisitorAbstract {
+                $traverser->addVisitor(new class() extends NodeVisitorAbstract {
                     public function enterNode(Node $n): int|Node|null
                     {
                         if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
@@ -231,12 +229,11 @@ final class ContractVisitor extends NodeVisitorAbstract
             } else {
                 // Non-generator functions: wrap return statements
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+                $traverser->addVisitor(new class($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
                     public function __construct(
                         private Node\Expr $thisArg,
                         private bool $isNativeVoid
-                    ) {
-                    }
+                    ) {}
 
                     public function enterNode(Node $n): int|array|null
                     {
@@ -297,13 +294,41 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        if (count($injectedStmts) > 0) {
-            /** @var array<Node\Stmt> $currentStmts */
-            $currentStmts = $node->stmts;
-            array_splice($currentStmts, 0, 0, $injectedStmts);
-            $node->stmts = $currentStmts;
+        // Wrap function body statements in try { ... } finally { TemplateManager::popCallFrame() }
+        if (count($node->stmts) > 0) {
+            $popCallFrameStmt = new Node\Stmt\Expression(
+                new Node\Expr\StaticCall(
+                    new Node\Name('\TypePHP\Resolver\TemplateManager'),
+                    'popCallFrame',
+                    [new Node\Arg(new Node\Scalar\MagicConst\Method())]
+                )
+            );
+
+            $bodyStmts = [];
+            $injectedHeaderStmts = [];
+
+            foreach ($node->stmts as $s) {
+                if ($s instanceof Node\Stmt\If_ && $s->cond instanceof Node\Expr\Assign && $s->cond->var instanceof Node\Expr\Variable && $s->cond->var->name === '__typephpErr') {
+                    $injectedHeaderStmts[] = $s;
+                } elseif ($s instanceof Node\Stmt\Expression && $s->expr instanceof Node\Expr\Assign && $s->expr->expr instanceof Node\Expr\FuncCall && $s->expr->expr->name instanceof Node\Name && str_contains($s->expr->expr->name->toString(), 'wrap')) {
+                    $injectedHeaderStmts[] = $s;
+                } else {
+                    $bodyStmts[] = $s;
+                }
+            }
+
+            if (count($bodyStmts) > 0) {
+                $tryFinallyStmt = new Node\Stmt\TryCatch(
+                    $bodyStmts,
+                    [],
+                    new Node\Stmt\Finally_([$popCallFrameStmt])
+                );
+
+                $node->stmts = array_merge($injectedHeaderStmts, [$tryFinallyStmt]);
+            }
         }
     }
+
 
     private function injectVarPrebinding(Node\Stmt\Expression $node): void
     {
