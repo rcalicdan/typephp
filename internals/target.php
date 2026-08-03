@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
-function test(): string
+/**
+ * @return array<int, mixed>
+ */
+function test1(): array
 {
-    return 1;
+    return ['a' => 'b', 'c' => 2];
 }
 
-test();
+test1();
