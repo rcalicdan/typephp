@@ -16,10 +16,12 @@ final class TemplateSubstitutor
 {
     /**
      * Recursively substitutes template placeholders (like T) with their bound concrete types (like int).
+     *
+     * @param array<string, TypeNode> $boundTemplates
      */
     public static function substitute(TypeNode $node, array $boundTemplates): TypeNode
     {
-        if (empty($boundTemplates)) {
+        if (count($boundTemplates) === 0) {
             return $node;
         }
 

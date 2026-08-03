@@ -11,12 +11,24 @@ use PhpParser\PrettyPrinter\Standard;
 
 final class StreamWrapper
 {
+    /**
+     * @var resource|null
+     */
     public $context;
 
-    private $handle;
+    /**
+     * @var resource|null
+     */
+    private $handle = null;
 
+    /**
+     * @var array<int, string>
+     */
     private static array $includePatterns = [];
 
+    /**
+     * @var array<int, string>
+     */
     private static array $excludePatterns = [];
 
     private static string $baseDir = '';
@@ -27,18 +39,25 @@ final class StreamWrapper
 
     private static string $cacheDir = '';
 
+    /**
+     * @param array{include?: array<int, string>, exclude?: array<int, string>, cache?: bool} $config
+     */
     public static function register(array $config = []): void
     {
-        if (! self::$isInitialized || ! empty($config)) {
-            self::$baseDir = rtrim(str_replace('\\', '/', getcwd()), '/');
+        if (! self::$isInitialized || \count($config) > 0) {
+            $cwd = getcwd();
+            $base = $cwd !== false ? $cwd : '';
+            self::$baseDir = rtrim(str_replace('\\', '/', $base), '/');
 
+            /** @var array<int, string> $includes */
             $includes = $config['include'] ?? ['**'];
+            /** @var array<int, string> $excludes */
             $excludes = $config['exclude'] ?? ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
             self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
             self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
 
-            self::$cacheEnabled = $config['cache'] ?? true;
+            self::$cacheEnabled = (bool) ($config['cache'] ?? true);
             self::$cacheDir = CacheManager::getCacheDir();
 
             self::$isInitialized = true;
@@ -72,7 +91,7 @@ final class StreamWrapper
         return '#' . $pattern . '#i';
     }
 
-    public function stream_open($path, $mode, $options, &$openedPath): bool
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         self::unregister();
         $exists = file_exists($path);
@@ -83,12 +102,13 @@ final class StreamWrapper
 
         if ($exists && str_ends_with($path, '.php') && $resolvedPath !== false) {
             $normalizedPath = str_replace('\\', '/', $resolvedPath);
-            $libSrcDir = str_replace('\\', '/', realpath(__DIR__ . '/..'));
+            $parentDir = realpath(__DIR__ . '/..');
+            $libSrcDir = $parentDir !== false ? str_replace('\\', '/', $parentDir) : '';
 
-            if (! str_starts_with($normalizedPath, $libSrcDir)) {
+            if ($libSrcDir !== '' && ! str_starts_with($normalizedPath, $libSrcDir)) {
                 $isExcluded = false;
                 foreach (self::$excludePatterns as $pattern) {
-                    if (preg_match($pattern, $normalizedPath)) {
+                    if (preg_match($pattern, $normalizedPath) === 1) {
                         $isExcluded = true;
 
                         break;
@@ -97,7 +117,7 @@ final class StreamWrapper
 
                 if (! $isExcluded) {
                     foreach (self::$includePatterns as $pattern) {
-                        if (preg_match($pattern, $normalizedPath)) {
+                        if (preg_match($pattern, $normalizedPath) === 1) {
                             $isAppFile = true;
 
                             break;
@@ -107,27 +127,38 @@ final class StreamWrapper
             }
         }
 
-        if (! $isAppFile) {
+        if (! $isAppFile || $resolvedPath === false) {
             self::unregister();
-            $this->handle = fopen($resolvedPath ?: $path, $mode);
+            $targetFile = ($resolvedPath !== false && $resolvedPath !== '') ? $resolvedPath : $path;
+            $handle = fopen($targetFile, $mode);
+            $this->handle = $handle !== false ? $handle : null;
             self::register();
 
-            return $this->handle !== false;
+            return $this->handle !== null;
         }
 
         self::unregister();
 
         if (! self::$cacheEnabled) {
             $source = file_get_contents($resolvedPath);
+            if ($source === false) {
+                self::register();
+
+                return false;
+            }
+
             $transformed = self::transformSource($source);
 
-            $this->handle = fopen('php://memory', 'r+');
-            fwrite($this->handle, $transformed);
-            rewind($this->handle);
+            $memHandle = fopen('php://memory', 'r+');
+            if ($memHandle !== false) {
+                fwrite($memHandle, $transformed);
+                rewind($memHandle);
+                $this->handle = $memHandle;
+            }
 
             self::register();
 
-            return $this->handle !== false;
+            return $this->handle !== null;
         }
 
         if (! is_dir(self::$cacheDir)) {
@@ -135,20 +166,24 @@ final class StreamWrapper
         }
 
         $mtime = filemtime($resolvedPath);
-        // BUMPED CACHE KEY TO v22_
-        $cacheKey = hash('xxh128', 'v22_' . $resolvedPath . $mtime);
+        $mtimeStr = $mtime !== false ? (string) $mtime : '0';
+
+        $cacheKey = hash('xxh128', 'v22_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {
             $source = file_get_contents($resolvedPath);
-            $transformed = self::transformSource($source);
-            file_put_contents($cachedFile, $transformed);
+            if ($source !== false) {
+                $transformed = self::transformSource($source);
+                file_put_contents($cachedFile, $transformed);
+            }
         }
 
-        $this->handle = fopen($cachedFile, $mode);
+        $cacheHandle = fopen($cachedFile, $mode);
+        $this->handle = $cacheHandle !== false ? $cacheHandle : null;
         self::register();
 
-        return $this->handle !== false;
+        return $this->handle !== null;
     }
 
     private static function transformSource(string $source): string
@@ -156,23 +191,33 @@ final class StreamWrapper
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
 
         $oldStmts = $parser->parse($source);
+        if ($oldStmts === null) {
+            return $source;
+        }
+
         $oldTokens = $parser->getTokens();
 
         $traverser1 = new NodeTraverser();
         $traverser1->addVisitor(new CloningVisitor());
-        $newStmts = $traverser1->traverse($oldStmts);
+
+        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
+        $nodesToTraverse = $oldStmts;
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser1->traverse($nodesToTraverse);
 
         $traverser2 = new NodeTraverser();
         $traverser2->addVisitor(new ContractVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
         $newStmts = $traverser2->traverse($newStmts);
 
         $printer = new Standard();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
-        // Fixed Regex: Using [^}]* ensures it never backtracks past the immediate closing brace!
         $result = preg_replace_callback(
             '/if\s*\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::checkParams\(.*?\)\)\s*\{[^}]*\}\r?\n?\s*/s',
-            function ($match) {
+            function (array $match): string {
                 return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
             },
             $transformed
@@ -181,37 +226,64 @@ final class StreamWrapper
         return $result ?? $transformed;
     }
 
-    public function stream_read($count)
+    public function stream_read(int $count): string
     {
-        return fread($this->handle, $count);
+        if ($this->handle === null || $count <= 0) {
+            return '';
+        }
+
+        $res = fread($this->handle, $count);
+
+        return $res !== false ? $res : '';
     }
 
-    public function stream_eof()
+    public function stream_eof(): bool
     {
+        if ($this->handle === null) {
+            return true;
+        }
+
         return feof($this->handle);
     }
 
-    public function stream_stat()
+    /**
+     * @return array<int|string, int>|false
+     */
+    public function stream_stat(): array|false
     {
+        if ($this->handle === null) {
+            return false;
+        }
+
         return fstat($this->handle);
     }
 
-    public function stream_seek($offset, $whence = SEEK_SET)
+    public function stream_seek(int $offset, int $whence = SEEK_SET): bool
     {
+        if ($this->handle === null) {
+            return false;
+        }
+
         return fseek($this->handle, $offset, $whence) === 0;
     }
 
-    public function stream_set_option($option, $arg1, $arg2)
+    public function stream_set_option(int $option, int $arg1, int $arg2): bool
     {
         return false;
     }
 
-    public function stream_close()
+    public function stream_close(): void
     {
-        fclose($this->handle);
+        if ($this->handle !== null) {
+            fclose($this->handle);
+            $this->handle = null;
+        }
     }
 
-    public function url_stat($path, $flags)
+    /**
+     * @return array<int|string, int>|false
+     */
+    public function url_stat(string $path, int $flags): array|false
     {
         self::unregister();
         $result = @stat($path);

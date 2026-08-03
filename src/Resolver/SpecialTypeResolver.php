@@ -32,26 +32,29 @@ final class SpecialTypeResolver
     public static function resolve(TypeNode $node, string $function, ?object $thisObj = null): TypeNode
     {
         $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
-        $runtimeClass = $thisObj ? get_class($thisObj) : $declaringClass;
+        $runtimeClass = $thisObj !== null ? get_class($thisObj) : $declaringClass;
 
         if ($node instanceof ThisTypeNode) {
-            if ($runtimeClass) {
+            if ($runtimeClass !== null) {
                 return new IdentifierTypeNode($runtimeClass);
             }
         }
 
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
-            if ($lower === 'self' && $declaringClass) {
+            if ($lower === 'self' && $declaringClass !== null) {
                 return new IdentifierTypeNode($declaringClass);
             }
-            if ($lower === 'static' && $runtimeClass) {
+            if ($lower === 'static' && $runtimeClass !== null) {
                 return new IdentifierTypeNode($runtimeClass);
             }
-            if ($lower === 'parent' && $declaringClass && get_parent_class($declaringClass)) {
-                return new IdentifierTypeNode(get_parent_class($declaringClass));
+            if ($lower === 'parent' && $declaringClass !== null) {
+                $parentClass = get_parent_class($declaringClass);
+                if ($parentClass !== false) {
+                    return new IdentifierTypeNode($parentClass);
+                }
             }
-            if ($lower === '$this' && $runtimeClass) {
+            if ($lower === '$this' && $runtimeClass !== null) {
                 return new IdentifierTypeNode($runtimeClass);
             }
         }

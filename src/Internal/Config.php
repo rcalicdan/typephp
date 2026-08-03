@@ -6,10 +6,15 @@ namespace TypePHP\Internal;
 
 final class Config
 {
+    /**
+     * @var array<string, mixed>|null
+     */
     private static ?array $cachedConfig = null;
 
     /**
      * Loads and caches the global configuration from 'typephp.php' in the working directory.
+     *
+     * @return array<string, mixed>
      */
     public static function get(): array
     {
@@ -17,11 +22,13 @@ final class Config
             return self::$cachedConfig;
         }
 
-        $configFile = getcwd() . '/typephp.php';
+        $cwd = getcwd();
+        $configFile = $cwd !== false ? $cwd . '/typephp.php' : '';
 
-        if (file_exists($configFile)) {
+        if ($configFile !== '' && file_exists($configFile)) {
             $loadedConfig = require $configFile;
             if (is_array($loadedConfig)) {
+                /** @var array<string, mixed> $loadedConfig */
                 return self::$cachedConfig = $loadedConfig;
             }
         }

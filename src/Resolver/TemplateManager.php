@@ -28,6 +28,9 @@ final class TemplateManager
      */
     private static array $callTemplateBindings = [];
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     */
     public static function clearCallBindings(string $function, array $templates): void
     {
         foreach ($templates as $templateName => $_) {
@@ -35,6 +38,10 @@ final class TemplateManager
         }
     }
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     * @return array<string, TypeNode>
+     */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
     {
         $bound = [];
@@ -95,15 +102,21 @@ final class TemplateManager
             return null;
         }
 
+        if (! class_exists($className) && ! interface_exists($className) && ! trait_exists($className)) {
+            return null;
+        }
+
         try {
             $ref = new \ReflectionClass($className);
             $classDoc = $ref->getDocComment();
 
-            if ($classDoc) {
+            if ($classDoc !== false) {
+                /** @var PhpDocParser|null $phpDocParser */
                 static $phpDocParser = null;
+                /** @var Lexer|null $lexer */
                 static $lexer = null;
 
-                if ($phpDocParser === null) {
+                if ($phpDocParser === null || $lexer === null) {
                     $config = new ParserConfig(usedAttributes: []);
                     $lexer = new Lexer($config);
                     $constExprParser = new ConstExprParser($config);
@@ -150,7 +163,6 @@ final class TemplateManager
                         $templateName = $templateTag->name;
 
                         if ($forceBind) {
-                            // Safely extract, modify, and assign back to WeakMap
                             $bindings = self::$instanceTemplateBindings[$instance] ?? [];
                             $bindings[$templateName] = $expectedTypeNode;
                             self::$instanceTemplateBindings[$instance] = $bindings;
@@ -210,15 +222,16 @@ final class TemplateManager
 
     public static function bindInstance(object $instance, string $typeString): object
     {
-        static $phpDocParser = null;
+        /** @var TypeParser|null $typeParser */
+        static $typeParser = null;
+        /** @var Lexer|null $lexer */
         static $lexer = null;
 
-        if ($phpDocParser === null) {
+        if ($typeParser === null || $lexer === null) {
             $config = new ParserConfig(usedAttributes: []);
             $lexer = new Lexer($config);
             $constExprParser = new ConstExprParser($config);
             $typeParser = new TypeParser($config, $constExprParser);
-            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
         }
 
         try {
@@ -226,7 +239,7 @@ final class TemplateManager
             $typeNode = $typeParser->parse($tokens);
 
             if ($typeNode instanceof GenericTypeNode) {
-                self::bindInstanceFromNode($instance, $typeNode, forceBind: true);
+                self::bindInstanceFromNode($instance, $typeNode, '', true);
             }
         } catch (\Throwable $e) {
             // Ignore malformed docblock strings
@@ -255,7 +268,7 @@ final class TemplateManager
 
         if (is_object($value)) {
             $className = get_class($value);
-            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && ! empty(self::$instanceTemplateBindings[$value])) {
+            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && count(self::$instanceTemplateBindings[$value]) > 0) {
                 $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
 
                 return new GenericTypeNode(new IdentifierTypeNode($className), $genericTypes);

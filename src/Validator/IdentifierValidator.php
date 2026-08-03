@@ -13,8 +13,9 @@ final class IdentifierValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
-        /** @var IdentifierTypeNode $node */
-        $lower = strtolower($node->name);
+        /** @var IdentifierTypeNode $identifierNode */
+        $identifierNode = $node;
+        $lower = strtolower($identifierNode->name);
 
         $ok = match ($lower) {
             'int', 'integer' => \is_int($value),
@@ -22,7 +23,7 @@ final class IdentifierValidator implements TypeValidatorInterface
             'float', 'double' => \is_float($value) || \is_int($value),
             'bool', 'boolean' => \is_bool($value),
             'array' => \is_array($value),
-            'list' => \is_array($value) && (empty($value) || array_is_list($value)),
+            'list' => \is_array($value) && (count($value) === 0 || array_is_list($value)),
             'object' => \is_object($value),
             'callable' => is_callable($value),
             'iterable' => is_iterable($value),
@@ -46,17 +47,17 @@ final class IdentifierValidator implements TypeValidatorInterface
             'lowercase-string' => is_string($value) && strtolower($value) === $value,
             'non-empty-lowercase-string' => is_string($value) && $value !== '' && strtolower($value) === $value,
             'literal-string' => is_string($value),
-            'non-empty-array' => is_array($value) && ! empty($value),
-            'non-empty-list' => is_array($value) && ! empty($value) && array_is_list($value),
+            'non-empty-array' => is_array($value) && count($value) > 0,
+            'non-empty-list' => is_array($value) && count($value) > 0 && array_is_list($value),
             'number', 'numeric' => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)),
-            'truthy' => (bool)$value === true,
-            'falsy', 'falsey' => (bool)$value === false,
+            'truthy' => (bool) $value === true,
+            'falsy', 'falsey' => (bool) $value === false,
 
-            default => \is_object($value) && is_a($value, $node->name),
+            default => \is_object($value) && is_a($value, $identifierNode->name),
         };
 
         if (! $ok) {
-            return ErrorFactory::createError($context . ' must be of type ' . $node->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+            return ErrorFactory::createError($context . ' must be of type ' . $identifierNode->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
         return null;

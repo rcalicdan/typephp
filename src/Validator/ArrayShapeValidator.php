@@ -40,7 +40,8 @@ final class ArrayShapeValidator implements TypeValidatorInterface
                     continue;
                 }
 
-                if ($err = $registry->validate($value[$key], $item->valueType, $context . "['" . $key . "']")) {
+                $err = $registry->validate($value[$key], $item->valueType, $context . "['" . $key . "']");
+                if ($err !== null) {
                     return $err;
                 }
             }
@@ -48,9 +49,9 @@ final class ArrayShapeValidator implements TypeValidatorInterface
 
         $extraKeys = array_diff_key($value, $knownKeys);
 
-        if (! empty($extraKeys)) {
+        if (\count($extraKeys) > 0) {
             if ($node->sealed) {
-                $firstExtraKey = array_key_first($extraKeys);
+                $firstExtraKey = (string) array_key_first($extraKeys);
 
                 return ErrorFactory::createError($context . " contains unsealed unexpected key '$firstExtraKey'");
             }
@@ -61,11 +62,13 @@ final class ArrayShapeValidator implements TypeValidatorInterface
 
                 foreach ($extraKeys as $k => $v) {
                     if ($unsealedKeyType !== null) {
-                        if ($err = $registry->validate($k, $unsealedKeyType, $context . " extra key '$k'")) {
+                        $err = $registry->validate($k, $unsealedKeyType, $context . " extra key '$k'");
+                        if ($err !== null) {
                             return $err;
                         }
                     }
-                    if ($err = $registry->validate($v, $unsealedValueType, $context . "['$k']")) {
+                    $err = $registry->validate($v, $unsealedValueType, $context . "['$k']");
+                    if ($err !== null) {
                         return $err;
                     }
                 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TypePHP\Internal;
 
+use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
@@ -37,10 +38,13 @@ final class RuntimeTypeChecker
         return TemplateManager::bindInstance($instance, $typeString);
     }
 
+    /**
+     * @param array<string, mixed> $vars
+     */
     public static function checkParams(string $function, array $vars, ?object $thisObj = null): ?\TypeError
     {
         $contract = ContractParser::parse($function);
-        if (! $contract || ! $contract['types']) {
+        if (count($contract['types']) === 0) {
             return null;
         }
 
@@ -66,7 +70,8 @@ final class RuntimeTypeChecker
 
             // Resolve class-string<T>
             if ($typeNode instanceof GenericTypeNode && self::isClassStringTemplate($typeNode, $templates)) {
-                if ($err = self::resolveClassStringTemplate($typeNode, $val, $paramName, $function, $thisObj, $templates)) {
+                $err = self::resolveClassStringTemplate($typeNode, $val, $paramName, $function, $thisObj, $templates);
+                if ($err !== null) {
                     return $err;
                 }
 
@@ -75,7 +80,8 @@ final class RuntimeTypeChecker
 
             // Resolve @template T & variadic templates (@param T ...$items)
             if (self::getTemplateName($typeNode, $templates) !== null) {
-                if ($err = self::resolveTemplateParam($typeNode, $val, $paramName, $function, $thisObj, $templates, $registry)) {
+                $err = self::resolveTemplateParam($typeNode, $val, $paramName, $function, $thisObj, $templates, $registry);
+                if ($err !== null) {
                     return $err;
                 }
 
@@ -83,7 +89,8 @@ final class RuntimeTypeChecker
             }
 
             // Standard Type Validation
-            if ($err = $registry->validate($val, $typeNode, $function . '(): Argument $' . $paramName)) {
+            $err = $registry->validate($val, $typeNode, $function . '(): Argument $' . $paramName);
+            if ($err !== null) {
                 return $err;
             }
         }
@@ -91,6 +98,9 @@ final class RuntimeTypeChecker
         return null;
     }
 
+    /**
+     * @param array<string, mixed> $vars
+     */
     public static function checkReturn(string $function, mixed $value, ?object $thisObj = null, array $vars = []): mixed
     {
         $contract = ContractParser::parse($function);
@@ -103,7 +113,8 @@ final class RuntimeTypeChecker
         $registry = self::getRegistry();
 
         // Strict $this identity check
-        if ($err = SpecialTypeResolver::checkThisIdentity($returnTypeNode, $value, $thisObj, $function)) {
+        $err = SpecialTypeResolver::checkThisIdentity($returnTypeNode, $value, $thisObj, $function);
+        if ($err !== null) {
             throw $err;
         }
 
@@ -118,7 +129,7 @@ final class RuntimeTypeChecker
 
         // Substitute template placeholders (T[] -> int[])
         $boundTemplates = TemplateManager::getBoundTemplates($function, $thisObj, $contract['templates']);
-        if (! empty($boundTemplates)) {
+        if (count($boundTemplates) > 0) {
             $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates);
         }
 
@@ -136,7 +147,8 @@ final class RuntimeTypeChecker
 
             $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
 
-            if ($err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value')) {
+            $err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value');
+            if ($err !== null) {
                 throw $err;
             }
 
@@ -145,14 +157,19 @@ final class RuntimeTypeChecker
 
         // Template-based Conditional Return Types
         if ($returnTypeNode instanceof ConditionalTypeNode) {
+            /** @var TypeNode|IdentifierTypeNode $subjectTypeNode */
             $subjectTypeNode = $returnTypeNode->subjectType;
 
             if ($subjectTypeNode instanceof IdentifierTypeNode && isset($boundTemplates[$subjectTypeNode->name])) {
+                /** @var TypeNode $subjectTypeNode */
                 $subjectTypeNode = $boundTemplates[$subjectTypeNode->name];
             }
 
             $subStr = (string) $subjectTypeNode;
-            $targetStr = (string) $returnTypeNode->targetType;
+
+            /** @var TypeNode $targetTypeNode */
+            $targetTypeNode = $returnTypeNode->targetType;
+            $targetStr = (string) $targetTypeNode;
 
             $isTargetMatch = ($subStr === $targetStr) ||
                 ((class_exists($subStr) || interface_exists($subStr)) && (class_exists($targetStr) || interface_exists($targetStr)) && is_a($subStr, $targetStr, true));
@@ -163,7 +180,8 @@ final class RuntimeTypeChecker
 
             $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
 
-            if ($err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value')) {
+            $err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value');
+            if ($err !== null) {
                 throw $err;
             }
 
@@ -171,7 +189,8 @@ final class RuntimeTypeChecker
         }
 
         // Standard Return Validation
-        if ($err = $registry->validate($value, $returnTypeNode, $function . '(): Return value')) {
+        $err = $registry->validate($value, $returnTypeNode, $function . '(): Return value');
+        if ($err !== null) {
             throw $err;
         }
 
@@ -188,11 +207,14 @@ final class RuntimeTypeChecker
         return IterableWrapper::wrap($function, $paramName, $iterable, self::getRegistry());
     }
 
-    public static function inferTypeFromValue(mixed $value): IdentifierTypeNode|GenericTypeNode
+    public static function inferTypeFromValue(mixed $value): TypeNode
     {
         return TemplateManager::inferTypeFromValue($value);
     }
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     */
     private static function isClassStringTemplate(GenericTypeNode $typeNode, array $templates): bool
     {
         return isset($typeNode->genericTypes[0])
@@ -201,6 +223,9 @@ final class RuntimeTypeChecker
             && isset($templates[$typeNode->genericTypes[0]->name]);
     }
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     */
     private static function resolveClassStringTemplate(GenericTypeNode $typeNode, mixed $val, string $paramName, string $function, ?object $thisObj, array $templates): ?\TypeError
     {
         /** @var IdentifierTypeNode $innerType */
@@ -216,7 +241,7 @@ final class RuntimeTypeChecker
             if ($templateNode->bound !== null) {
                 $boundName = $templateNode->bound instanceof IdentifierTypeNode ? $templateNode->bound->name : (string) $templateNode->bound;
                 if (! is_a($val, $boundName, true)) {
-                    return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' (class-string<' . $templateName . '>) must be a class-string of ' . $boundName . ", '$val' given");
+                    return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' (class-string<' . $templateName . '>) must be a class-string of ' . $boundName . ", '" . $val . "' given");
                 }
             }
 
@@ -224,14 +249,20 @@ final class RuntimeTypeChecker
         } else {
             $expectedTypeNode = TemplateManager::getBoundType($function, $thisObj, $templateName);
             $targetClass = $expectedTypeNode instanceof IdentifierTypeNode ? $expectedTypeNode->name : (string) $expectedTypeNode;
+
             if (! is_string($val) || ! is_a($val, $targetClass, true)) {
-                return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a class-string of ' . $targetClass . ", '$val' given");
+                $valStr = TypeFormatter::formatGivenValue($val);
+
+                return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a class-string of ' . $targetClass . ', ' . $valStr . ' given');
             }
         }
 
         return null;
     }
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     */
     private static function getTemplateName(TypeNode $typeNode, array $templates): ?string
     {
         if ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name])) {
@@ -245,18 +276,26 @@ final class RuntimeTypeChecker
         return null;
     }
 
+    /**
+     * @param array<string, TemplateTagValueNode> $templates
+     */
     private static function resolveTemplateParam(TypeNode $typeNode, mixed $val, string $paramName, string $function, ?object $thisObj, array $templates, TypeValidatorRegistry $registry): ?\TypeError
     {
         $templateName = self::getTemplateName($typeNode, $templates);
+        if ($templateName === null || ! isset($templates[$templateName])) {
+            return null;
+        }
+
         $templateNode = $templates[$templateName];
         $isVariadic = $typeNode instanceof ArrayTypeNode;
 
         if (! TemplateManager::isBound($function, $thisObj, $templateName)) {
-            $sampleVal = $isVariadic ? ($val[0] ?? null) : $val;
+            $sampleVal = ($isVariadic && is_array($val)) ? ($val[0] ?? null) : $val;
             $inferredType = TemplateManager::inferTypeFromValue($sampleVal);
 
             if ($templateNode->bound !== null) {
-                if ($err = $registry->validate($sampleVal, $templateNode->bound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')')) {
+                $err = $registry->validate($sampleVal, $templateNode->bound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')');
+                if ($err !== null) {
                     return $err;
                 }
             }
@@ -265,22 +304,28 @@ final class RuntimeTypeChecker
 
             if ($isVariadic && is_array($val)) {
                 foreach ($val as $idx => $item) {
-                    if ($err = $registry->validate($item, $inferredType, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $inferredType . ')')) {
+                    $err = $registry->validate($item, $inferredType, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $inferredType . ')');
+                    if ($err !== null) {
                         return $err;
                     }
                 }
             }
         } else {
             $expectedTypeNode = TemplateManager::getBoundType($function, $thisObj, $templateName);
+            if ($expectedTypeNode === null) {
+                return null; // Should ideally never happen if isBound() is true
+            }
 
             if ($isVariadic && is_array($val)) {
                 foreach ($val as $idx => $item) {
-                    if ($err = $registry->validate($item, $expectedTypeNode, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
+                    $err = $registry->validate($item, $expectedTypeNode, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $expectedTypeNode . ')');
+                    if ($err !== null) {
                         return $err;
                     }
                 }
             } else {
-                if ($err = $registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
+                $err = $registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')');
+                if ($err !== null) {
                     return $err;
                 }
             }

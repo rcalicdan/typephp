@@ -17,9 +17,12 @@ final class ArrayValidator implements TypeValidatorInterface
             return ErrorFactory::createError($context . ' must be of type array, ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
-        /** @var ArrayTypeNode $node */
+        /** @var ArrayTypeNode $arrayNode */
+        $arrayNode = $node;
+
         foreach ($value as $k => $v) {
-            if ($err = $registry->validate($v, $node->type, $context . '[' . $k . ']')) {
+            $err = $registry->validate($v, $arrayNode->type, $context . '[' . $k . ']');
+            if ($err !== null) {
                 return $err;
             }
         }

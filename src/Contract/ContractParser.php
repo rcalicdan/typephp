@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TypePHP\Contract;
 
+use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
@@ -34,20 +35,23 @@ final class ContractParser
         if (str_contains($function, '::')) {
             [$className, $methodName] = explode('::', $function, 2);
             $ref = new \ReflectionMethod($className, $methodName);
-            $classDoc = $ref->getDeclaringClass()->getDocComment() ?: null;
+            $fetchedClassDoc = $ref->getDeclaringClass()->getDocComment();
+            $classDoc = $fetchedClassDoc !== false ? $fetchedClassDoc : null;
         } else {
             $ref = new \ReflectionFunction($function);
         }
 
         $doc = $ref->getDocComment();
-        if (! $doc && ! $classDoc) {
+        if ($doc === false && $classDoc === null) {
             return self::$cache[$function] = ['types' => [], 'templates' => [], 'return' => null, 'aliases' => []];
         }
 
+        /** @var PhpDocParser|null $phpDocParser */
         static $phpDocParser = null;
+        /** @var Lexer|null $lexer */
         static $lexer = null;
 
-        if ($phpDocParser === null) {
+        if ($phpDocParser === null || $lexer === null) {
             $config = new ParserConfig(usedAttributes: []);
             $lexer = new Lexer($config);
             $constExprParser = new ConstExprParser($config);
@@ -55,7 +59,12 @@ final class ContractParser
             $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
         }
 
-        $getAllTemplates = function ($node) {
+        /**
+         * @param PhpDocNode $node
+         *
+         * @return array<string, TemplateTagValueNode>
+         */
+        $getAllTemplates = function (PhpDocNode $node): array {
             $tags = [];
             foreach ($node->getTags() as $tagNode) {
                 if ($tagNode->value instanceof TemplateTagValueNode) {
@@ -70,7 +79,7 @@ final class ContractParser
             $templates = [];
             $aliases = [];
 
-            if ($classDoc) {
+            if ($classDoc !== null) {
                 $classTokens = new TokenIterator($lexer->tokenize($classDoc));
                 $classPhpDocNode = $phpDocParser->parse($classTokens);
 
@@ -85,7 +94,8 @@ final class ContractParser
 
             $types = [];
             $returnType = null;
-            if ($doc) {
+
+            if ($doc !== false) {
                 $tokens = new TokenIterator($lexer->tokenize($doc));
                 $phpDocNode = $phpDocParser->parse($tokens);
 
@@ -115,7 +125,7 @@ final class ContractParser
                 }
 
                 $returnTags = $phpDocNode->getReturnTagValues();
-                if (! empty($returnTags)) {
+                if (\count($returnTags) > 0) {
                     $returnType = $returnTags[0]->type;
                 }
             }

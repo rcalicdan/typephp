@@ -10,30 +10,34 @@ use PhpParser\NodeVisitorAbstract;
 
 final class ContractVisitor extends NodeVisitorAbstract
 {
-    public function enterNode(Node $node)
+    public function enterNode(Node $node): ?int
     {
         // Function / Method contract injection
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
-            return $this->injectFunctionContract($node);
+            $this->injectFunctionContract($node);
+
+            return null;
         }
 
         // @var Docblock Pre-binding on assignments ($var = new Class())
         if ($node instanceof Node\Stmt\Expression && $node->expr instanceof Node\Expr\Assign) {
-            return $this->injectVarPrebinding($node);
+            $this->injectVarPrebinding($node);
+
+            return null;
         }
 
         return null;
     }
 
-    private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node)
+    private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): void
     {
         if ($node->stmts === null) {
-            return null;
+            return;
         }
 
         $doc = $node->getDocComment();
-        if (! $doc) {
-            return null;
+        if ($doc === null) {
+            return;
         }
 
         $docText = $doc->getText();
@@ -41,7 +45,7 @@ final class ContractVisitor extends NodeVisitorAbstract
         $hasReturn = str_contains($docText, '@return') || str_contains($docText, '@phpstan-return') || str_contains($docText, '@psalm-return');
 
         if (! $hasParam && ! $hasReturn) {
-            return null;
+            return;
         }
 
         $hasThis = ($node instanceof Node\Stmt\ClassMethod) && ! $node->isStatic();
@@ -121,11 +125,11 @@ final class ContractVisitor extends NodeVisitorAbstract
         if ($hasReturn) {
             $traverser = new NodeTraverser();
             $traverser->addVisitor(new class ($thisArg) extends NodeVisitorAbstract {
-                public function __construct(private Node $thisArg)
+                public function __construct(private Node\Expr $thisArg)
                 {
                 }
 
-                public function enterNode(Node $n)
+                public function enterNode(Node $n): ?int
                 {
                     if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                         return NodeTraverser::DONT_TRAVERSE_CHILDREN;
@@ -149,10 +153,12 @@ final class ContractVisitor extends NodeVisitorAbstract
                 }
             });
 
-            $node->stmts = $traverser->traverse($node->stmts);
+            /** @var array<Node\Stmt> $newStmts */
+            $newStmts = $traverser->traverse($node->stmts);
+            $node->stmts = $newStmts;
 
             $lastStmt = end($node->stmts);
-            if (! $lastStmt instanceof Node\Stmt\Return_ && ! $lastStmt instanceof Node\Stmt\Throw_) {
+            if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
                 $node->stmts[] = new Node\Stmt\Return_(
                     new Node\Expr\FuncCall(
                         new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
@@ -167,28 +173,29 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        if (! empty($injectedStmts)) {
-            array_splice($node->stmts, 0, 0, $injectedStmts);
+        if (count($injectedStmts) > 0) {
+            /** @var array<Node\Stmt> $currentStmts */
+            $currentStmts = $node->stmts;
+            array_splice($currentStmts, 0, 0, $injectedStmts);
+            $node->stmts = $currentStmts;
         }
-
-        return null;
     }
 
-    private function injectVarPrebinding(Node\Stmt\Expression $node)
+    private function injectVarPrebinding(Node\Stmt\Expression $node): void
     {
         $doc = $node->getDocComment();
-        if (! $doc || ! str_contains($doc->getText(), '@var')) {
-            return null;
+        if ($doc === null || ! str_contains($doc->getText(), '@var')) {
+            return;
         }
 
         /** @var Node\Expr\Assign $assign */
         $assign = $node->expr;
         if (! ($assign->expr instanceof Node\Expr\New_)) {
-            return null;
+            return;
         }
 
         $docText = $doc->getText();
-        if (preg_match('/@var\s+([^\s$]+<[^>]+>)/', $docText, $m) || preg_match('/@var\s+\$[^\s]+\s+([^\s]+<[^>]+>)/', $docText, $m)) {
+        if (preg_match('/@var\s+([^\s$]+<[^>]+>)/', $docText, $m) === 1 || preg_match('/@var\s+\$[^\s]+\s+([^\s]+<[^>]+>)/', $docText, $m) === 1) {
             $typeString = $m[1];
 
             $assign->expr = new Node\Expr\FuncCall(
@@ -199,7 +206,5 @@ final class ContractVisitor extends NodeVisitorAbstract
                 ]
             );
         }
-
-        return null;
     }
 }
