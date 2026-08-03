@@ -13,7 +13,6 @@ foreach ($autoloadFiles as $file) {
     }
 }
 
-// Clean Exception Handler for CLI: filters out TypePHP internal frames
 set_exception_handler(function (\Throwable $e) {
     $cleanTrace = array_filter($e->getTrace(), function ($frame) {
         return !str_starts_with($frame['class'] ?? '', 'TypePHP\\');
@@ -47,16 +46,6 @@ if (!$target || !file_exists($target)) {
     die("Usage: vendor/bin/typephp <script.php>\n");
 }
 
-// Load PHP configuration file
-$configFile = getcwd() . '/typephp.php';
-$config = [];
-if (file_exists($configFile)) {
-    $loadedConfig = require $configFile;
-    if (is_array($loadedConfig)) {
-        $config = $loadedConfig;
-    }
-}
-
-\TypePHP\TypePHP::boot($config);
+\TypePHP\TypePHP::boot();
 
 require realpath($target);

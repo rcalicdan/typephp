@@ -9,8 +9,8 @@ final class TypePHP
     /**
      * Boots the TypePHP runtime type engine.
      */
-    public static function boot(array $config = []): void
+    public static function boot(): void
     {
-        StreamWrapper::register($config);
+        StreamWrapper::register(Config::get());
     }
 }
