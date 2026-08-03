@@ -7,13 +7,13 @@ namespace TypePHP\Internal;
 final class ClassNameValidator
 {
     /**
-     * Validates whether a given string is a syntactically valid PHP class, interface, trait, or enum identifier.
+     * Validates whether a given value is a syntactically valid PHP class, interface, trait, or enum identifier.
      * Handles fully-qualified names with leading backslashes.
-     * Returns false for complex PHPDoc strings like "Producer<Dog>", "array{id: int}", unions, or invalid identifiers.
+     * Returns false for non-strings, empty strings, complex PHPDoc strings like "Producer<Dog>", "array{id: int}", or unions.
      */
-    public static function isValid(string $name): bool
+    public static function isValid(mixed $name): bool
     {
-        if ($name === '') {
+        if (! is_string($name) || $name === '') {
             return false;
         }
 
