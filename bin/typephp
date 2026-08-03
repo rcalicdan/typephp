@@ -13,6 +13,7 @@ foreach ($autoloadFiles as $file) {
     }
 }
 
+// Clean Exception Handler for CLI: filters out TypePHP internal frames
 set_exception_handler(function (\Throwable $e) {
     $cleanTrace = array_filter($e->getTrace(), function ($frame) {
         return !str_starts_with($frame['class'] ?? '', 'TypePHP\\');
@@ -41,9 +42,24 @@ set_exception_handler(function (\Throwable $e) {
     exit(255);
 });
 
-$target = $argv[1] ?? null;
-if (!$target || !file_exists($target)) {
-    die("Usage: vendor/bin/typephp <script.php>\n");
+$args = array_slice($argv, 1);
+
+if (in_array('--clear-cache', $args, true)) {
+    $count = \TypePHP\CacheManager::clear();
+    fwrite(STDOUT, sprintf("Cleared %d cached file(s).\n", $count));
+    exit(0);
+}
+
+$target = null;
+foreach ($args as $arg) {
+    if (!str_starts_with($arg, '--') && file_exists($arg)) {
+        $target = $arg;
+        break;
+    }
+}
+
+if (!$target) {
+    die("Usage: vendor/bin/typephp <script.php> [--clear-cache] [--no-cache]\n");
 }
 
 \TypePHP\TypePHP::boot();
