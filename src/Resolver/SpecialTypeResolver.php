@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace TypePHP\Resolver;
 
+use PhpParser\Node\Stmt;
+use PhpParser\ParserFactory;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
@@ -22,6 +24,11 @@ final class SpecialTypeResolver
      * @var array<string, array<string, string>>
      */
     private static array $fileUseImports = [];
+
+    /**
+     * @var array<string, string>
+     */
+    private static array $fileNamespaces = [];
 
     public static function checkThisIdentity(TypeNode $returnTypeNode, mixed $value, ?object $thisObj, string $function): ?\TypeError
     {
@@ -117,6 +124,63 @@ final class SpecialTypeResolver
     }
 
     /**
+     * Resolves nodes specifically using a file context instead of reflection.
+     * Useful for pre-binding @var annotations where reflection is unavailable.
+     */
+    public static function resolveForFile(TypeNode $node, string $file): TypeNode
+    {
+        if ($node instanceof IdentifierTypeNode) {
+            $lower = strtolower($node->name);
+            if (\in_array($lower, ['self', 'static', 'parent', '$this'], true)) {
+                return clone $node;
+            }
+
+            $fqcn = self::resolveFqcnForFile($node->name, $file);
+            if ($fqcn !== $node->name) {
+                return new IdentifierTypeNode($fqcn);
+            }
+        }
+
+        if ($node instanceof GenericTypeNode) {
+            $genericType = self::resolveForFile($node->type, $file);
+            $innerTypes = array_map(
+                fn ($t) => self::resolveForFile($t, $file),
+                $node->genericTypes
+            );
+
+            return new GenericTypeNode(
+                $genericType instanceof IdentifierTypeNode ? $genericType : $node->type,
+                $innerTypes,
+                $node->variances
+            );
+        }
+
+        if ($node instanceof NullableTypeNode) {
+            return new NullableTypeNode(self::resolveForFile($node->type, $file));
+        }
+
+        if ($node instanceof ArrayTypeNode) {
+            return new ArrayTypeNode(self::resolveForFile($node->type, $file));
+        }
+
+        if ($node instanceof UnionTypeNode) {
+            return new UnionTypeNode(array_map(
+                fn ($t) => self::resolveForFile($t, $file),
+                $node->types
+            ));
+        }
+
+        if ($node instanceof IntersectionTypeNode) {
+            return new IntersectionTypeNode(array_map(
+                fn ($t) => self::resolveForFile($t, $file),
+                $node->types
+            ));
+        }
+
+        return clone $node;
+    }
+
+    /**
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      *
      * @return array<string, string>
@@ -125,6 +189,20 @@ final class SpecialTypeResolver
     {
         $fileName = $ref->getFileName();
         if ($fileName === false || ! file_exists($fileName)) {
+            return [];
+        }
+
+        return self::getUseImportsFromFile($fileName);
+    }
+
+    /**
+     * Extracts and caches use imports directly from a file path.
+     *
+     * @return array<string, string>
+     */
+    public static function getUseImportsFromFile(string $fileName): array
+    {
+        if ($fileName === '' || ! file_exists($fileName)) {
             return [];
         }
 
@@ -137,64 +215,103 @@ final class SpecialTypeResolver
             return self::$fileUseImports[$fileName] = [];
         }
 
-        return self::$fileUseImports[$fileName] = self::parseUseStatements($source);
+        self::parseFileMetadata($fileName, $source);
+
+        return self::$fileUseImports[$fileName] ?? [];
     }
 
     /**
-     * @return array<string, string>
+     * Extracts and caches the namespace directly from a file path.
      */
-    private static function parseUseStatements(string $source): array
+    public static function getNamespaceFromFile(string $fileName): string
     {
-        $imports = [];
-        $tokens = token_get_all($source);
-        $count = count($tokens);
-
-        for ($i = 0; $i < $count; $i++) {
-            if (! is_array($tokens[$i]) || $tokens[$i][0] !== T_USE) {
-                continue;
-            }
-
-            // Skip 'use' inside closures or traits
-            $j = $i - 1;
-            while ($j >= 0 && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                $j--;
-            }
-            if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_STRING && strtolower($tokens[$j][1]) === 'function') {
-                continue; // It's a closure `use ()`
-            }
-
-            $fqcn = '';
-            $alias = '';
-            $i++;
-
-            while ($i < $count && $tokens[$i] !== ';') {
-                if (is_array($tokens[$i])) {
-                    if ($tokens[$i][0] === T_STRING || $tokens[$i][0] === T_NAME_QUALIFIED || $tokens[$i][0] === T_NAME_FULLY_QUALIFIED) {
-                        if ($fqcn === '') {
-                            $fqcn = $tokens[$i][1];
-                        } else {
-                            $alias = $tokens[$i][1]; // 'as Alias'
-                        }
-                    }
-                }
-                $i++;
-            }
-
-            if ($fqcn !== '') {
-                $fqcn = ltrim($fqcn, '\\');
-                $pos = strrpos($fqcn, '\\');
-                $shortName = $alias !== '' ? $alias : ($pos !== false ? substr($fqcn, $pos + 1) : $fqcn);
-                $imports[$shortName] = $fqcn;
-            }
+        if ($fileName === '' || ! file_exists($fileName)) {
+            return '';
         }
 
-        return $imports;
+        if (isset(self::$fileNamespaces[$fileName])) {
+            return self::$fileNamespaces[$fileName];
+        }
+
+        $source = file_get_contents($fileName);
+        if ($source === false) {
+            return self::$fileNamespaces[$fileName] = '';
+        }
+
+        self::parseFileMetadata($fileName, $source);
+
+        return self::$fileNamespaces[$fileName] ?? '';
+    }
+
+    /**
+     * Parses the AST of the file once to extract both namespace and use statements.
+     */
+    private static function parseFileMetadata(string $fileName, string $source): void
+    {
+        self::$fileNamespaces[$fileName] = '';
+        self::$fileUseImports[$fileName] = [];
+
+        static $parser = null;
+        if ($parser === null) {
+            $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        }
+
+        try {
+            $stmts = $parser->parse($source);
+            if ($stmts === null) {
+                return;
+            }
+
+            $imports = [];
+            $namespace = '';
+
+            // PSR-4 codebases typically have top-level statements or a single namespace block
+            $nodesToScan = $stmts;
+            foreach ($stmts as $stmt) {
+                if ($stmt instanceof Stmt\Namespace_) {
+                    $namespace = $stmt->name ? $stmt->name->toString() : '';
+                    $nodesToScan = $stmt->stmts;
+                    break;
+                }
+            }
+
+            foreach ($nodesToScan as $stmt) {
+                // Regular imports: use App\Models\User;
+                if ($stmt instanceof Stmt\Use_) {
+                    if ($stmt->type !== Stmt\Use_::TYPE_NORMAL) {
+                        continue; // Skip function/const imports
+                    }
+                    foreach ($stmt->uses as $use) {
+                        $fqcn = $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                }
+                // Grouped imports: use App\Models\{User, Post};
+                elseif ($stmt instanceof Stmt\GroupUse) {
+                    $prefix = $stmt->prefix->toString();
+                    foreach ($stmt->uses as $use) {
+                        if ($use->type !== Stmt\Use_::TYPE_NORMAL && $use->type !== Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== Stmt\Use_::TYPE_NORMAL) {
+                            continue;
+                        }
+                        $fqcn = $prefix . '\\' . $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                }
+            }
+
+            self::$fileNamespaces[$fileName] = $namespace;
+            self::$fileUseImports[$fileName] = $imports;
+        } catch (\Throwable $e) {
+            // Silently fall back to empty metadata if parsing fails
+        }
     }
 
     /**
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      */
-  public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
+    public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
     {
         $lower = strtolower($name);
         if (\in_array($lower, [
@@ -229,6 +346,52 @@ final class SpecialTypeResolver
             $ref instanceof \ReflectionFunction => $ref->getNamespaceName(),
         };
 
+        if ($namespace !== '') {
+            $namespacedClass = $namespace . '\\' . $name;
+            if (class_exists($namespacedClass) || interface_exists($namespacedClass) || trait_exists($namespacedClass) || enum_exists($namespacedClass)) {
+                return $namespacedClass;
+            }
+        }
+
+        if (class_exists($name) || interface_exists($name) || trait_exists($name) || enum_exists($name)) {
+            return $name;
+        }
+
+        return $name;
+    }
+
+    /**
+     * Resolves an FQCN purely based on the file context (namespace and use imports).
+     */
+    public static function resolveFqcnForFile(string $name, string $file): string
+    {
+        $lower = strtolower($name);
+        if (\in_array($lower, [
+            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
+            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
+            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
+            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
+            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
+        ], true)) {
+            return $name;
+        }
+
+        if (str_starts_with($name, '\\')) {
+            return ltrim($name, '\\');
+        }
+
+        if (! ClassNameValidator::isValid($name)) {
+            return $name;
+        }
+
+        // Check `use` imports in file
+        $imports = self::getUseImportsFromFile($file);
+        if (isset($imports[$name])) {
+            return $imports[$name];
+        }
+
+        // Check same namespace
+        $namespace = self::getNamespaceFromFile($file);
         if ($namespace !== '') {
             $namespacedClass = $namespace . '\\' . $name;
             if (class_exists($namespacedClass) || interface_exists($namespacedClass) || trait_exists($namespacedClass) || enum_exists($namespacedClass)) {

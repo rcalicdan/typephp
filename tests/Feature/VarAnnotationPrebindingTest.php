@@ -41,4 +41,58 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
         expect(fn () => $producers->add(new Producer(new Car())))
             ->toThrow(TypeError::class);
     });
+
+    test('prebinds template T with a multi-line generic type definition', function () {
+        /**
+         * @var GenericCollection<
+         *     Dog
+         * > $dogs
+         */
+        $dogs = new GenericCollection();
+
+        $dogs->add(new Dog());
+        expect($dogs->count())->toBe(1);
+
+        expect(fn () => $dogs->add(new Car()))
+            ->toThrow(TypeError::class);
+    });
+
+    test('prebinds template T with weird spacing and missing variable name', function () {
+        /** @var    GenericCollection<   Dog   > */
+        $dogs = new GenericCollection();
+
+        $dogs->add(new Dog());
+        expect($dogs->count())->toBe(1);
+
+        expect(fn () => $dogs->add(new Car()))
+            ->toThrow(TypeError::class);
+    });
+
+    test('prebinds template T when variable name precedes the type', function () {
+        /** @var $dogs GenericCollection<Dog> */
+        $dogs = new GenericCollection();
+
+        $dogs->add(new Dog());
+        expect($dogs->count())->toBe(1);
+
+        expect(fn () => $dogs->add(new Car()))
+            ->toThrow(TypeError::class);
+    });
+
+    test('prebinds deeply nested multi-line generics with asterisks', function () {
+        /**
+         * @var GenericCollection<
+         *   Producer<
+         *     Dog
+         *   >
+         * > $producers
+         */
+        $producers = new GenericCollection();
+
+        $producers->add(new Producer(new Dog()));
+        expect($producers->count())->toBe(1);
+
+        expect(fn () => $producers->add(new Producer(new Car())))
+            ->toThrow(TypeError::class);
+    });
 });

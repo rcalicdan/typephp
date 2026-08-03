@@ -7,6 +7,12 @@ namespace TypePHP\Internal;
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
+use PHPStan\PhpDocParser\Lexer\Lexer;
+use PHPStan\PhpDocParser\Parser\ConstExprParser;
+use PHPStan\PhpDocParser\Parser\PhpDocParser;
+use PHPStan\PhpDocParser\Parser\TokenIterator;
+use PHPStan\PhpDocParser\Parser\TypeParser;
+use PHPStan\PhpDocParser\ParserConfig;
 
 final class ContractVisitor extends NodeVisitorAbstract
 {
@@ -309,17 +315,38 @@ final class ContractVisitor extends NodeVisitorAbstract
             return;
         }
 
-        $docText = $doc->getText();
-        if (preg_match('/@var\s+([^\s$]+<[^>]+>)/', $docText, $m) === 1 || preg_match('/@var\s+\$[^\s]+\s+([^\s]+<[^>]+>)/', $docText, $m) === 1) {
-            $typeString = $m[1];
+        static $phpDocParser = null;
+        static $lexer = null;
 
-            $assign->expr = new Node\Expr\FuncCall(
-                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::bindInstance'),
-                [
-                    new Node\Arg($assign->expr),
-                    new Node\Arg(new Node\Scalar\String_($typeString)),
-                ]
-            );
+        if ($phpDocParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+        }
+
+        try {
+            $tokens = new TokenIterator($lexer->tokenize($doc->getText()));
+            $phpDocNode = $phpDocParser->parse($tokens);
+            $varTags = $phpDocNode->getVarTagValues();
+
+            if (\count($varTags) > 0) {
+                $typeString = (string) $varTags[0]->type;
+
+                if (str_contains($typeString, '<')) {
+                    $assign->expr = new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::bindInstance'),
+                        [
+                            new Node\Arg($assign->expr),
+                            new Node\Arg(new Node\Scalar\String_($typeString)),
+                            new Node\Arg(new Node\Scalar\MagicConst\File()),
+                        ]
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore malformed docblocks
         }
     }
 }

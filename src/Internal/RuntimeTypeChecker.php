@@ -33,9 +33,9 @@ final class RuntimeTypeChecker
         return TemplateManager::bindInstanceFromNode($instance, $typeNode, $context, $forceBind);
     }
 
-    public static function bindInstance(object $instance, string $typeString): object
+    public static function bindInstance(object $instance, string $typeString, string $file = ''): object
     {
-        return TemplateManager::bindInstance($instance, $typeString);
+        return TemplateManager::bindInstance($instance, $typeString, $file);
     }
 
     /**

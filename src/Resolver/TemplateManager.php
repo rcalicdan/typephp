@@ -351,7 +351,7 @@ final class TemplateManager
         return false;
     }
 
-    public static function bindInstance(object $instance, string $typeString): object
+      public static function bindInstance(object $instance, string $typeString, string $file = ''): object
     {
         /** @var TypeParser|null $typeParser */
         static $typeParser = null;
@@ -368,6 +368,10 @@ final class TemplateManager
         try {
             $tokens = new TokenIterator($lexer->tokenize($typeString));
             $typeNode = $typeParser->parse($tokens);
+
+            if ($file !== '') {
+                $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
+            }
 
             if ($typeNode instanceof GenericTypeNode) {
                 self::bindInstanceFromNode($instance, $typeNode, '', true);
