@@ -115,6 +115,7 @@ echo "=== Testing @extends and @implements Generic Annotations ===\n\n";
 // 1. Testing @extends Repository<Dog> vs Repository<Car>
 // -------------------------------------------------------------
 echo "1. Testing @extends Repository<Dog> (Valid)...\n";
+
 try {
     handleAnimalRepo(new DogRepository());
     echo "   ✅ DogRepository passed for Repository<covariant Animal>!\n";
@@ -123,6 +124,7 @@ try {
 }
 
 echo "\n2. Testing @extends Repository<Car> (Invalid - Car is not an Animal)...\n";
+
 try {
     handleAnimalRepo(new CarRepository());
     echo "   ❌ Failed to catch invalid @extends Repository<Car> for Repository<covariant Animal>!\n";
@@ -134,6 +136,7 @@ try {
 // 2. Testing @implements ProcessorInterface<Cat>
 // -------------------------------------------------------------
 echo "\n3. Testing @implements ProcessorInterface<Cat> (Valid)...\n";
+
 try {
     handleAnimalProcessor(new CatProcessor());
     echo "   ✅ CatProcessor passed for ProcessorInterface<covariant Animal>!\n";

@@ -40,6 +40,7 @@ final class TemplateManager
 
     /**
      * @param array<string, TemplateTagValueNode> $templates
+     *
      * @return array<string, TypeNode>
      */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array

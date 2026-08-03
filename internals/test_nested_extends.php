@@ -116,6 +116,7 @@ echo "=== Testing Nested Generics & Multi-Level @extends ===\n\n";
 
 // 1. Nested Generic in @extends
 echo "1. Testing @extends Repository<Producer<Dog>> (Valid)...\n";
+
 try {
     handleNestedRepo(new ProducerDogRepo());
     echo "   ✅ ProducerDogRepo passed for Repository<Producer<Animal>>!\n";
@@ -124,6 +125,7 @@ try {
 }
 
 echo "\n2. Testing @extends Repository<Producer<Car>> (Invalid - Car is not an Animal)...\n";
+
 try {
     handleNestedRepo(new ProducerCarRepo());
     echo "   ❌ Failed to catch invalid nested generic!\n";
@@ -133,6 +135,7 @@ try {
 
 // 2. Multi-Level Generic Inheritance
 echo "\n3. Testing Multi-Level @extends Inheritance (Dog -> BaseRepo<T> -> Repository<T>)...\n";
+
 try {
     handleMultiLevelRepo(new MultiLevelDogRepo());
     echo "   ✅ MultiLevelDogRepo passed for Repository<Animal>!\n";
