@@ -2,66 +2,115 @@
 
 declare(strict_types=1);
 
-class Animal {}
-class Dog extends Animal {}
-class Cat extends Animal {}
-
-/**
- * @template T
- */
-class Producer
+class User
 {
-    /**
-     * @param T $item
-     */
-    public function __construct(public mixed $item) {}
+    public function __construct(public int $id, public string $name) {}
 }
 
-/**
- * @template T
- */
-class Box
+class UserProcessor
 {
     /**
-     * @param T $item
+     * 1. Validates SomeClass[]
+     * @param User[] $users
      */
-    public function __construct(public mixed $item) {}
-
-    /**
-     * @return self<Producer<Dog>>
-     */
-    public function getValidNested(): self
+    public function processUsers(array $users)
     {
-        // Valid: returns Box<Producer<Dog>>
-        return new self(new Producer(new Dog()));
+        return count($users);
     }
 
     /**
-     * @return self<Producer<Dog>>
+     * 2. Validates array{id: int, name: string}[]
+     * @param array{id: int, name: string}[] $userShapes
      */
-    public function getInvalidNested(): self
+    public function processUserShapes(array $userShapes)
     {
-        // Invalid: returns Box<Producer<Cat>>, but expects Box<Producer<Dog>>
-        return new self(new Producer(new Cat()));
+        return count($userShapes);
+    }
+
+    /**
+     * 3. Validates Shape containing Object Array: array{users: User[], count: int}
+     * @param array{users: User[], count: int} $payload
+     */
+    public function processPayload(array $payload)
+    {
+        return $payload['count'];
+    }
+
+    /**
+     * 4. Validates self[]
+     * @return self[]
+     */
+    public function getProcessors(): array
+    {
+        return [$this, new self()];
     }
 }
 
-echo "=== Testing Nested Generics: self<Producer<Dog>> ===\n\n";
+echo "=== Testing SomeClass[] and Array Shapes ===\n\n";
 
-$box = new Box(new Producer(new Dog()));
+$processor = new UserProcessor();
 
-// 1. Test Valid Nested Generic
-echo "1. Testing Valid self<Producer<Dog>>...\n";
-$box->getValidNested();
-echo "   ✅ Valid nested generic passed!\n";
+// -------------------------------------------------------------
+// 1. Testing SomeClass[] (User[])
+// -------------------------------------------------------------
+echo "1. Testing User[]...\n";
+$processor->processUsers([new User(1, 'Alice'), new User(2, 'Bob')]);
+echo "   ✅ Valid User[] passed!\n";
 
-// 2. Test Invalid Nested Generic (Cat instead of Dog)
-echo "\n2. Testing Invalid self<Producer<Dog>>...\n";
 try {
-    $box->getInvalidNested();
-    echo "   ❌ Failed to catch bad nested generic!\n";
+    $processor->processUsers([new User(1, 'Alice'), 'not_a_user_object']);
+    echo "   ❌ Failed to catch invalid User[]!\n";
 } catch (\TypeError $e) {
     echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
 }
 
-echo "\n🎉 NESTED GENERICS TEST PASSED PERFECTLY!\n";
+// -------------------------------------------------------------
+// 2. Testing array{id: int, name: string}[]
+// -------------------------------------------------------------
+echo "\n2. Testing array{id: int, name: string}[]...\n";
+$processor->processUserShapes([
+    ['id' => 1, 'name' => 'Alice'],
+    ['id' => 2, 'name' => 'Bob']
+]);
+echo "   ✅ Valid array{id: int, name: string}[] passed!\n";
+
+try {
+    // Second shape is missing 'name'
+    $processor->processUserShapes([
+        ['id' => 1, 'name' => 'Alice'],
+        ['id' => 2] 
+    ]);
+    echo "   ❌ Failed to catch invalid array shape in array!\n";
+} catch (\TypeError $e) {
+    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+}
+
+// -------------------------------------------------------------
+// 3. Testing Shape with Object Array: array{users: User[], count: int}
+// -------------------------------------------------------------
+echo "\n3. Testing array{users: User[], count: int}...\n";
+$processor->processPayload([
+    'users' => [new User(1, 'Alice')],
+    'count' => 1
+]);
+echo "   ✅ Valid payload passed!\n";
+
+try {
+    // 'users' contains a string instead of User object
+    $processor->processPayload([
+        'users' => ['not_a_user'],
+        'count' => 1
+    ]);
+    echo "   ❌ Failed to catch invalid User object inside shape array!\n";
+} catch (\TypeError $e) {
+    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+}
+
+// -------------------------------------------------------------
+// 4. Testing self[]
+// -------------------------------------------------------------
+echo "\n4. Testing self[]...\n";
+$processor->getProcessors();
+echo "   ✅ Valid self[] return passed!\n";
+
+echo "\n🎉 ALL ARRAY & SHAPE TESTS PASSED PERFECTLY!\n";

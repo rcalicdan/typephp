@@ -57,8 +57,6 @@ if (file_exists($configFile)) {
     }
 }
 
-var_dump("Loaded Config Includes:", $config['include'] ?? ['** (Default)']);
-
 \TypePHP\TypePHP::boot($config);
 
 require realpath($target);

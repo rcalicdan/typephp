@@ -77,7 +77,7 @@ final class RuntimeTypeChecker
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolveSpecialTypeNames($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -98,14 +98,70 @@ final class RuntimeTypeChecker
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                $node->types
+            ));
+        }
+
+        return $node;
+    }
+
+    /**
+     * Recursively substitutes template placeholders (like T) with their bound concrete types (like int).
+     */
+    private static function substituteTemplates(TypeNode $node, array $boundTemplates): TypeNode
+    {
+        if (empty($boundTemplates)) {
+            return $node;
+        }
+
+        if ($node instanceof IdentifierTypeNode) {
+            if (isset($boundTemplates[$node->name])) {
+                return $boundTemplates[$node->name];
+            }
+
+            return $node;
+        }
+
+        if ($node instanceof ArrayTypeNode) {
+            return new ArrayTypeNode(self::substituteTemplates($node->type, $boundTemplates));
+        }
+
+        if ($node instanceof GenericTypeNode) {
+            $type = self::substituteTemplates($node->type, $boundTemplates);
+            $genericTypes = array_map(
+                fn ($t) => self::substituteTemplates($t, $boundTemplates),
+                $node->genericTypes
+            );
+
+            return new GenericTypeNode(
+                $type instanceof IdentifierTypeNode ? $type : $node->type,
+                $genericTypes,
+                $node->variances
+            );
+        }
+
+        if ($node instanceof NullableTypeNode) {
+            return new NullableTypeNode(self::substituteTemplates($node->type, $boundTemplates));
+        }
+
+        if ($node instanceof UnionTypeNode) {
+            return new UnionTypeNode(array_map(
+                fn ($t) => self::substituteTemplates($t, $boundTemplates),
+                $node->types
+            ));
+        }
+
+        if ($node instanceof IntersectionTypeNode) {
+            return new IntersectionTypeNode(array_map(
+                fn ($t) => self::substituteTemplates($t, $boundTemplates),
                 $node->types
             ));
         }
@@ -378,9 +434,16 @@ final class RuntimeTypeChecker
                 }
             }
 
-            // Resolve / Infer direct template types (@template T)
-            if ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name])) {
-                $templateName = $typeNode->name;
+            // Resolve / Infer direct template types (@template T) or variadic templates (@param T ...$items)
+            $innerTypeNode = ($typeNode instanceof ArrayTypeNode && $typeNode->type instanceof IdentifierTypeNode)
+                ? $typeNode->type
+                : null;
+
+            $isTemplateIdentifier = ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name]));
+            $isVariadicTemplateIdentifier = ($innerTypeNode !== null && isset($templates[$innerTypeNode->name]));
+
+            if ($isTemplateIdentifier || $isVariadicTemplateIdentifier) {
+                $templateName = $isVariadicTemplateIdentifier ? $innerTypeNode->name : $typeNode->name;
                 $templateNode = $templates[$templateName];
 
                 $alreadyBound = false;
@@ -403,10 +466,12 @@ final class RuntimeTypeChecker
                 }
 
                 if (! $alreadyBound) {
-                    $inferredType = self::inferTypeFromValue($val);
+                    // If variadic, infer T from the first item in the variadic array
+                    $sampleVal = $isVariadicTemplateIdentifier ? ($val[0] ?? null) : $val;
+                    $inferredType = self::inferTypeFromValue($sampleVal);
 
                     if ($templateNode->bound !== null) {
-                        if ($err = self::$registry->validate($val, $templateNode->bound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')')) {
+                        if ($err = self::$registry->validate($sampleVal, $templateNode->bound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')')) {
                             return $err;
                         }
                     }
@@ -416,9 +481,26 @@ final class RuntimeTypeChecker
                     } else {
                         self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
                     }
+
+                    // Validate all items in the variadic array against inferred T
+                    if ($isVariadicTemplateIdentifier && is_array($val)) {
+                        foreach ($val as $idx => $item) {
+                            if ($err = self::$registry->validate($item, $inferredType, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $inferredType . ')')) {
+                                return $err;
+                            }
+                        }
+                    }
                 } else {
-                    if ($err = self::$registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
-                        return $err;
+                    if ($isVariadicTemplateIdentifier && is_array($val)) {
+                        foreach ($val as $idx => $item) {
+                            if ($err = self::$registry->validate($item, $expectedTypeNode, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
+                                return $err;
+                            }
+                        }
+                    } else {
+                        if ($err = self::$registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
+                            return $err;
+                        }
                     }
                 }
 
@@ -471,6 +553,26 @@ final class RuntimeTypeChecker
             $returnTypeNode = $aliases[$returnTypeNode->name];
         }
 
+        // Substitute bound templates in return types (e.g. T[] -> int[], Collection<T> -> Collection<User>)
+        $templates = $contract['templates'];
+        $isInstanceMethod = $thisObj !== null;
+
+        $boundTemplates = [];
+        if ($isInstanceMethod && isset(self::$instanceTemplateBindings[$thisObj])) {
+            $boundTemplates = self::$instanceTemplateBindings[$thisObj];
+        } else {
+            foreach ($templates as $templateName => $_) {
+                $callKey = "{$function}:{$templateName}";
+                if (isset(self::$callTemplateBindings[$callKey])) {
+                    $boundTemplates[$templateName] = self::$callTemplateBindings[$callKey];
+                }
+            }
+        }
+
+        if (! empty($boundTemplates)) {
+            $returnTypeNode = self::substituteTemplates($returnTypeNode, $boundTemplates);
+        }
+
         // 1. Handle Parameter-based Conditional Return Types: ($input is string ? int : bool)
         if ($returnTypeNode instanceof ConditionalTypeForParameterNode) {
             $paramName = ltrim($returnTypeNode->parameterName, '$');
@@ -498,12 +600,9 @@ final class RuntimeTypeChecker
 
             if ($subjectTypeNode instanceof IdentifierTypeNode) {
                 $templateName = $subjectTypeNode->name;
-                $isInstanceMethod = $thisObj !== null;
 
-                if ($isInstanceMethod && isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
-                    $subjectTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
-                } elseif (isset(self::$callTemplateBindings["{$function}:{$templateName}"])) {
-                    $subjectTypeNode = self::$callTemplateBindings["{$function}:{$templateName}"];
+                if (isset($boundTemplates[$templateName])) {
+                    $subjectTypeNode = $boundTemplates[$templateName];
                 }
             }
 
@@ -521,34 +620,6 @@ final class RuntimeTypeChecker
 
             if ($err = self::$registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value')) {
                 throw $err;
-            }
-
-            return $value;
-        }
-
-        $templates = $contract['templates'];
-        $isInstanceMethod = $thisObj !== null;
-
-        // Resolve / Check template return types (@return T)
-        if ($returnTypeNode instanceof IdentifierTypeNode && isset($templates[$returnTypeNode->name])) {
-            $templateName = $returnTypeNode->name;
-            $expectedTypeNode = null;
-
-            if ($isInstanceMethod) {
-                if (isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
-                    $expectedTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
-                }
-            } else {
-                $callKey = "{$function}:{$templateName}";
-                if (isset(self::$callTemplateBindings[$callKey])) {
-                    $expectedTypeNode = self::$callTemplateBindings[$callKey];
-                }
-            }
-
-            if ($expectedTypeNode !== null) {
-                if ($err = self::$registry->validate($value, $expectedTypeNode, $function . '(): Return value (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
-                    throw $err;
-                }
             }
 
             return $value;
