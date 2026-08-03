@@ -47,8 +47,17 @@ if (!$target || !file_exists($target)) {
     die("Usage: vendor/bin/typephp <script.php>\n");
 }
 
-$configFile = getcwd() . '/typephp.json';
-$config = file_exists($configFile) ? json_decode(file_get_contents($configFile), true) : [];
+// Load PHP configuration file
+$configFile = getcwd() . '/typephp.php';
+$config = [];
+if (file_exists($configFile)) {
+    $loadedConfig = require $configFile;
+    if (is_array($loadedConfig)) {
+        $config = $loadedConfig;
+    }
+}
+
+var_dump("Loaded Config Includes:", $config['include'] ?? ['** (Default)']);
 
 \TypePHP\TypePHP::boot($config);
 

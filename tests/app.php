@@ -15,6 +15,7 @@ function processProducers(Producer ...$producers)
     echo "Successfully processed " . count($producers) . " producers!\n";
 }
 
+
 // 2. Variadic Complex Array Shapes
 /**
  * @param array{id: int, name: string} ...$users

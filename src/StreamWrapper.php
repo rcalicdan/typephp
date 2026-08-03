@@ -17,6 +17,8 @@ final class StreamWrapper
 
     private static array $includePatterns = [];
 
+    private static array $excludePatterns = [];
+
     private static string $baseDir = '';
 
     public static function register(array $config = []): void
@@ -24,7 +26,10 @@ final class StreamWrapper
         self::$baseDir = rtrim(str_replace('\\', '/', getcwd()), '/');
 
         $includes = $config['include'] ?? ['**'];
+        $excludes = $config['exclude'] ?? ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+
         self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
+        self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
 
         stream_wrapper_unregister('file');
         stream_wrapper_register('file', self::class);
@@ -37,15 +42,21 @@ final class StreamWrapper
 
     private static function compileGlobToRegex(string $glob): string
     {
-        $glob = str_replace('\\', '/', $glob);
+        $glob = str_replace('\\', '/', trim($glob));
+        $isAbsolute = str_starts_with($glob, '/') || (bool)preg_match('#^[a-zA-Z]:/#', $glob);
+
         $regex = preg_quote($glob, '#');
         $regex = str_replace(['\*\*', '\*'], ['.*', '[^/]*'], $regex);
 
-        if (! str_starts_with($glob, '**') && ! str_starts_with($glob, '/')) {
-            $regex = preg_quote(self::$baseDir . '/', '#') . $regex;
+        if ($isAbsolute) {
+            $pattern = '^' . $regex . '$';
+        } elseif (str_starts_with($glob, '**')) {
+            $pattern = '.*' . substr($regex, 4) . '$';
+        } else {
+            $pattern = '^' . preg_quote(self::$baseDir . '/', '#') . $regex . '$';
         }
 
-        return '#' . $regex . '#i';
+        return '#' . $pattern . '#i';
     }
 
     public function stream_open($path, $mode, $options, &$openedPath): bool
@@ -61,12 +72,25 @@ final class StreamWrapper
             $normalizedPath = str_replace('\\', '/', $resolvedPath);
             $libSrcDir = str_replace('\\', '/', realpath(__DIR__));
 
-            if (! str_contains($normalizedPath, '/vendor/') && ! str_starts_with($normalizedPath, $libSrcDir)) {
-                foreach (self::$includePatterns as $pattern) {
+            // Don't instrument TypePHP internal engine files
+            if (! str_starts_with($normalizedPath, $libSrcDir)) {
+                
+                // 1. Check Exclusions first
+                $isExcluded = false;
+                foreach (self::$excludePatterns as $pattern) {
                     if (preg_match($pattern, $normalizedPath)) {
-                        $isAppFile = true;
-
+                        $isExcluded = true;
                         break;
+                    }
+                }
+
+                // 2. If not excluded, check Includes
+                if (! $isExcluded) {
+                    foreach (self::$includePatterns as $pattern) {
+                        if (preg_match($pattern, $normalizedPath)) {
+                            $isAppFile = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -87,7 +111,7 @@ final class StreamWrapper
         }
         $mtime = filemtime($resolvedPath);
 
-        $cacheKey = hash('xxh128', 'v19_' . $resolvedPath . $mtime);
+        $cacheKey = hash('xxh128', 'v20_' . $resolvedPath . $mtime);
         $cachedFile = "$cacheDir/$cacheKey.php";
 
         if (! file_exists($cachedFile)) {

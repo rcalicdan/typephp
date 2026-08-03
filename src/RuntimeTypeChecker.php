@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace TypePHP;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
@@ -551,7 +552,7 @@ final class RuntimeTypeChecker
                     $keyTypeNode = $typeNode->genericTypes[0];
                     $itemTypeNode = $typeNode->genericTypes[1];
                 }
-            } elseif ($typeNode instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
+            } elseif ($typeNode instanceof ArrayTypeNode) {
                 $itemTypeNode = $typeNode->type;
             }
 
@@ -650,9 +651,22 @@ final class RuntimeTypeChecker
                     $aliases[$aliasTag->alias] = $aliasTag->type;
                 }
 
+                $refParams = [];
+                foreach ($ref->getParameters() as $p) {
+                    $refParams[$p->getName()] = $p->isVariadic();
+                }
+
                 foreach ($phpDocNode->getParamTagValues() as $paramTag) {
                     $paramName = ltrim($paramTag->parameterName, '$');
-                    $types[$paramName] = $paramTag->type;
+                    $type = $paramTag->type;
+
+                    // Automatically wrap variadic parameters into an ArrayTypeNode (Type[])
+                    $isVariadic = $paramTag->isVariadic || ($refParams[$paramName] ?? false);
+                    if ($isVariadic) {
+                        $type = new ArrayTypeNode($type);
+                    }
+
+                    $types[$paramName] = $type;
                 }
 
                 $returnTags = $phpDocNode->getReturnTagValues();
