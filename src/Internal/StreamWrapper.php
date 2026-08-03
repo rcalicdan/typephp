@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\CloningVisitor;
@@ -90,6 +90,7 @@ final class StreamWrapper
                 foreach (self::$excludePatterns as $pattern) {
                     if (preg_match($pattern, $normalizedPath)) {
                         $isExcluded = true;
+
                         break;
                     }
                 }
@@ -98,6 +99,7 @@ final class StreamWrapper
                     foreach (self::$includePatterns as $pattern) {
                         if (preg_match($pattern, $normalizedPath)) {
                             $isAppFile = true;
+
                             break;
                         }
                     }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;

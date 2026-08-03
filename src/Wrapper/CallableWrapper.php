@@ -7,8 +7,8 @@ namespace TypePHP\Wrapper;
 use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use TypePHP\Contract\ContractParser;
-use TypePHP\ErrorFactory;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 final class CallableWrapper

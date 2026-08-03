@@ -7,9 +7,9 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
-use TypePHP\ErrorFactory;
-use TypePHP\RuntimeTypeChecker;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\RuntimeTypeChecker;
+use TypePHP\Internal\TypeFormatter;
 
 final class GenericValidator implements TypeValidatorInterface
 {

@@ -12,8 +12,8 @@ use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprStringNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprTrueNode;
 use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
-use TypePHP\ErrorFactory;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 
 final class ConstValidator implements TypeValidatorInterface
 {

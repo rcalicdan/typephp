@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
@@ -28,7 +28,7 @@ final class ContractVisitor extends NodeVisitorAbstract
     private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node)
     {
         if ($node->stmts === null) {
-            return null; // Interfaces and abstract methods have null stmts. Empty methods have []
+            return null;
         }
 
         $doc = $node->getDocComment();
@@ -52,12 +52,11 @@ final class ContractVisitor extends NodeVisitorAbstract
         $injectedStmts = [];
 
         if ($hasParam) {
-            // if ($__typephpErr = \TypePHP\RuntimeTypeChecker::checkParams(__METHOD__, get_defined_vars(), $thisObj)) throw $__typephpErr;
             $injectedStmts[] = new Node\Stmt\If_(
                 new Node\Expr\Assign(
                     new Node\Expr\Variable('__typephpErr'),
                     new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\RuntimeTypeChecker::checkParams'),
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkParams'),
                         [
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
                             new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
@@ -83,7 +82,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                             new Node\Expr\Assign(
                                 new Node\Expr\Variable($paramName),
                                 new Node\Expr\FuncCall(
-                                    new Node\Name('\TypePHP\RuntimeTypeChecker::wrapCallable'),
+                                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapCallable'),
                                     [
                                         new Node\Arg(new Node\Scalar\MagicConst\Method()),
                                         new Node\Arg(new Node\Scalar\String_($paramName)),
@@ -105,7 +104,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                             new Node\Expr\Assign(
                                 new Node\Expr\Variable($paramName),
                                 new Node\Expr\FuncCall(
-                                    new Node\Name('\TypePHP\RuntimeTypeChecker::wrapIterable'),
+                                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
                                     [
                                         new Node\Arg(new Node\Scalar\MagicConst\Method()),
                                         new Node\Arg(new Node\Scalar\String_($paramName)),
@@ -136,7 +135,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                         $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
 
                         $n->expr = new Node\Expr\FuncCall(
-                            new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
+                            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
                             [
                                 new Node\Arg(new Node\Scalar\MagicConst\Method()),
                                 new Node\Arg($exprToWrap),
@@ -156,7 +155,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             if (! $lastStmt instanceof Node\Stmt\Return_ && ! $lastStmt instanceof Node\Stmt\Throw_) {
                 $node->stmts[] = new Node\Stmt\Return_(
                     new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
                         [
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
                             new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
@@ -193,7 +192,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             $typeString = $m[1];
 
             $assign->expr = new Node\Expr\FuncCall(
-                new Node\Name('\TypePHP\RuntimeTypeChecker::bindInstance'),
+                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::bindInstance'),
                 [
                     new Node\Arg($assign->expr),
                     new Node\Arg(new Node\Scalar\String_($typeString)),

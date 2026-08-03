@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
 final class Config
 {

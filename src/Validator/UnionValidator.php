@@ -6,8 +6,8 @@ namespace TypePHP\Validator;
 
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
-use TypePHP\ErrorFactory;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 
 final class UnionValidator implements TypeValidatorInterface
 {

@@ -14,7 +14,7 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
-use TypePHP\ErrorFactory;
+use TypePHP\Internal\ErrorFactory;
 
 final class TemplateManager
 {
