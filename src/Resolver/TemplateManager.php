@@ -40,7 +40,6 @@ final class TemplateManager
 
     /**
      * @param array<string, TemplateTagValueNode> $templates
-     *
      * @return array<string, TypeNode>
      */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
@@ -106,6 +105,8 @@ final class TemplateManager
         if (! class_exists($className) && ! interface_exists($className) && ! trait_exists($className)) {
             return null;
         }
+
+        self::resolveInheritedTemplates($instance, $className);
 
         try {
             $ref = new \ReflectionClass($className);
@@ -189,6 +190,81 @@ final class TemplateManager
         return null;
     }
 
+    private static function resolveInheritedTemplates(object $instance, string $targetClassName): void
+    {
+        $actualClassName = get_class($instance);
+
+        try {
+            $ref = new \ReflectionClass($actualClassName);
+            $classDoc = $ref->getDocComment();
+
+            if ($classDoc !== false) {
+                /** @var PhpDocParser|null $phpDocParser */
+                static $phpDocParser = null;
+                /** @var Lexer|null $lexer */
+                static $lexer = null;
+
+                if ($phpDocParser === null || $lexer === null) {
+                    $config = new ParserConfig(usedAttributes: []);
+                    $lexer = new Lexer($config);
+                    $constExprParser = new ConstExprParser($config);
+                    $typeParser = new TypeParser($config, $constExprParser);
+                    $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+                }
+
+                $classTokens = new TokenIterator($lexer->tokenize($classDoc));
+                $classPhpDocNode = $phpDocParser->parse($classTokens);
+
+                $inheritedTags = array_merge(
+                    $classPhpDocNode->getExtendsTagValues(),
+                    $classPhpDocNode->getImplementsTagValues()
+                );
+
+                foreach ($inheritedTags as $inheritedTag) {
+                    $genericTypeNode = $inheritedTag->type;
+                    if ($genericTypeNode instanceof GenericTypeNode) {
+                        $parentName = $genericTypeNode->type->name;
+
+                        if ($parentName === $targetClassName || is_a($parentName, $targetClassName, true)) {
+                            if (! class_exists($parentName) && ! interface_exists($parentName)) {
+                                continue;
+                            }
+
+                            $parentRef = new \ReflectionClass($parentName);
+                            $parentDoc = $parentRef->getDocComment();
+
+                            if ($parentDoc !== false) {
+                                $parentTokens = new TokenIterator($lexer->tokenize($parentDoc));
+                                $parentPhpDocNode = $phpDocParser->parse($parentTokens);
+
+                                $parentTemplateNames = [];
+                                foreach ($parentPhpDocNode->getTags() as $tag) {
+                                    if ($tag->value instanceof TemplateTagValueNode) {
+                                        $parentTemplateNames[] = $tag->value->name;
+                                    }
+                                }
+
+                                $bindings = self::$instanceTemplateBindings[$instance] ?? [];
+                                foreach ($parentTemplateNames as $idx => $templateName) {
+                                    if (isset($genericTypeNode->genericTypes[$idx])) {
+                                        $bindings[$templateName] = $genericTypeNode->genericTypes[$idx];
+                                    }
+                                }
+
+                                if (self::$instanceTemplateBindings === null) {
+                                    self::$instanceTemplateBindings = new \WeakMap();
+                                }
+                                self::$instanceTemplateBindings[$instance] = $bindings;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore
+        }
+    }
+
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
     {
         $existingStr = (string) $existing;
@@ -199,6 +275,24 @@ final class TemplateManager
         }
 
         if ($variance === GenericTypeNode::VARIANCE_BIVARIANT || $expectedStr === 'mixed') {
+            return true;
+        }
+
+        // Unroll and recursively check nested generic type nodes
+        if ($existing instanceof GenericTypeNode && $expected instanceof GenericTypeNode) {
+            if (! is_a($existing->type->name, $expected->type->name, true)) {
+                return false;
+            }
+
+            foreach ($expected->genericTypes as $idx => $expectedInner) {
+                $existingInner = $existing->genericTypes[$idx] ?? new IdentifierTypeNode('mixed');
+                $innerVariance = $expected->variances[$idx] ?? GenericTypeNode::VARIANCE_INVARIANT;
+
+                if (! self::checkVariance($existingInner, $expectedInner, $innerVariance)) {
+                    return false;
+                }
+            }
+
             return true;
         }
 
