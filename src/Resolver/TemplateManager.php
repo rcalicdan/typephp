@@ -76,10 +76,9 @@ final class TemplateManager
             if (self::$instanceTemplateBindings === null) {
                 self::$instanceTemplateBindings = new \WeakMap();
             }
-            if (! isset(self::$instanceTemplateBindings[$thisObj])) {
-                self::$instanceTemplateBindings[$thisObj] = [];
-            }
-            self::$instanceTemplateBindings[$thisObj][$templateName] = $inferredType;
+            $bindings = self::$instanceTemplateBindings[$thisObj] ?? [];
+            $bindings[$templateName] = $inferredType;
+            self::$instanceTemplateBindings[$thisObj] = $bindings;
         } else {
             self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
         }
@@ -151,19 +150,15 @@ final class TemplateManager
                         $templateName = $templateTag->name;
 
                         if ($forceBind) {
-                            if (! isset(self::$instanceTemplateBindings[$instance])) {
-                                self::$instanceTemplateBindings[$instance] = [];
-                            }
-                            self::$instanceTemplateBindings[$instance][$templateName] = $expectedTypeNode;
+                            // Safely extract, modify, and assign back to WeakMap
+                            $bindings = self::$instanceTemplateBindings[$instance] ?? [];
+                            $bindings[$templateName] = $expectedTypeNode;
+                            self::$instanceTemplateBindings[$instance] = $bindings;
                         } else {
                             $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName]
                                 ?? new IdentifierTypeNode('mixed');
 
-                            $valid = self::checkVariance(
-                                $existingTypeNode,
-                                $expectedTypeNode,
-                                $variance
-                            );
+                            $valid = self::checkVariance($existingTypeNode, $expectedTypeNode, $variance);
 
                             if (! $valid) {
                                 return ErrorFactory::createError(
@@ -257,9 +252,9 @@ final class TemplateManager
         if (is_array($value)) {
             return new IdentifierTypeNode(array_is_list($value) ? 'list' : 'array');
         }
+
         if (is_object($value)) {
             $className = get_class($value);
-
             if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && ! empty(self::$instanceTemplateBindings[$value])) {
                 $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
 
@@ -268,6 +263,7 @@ final class TemplateManager
 
             return new IdentifierTypeNode($className);
         }
+
         if ($value === null) {
             return new IdentifierTypeNode('null');
         }

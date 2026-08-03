@@ -83,7 +83,7 @@ final class StreamWrapper
 
         if ($exists && str_ends_with($path, '.php') && $resolvedPath !== false) {
             $normalizedPath = str_replace('\\', '/', $resolvedPath);
-            $libSrcDir = str_replace('\\', '/', realpath(__DIR__));
+            $libSrcDir = str_replace('\\', '/', realpath(__DIR__ . '/..'));
 
             if (! str_starts_with($normalizedPath, $libSrcDir)) {
                 $isExcluded = false;
@@ -135,7 +135,8 @@ final class StreamWrapper
         }
 
         $mtime = filemtime($resolvedPath);
-        $cacheKey = hash('xxh128', 'v21_' . $resolvedPath . $mtime);
+        // BUMPED CACHE KEY TO v22_
+        $cacheKey = hash('xxh128', 'v22_' . $resolvedPath . $mtime);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {
@@ -168,13 +169,16 @@ final class StreamWrapper
         $printer = new Standard();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
-        return preg_replace_callback(
-            '/if\s*\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\RuntimeTypeChecker::checkParams\(.*?\)\)\s*\{.*?\}\r?\n\s*/s',
+        // Fixed Regex: Using [^}]* ensures it never backtracks past the immediate closing brace!
+        $result = preg_replace_callback(
+            '/if\s*\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::checkParams\(.*?\)\)\s*\{[^}]*\}\r?\n?\s*/s',
             function ($match) {
                 return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
             },
             $transformed
         );
+
+        return $result ?? $transformed;
     }
 
     public function stream_read($count)
