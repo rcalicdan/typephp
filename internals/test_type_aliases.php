@@ -17,6 +17,7 @@ class GlobalTypes
  *
  * @phpstan-import-type UserShape from GlobalTypes
  * @phpstan-import-type RoleType from GlobalTypes as UserRole
+ *
  * @phpstan-type LocalStatus 'active'|'inactive'
  */
 class UserService
@@ -52,6 +53,7 @@ $service = new UserService();
 // 1. Local Type Aliases (@phpstan-type LocalStatus)
 // -------------------------------------------------------------
 echo "1. Testing Local Type Alias (@phpstan-type LocalStatus)...\n";
+
 try {
     $service->updateUser(['id' => 1, 'name' => 'Alice'], 'active');
     echo "   ✅ Valid LocalStatus passed!\n";
@@ -70,6 +72,7 @@ try {
 // 2. Imported Type Aliases (@phpstan-import-type UserShape from GlobalTypes)
 // -------------------------------------------------------------
 echo "\n2. Testing Imported Type Alias (@phpstan-import-type UserShape from GlobalTypes)...\n";
+
 try {
     // Invalid UserShape: id is negative (-1)
     $service->updateUser(['id' => -1, 'name' => 'Alice'], 'active');
@@ -82,6 +85,7 @@ try {
 // 3. Imported Type Aliases WITH 'as' Alias
 // -------------------------------------------------------------
 echo "\n3. Testing Imported Type Alias with 'as' (@phpstan-import-type RoleType ... as UserRole)...\n";
+
 try {
     $service->setRole('admin');
     echo "   ✅ Valid UserRole passed!\n";

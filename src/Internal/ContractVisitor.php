@@ -15,12 +15,14 @@ final class ContractVisitor extends NodeVisitorAbstract
         // Function / Method contract injection
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
             $this->injectFunctionContract($node);
+
             return null;
         }
 
         // @var Docblock Pre-binding on assignments ($var = new Class())
         if ($node instanceof Node\Stmt\Expression && $node->expr instanceof Node\Expr\Assign) {
             $this->injectVarPrebinding($node);
+
             return null;
         }
 

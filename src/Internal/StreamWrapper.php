@@ -9,7 +9,7 @@ use PhpParser\NodeVisitor\CloningVisitor;
 use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 
-final class StreamWrapper
+final class StreamWrapper implements StreamWrapperInterface
 {
     /**
      * @var resource|null
@@ -20,6 +20,11 @@ final class StreamWrapper
      * @var resource|null
      */
     private $handle = null;
+
+    /**
+     * @var resource|null
+     */
+    private $dirHandle = null;
 
     /**
      * @var array<int, string>
@@ -169,7 +174,7 @@ final class StreamWrapper
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v25_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v29_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {
@@ -238,6 +243,49 @@ final class StreamWrapper
         return $res !== false ? $res : '';
     }
 
+    public function stream_write(string $data): int
+    {
+        if ($this->handle === null) {
+            return 0;
+        }
+
+        $res = fwrite($this->handle, $data);
+
+        return $res !== false ? $res : 0;
+    }
+
+    public function stream_lock(int $operation): bool
+    {
+        if ($this->handle === null) {
+            return false;
+        }
+
+        if ($operation < 1 || $operation > 15) {
+            return true;
+        }
+
+        // @phpstan-ignore-next-line
+        return @flock($this->handle, $operation);
+    }
+
+    public function stream_flush(): bool
+    {
+        if ($this->handle === null) {
+            return false;
+        }
+
+        return fflush($this->handle);
+    }
+
+    public function stream_truncate(int $new_size): bool
+    {
+        if ($this->handle === null || $new_size < 0) {
+            return false;
+        }
+
+        return ftruncate($this->handle, $new_size);
+    }
+
     public function stream_eof(): bool
     {
         if ($this->handle === null) {
@@ -288,6 +336,102 @@ final class StreamWrapper
     {
         self::unregister();
         $result = @stat($path);
+        self::register();
+
+        return $result;
+    }
+
+    public function stream_metadata(string $path, int $option, mixed $value): bool
+    {
+        self::unregister();
+        $result = false;
+        if ($option === STREAM_META_TOUCH) {
+            /** @var array{0?: int, 1?: int} $valueArray */
+            $valueArray = is_array($value) ? $value : [];
+            $time = $valueArray[0] ?? time();
+            $atime = $valueArray[1] ?? $time;
+            $result = @touch($path, $time, $atime);
+        } elseif ($option === STREAM_META_ACCESS) {
+            /** @var int $mode */
+            $mode = is_int($value) ? $value : 0777;
+            $result = @chmod($path, $mode);
+        }
+        self::register();
+
+        return $result;
+    }
+
+    public function dir_opendir(string $path, int $options): bool
+    {
+        self::unregister();
+        $dh = @opendir($path);
+        $this->dirHandle = $dh !== false ? $dh : null;
+        self::register();
+
+        return $this->dirHandle !== null;
+    }
+
+    public function dir_readdir(): string|false
+    {
+        if ($this->dirHandle === null) {
+            return false;
+        }
+
+        return readdir($this->dirHandle);
+    }
+
+    public function dir_rewinddir(): bool
+    {
+        if ($this->dirHandle === null) {
+            return false;
+        }
+
+        rewinddir($this->dirHandle);
+
+        return true;
+    }
+
+    public function dir_closedir(): bool
+    {
+        if ($this->dirHandle !== null) {
+            closedir($this->dirHandle);
+            $this->dirHandle = null;
+        }
+
+        return true;
+    }
+
+    public function mkdir(string $path, int $mode, int $options): bool
+    {
+        self::unregister();
+        $result = @mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE));
+        self::register();
+
+        return $result;
+    }
+
+    public function rmdir(string $path, int $options): bool
+    {
+        self::unregister();
+        $result = @rmdir($path);
+        self::register();
+
+        return $result;
+    }
+
+    public function unlink(string $path): bool
+    {
+        self::unregister();
+        $result = @unlink($path);
+        self::register();
+
+        return $result;
+    }
+
+    public function rename(string $pathFrom, string $pathTo): bool
+    {
+        self::unregister();
+        $result = @rename($pathFrom, $pathTo);
         self::register();
 
         return $result;

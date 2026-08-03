@@ -63,6 +63,7 @@ final class ContractParser
 
         /**
          * @param PhpDocNode $node
+         *
          * @return array<string, TemplateTagValueNode>
          */
         $getAllTemplates = function (PhpDocNode $node): array {
@@ -72,6 +73,7 @@ final class ContractParser
                     $tags[] = $tagNode->value;
                 }
             }
+
             return $tags;
         };
 
