@@ -70,3 +70,8 @@ try {
 } catch (\TypeError $e) {
     echo "✅ Caught bad int<50, max>: " . $e->getMessage() . "\n";
 }
+
+/**
+ * @var int $num
+ */
+$num = 1;
