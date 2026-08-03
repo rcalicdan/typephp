@@ -3,63 +3,70 @@
 declare(strict_types=1);
 
 /**
- * @param iterable<string> $items
+ * @param positive-int $a
+ * @param negative-int $b
+ * @param non-positive-int $c
+ * @param non-negative-int $d
+ * @param non-zero-int $e
+ * @param int<0, 100> $f
+ * @param int<min, 100> $g
+ * @param int<50, max> $h
  */
-function processStrings(iterable $items)
-{
-    foreach ($items as $item) {
-        echo "Processing string: '$item'\n";
-    }
-}
+function testIntegerTypes(
+    int $a,
+    int $b,
+    int $c,
+    int $d,
+    int $e,
+    int $f,
+    int $g,
+    int $h
+) {}
 
-/**
- * @param iterable<string, int> $map
- */
-function processMap(iterable $map)
-{
-    foreach ($map as $key => $value) {
-        echo "Processing pair: $key => $value\n";
-    }
-}
 
-// 1. Fully Valid Generator
-function validGenerator()
-{
-    yield "First";
-    yield "Second";
-}
+echo "=== Testing All 8 Integer Formats ===\n\n";
 
-// 2. Generator that yields a valid string first, then an invalid int
-function invalidValueGenerator()
-{
-    yield "Valid String";
-    yield 999; // <--- ERROR! Expected string
-    yield "Third"; // Should never be reached
-}
+// Valid call
+testIntegerTypes(
+    10,      // positive-int (> 0)
+    -5,      // negative-int (< 0)
+    0,       // non-positive-int (<= 0)
+    0,       // non-negative-int (>= 0)
+    100,     // non-zero-int (!= 0)
+    50,      // int<0, 100>
+    -9999,   // int<min, 100>
+    9999     // int<50, max>
+);
+echo "✅ All valid integer types passed!\n\n";
 
-// 3. Generator that yields an invalid key type
-function invalidKeyGenerator()
-{
-    yield "valid_key" => 10;
-    yield 123 => 20; // <--- ERROR! Key must be string, got int
-}
-
-echo "=== Test 1: Valid Generator ===\n";
-processStrings(validGenerator());
-echo "Passed!\n\n";
-
-echo "=== Test 2: Invalid Value Generator ===\n";
+// Test failure 1: 0 passed to positive-int
 try {
-    processStrings(invalidValueGenerator());
-    echo "❌ FAILED: Did not catch invalid value!\n";
+    testIntegerTypes(0, -5, 0, 0, 100, 50, -9999, 9999);
+    echo "❌ Failed to catch 0 in positive-int!\n";
 } catch (\TypeError $e) {
-    echo "✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n\n";
+    echo "✅ Caught bad positive-int: " . $e->getMessage() . "\n";
 }
 
-echo "=== Test 3: Invalid Key Generator ===\n";
+// Test failure 2: 150 passed to int<0, 100>
 try {
-    processMap(invalidKeyGenerator());
-    echo "❌ FAILED: Did not catch invalid key!\n";
+    testIntegerTypes(10, -5, 0, 0, 100, 150, -9999, 9999);
+    echo "❌ Failed to catch 150 in int<0, 100>!\n";
 } catch (\TypeError $e) {
-    echo "✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n\n";
+    echo "✅ Caught bad int<0, 100>: " . $e->getMessage() . "\n";
+}
+
+// Test failure 3: 200 passed to int<min, 100>
+try {
+    testIntegerTypes(10, -5, 0, 0, 100, 50, 200, 9999);
+    echo "❌ Failed to catch 200 in int<min, 100>!\n";
+} catch (\TypeError $e) {
+    echo "✅ Caught bad int<min, 100>: " . $e->getMessage() . "\n";
+}
+
+// Test failure 4: 10 passed to int<50, max>
+try {
+    testIntegerTypes(10, -5, 0, 0, 100, 50, -9999, 10);
+    echo "❌ Failed to catch 10 in int<50, max>!\n";
+} catch (\TypeError $e) {
+    echo "✅ Caught bad int<50, max>: " . $e->getMessage() . "\n";
 }

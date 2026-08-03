@@ -99,7 +99,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             // Lazy Iterable/Generator wrapping
             if (str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
                 foreach ($node->params as $param) {
-                    if ($param->var instanceof Node\Expr\Variable && \is_string($param->var->name)) {
+                    if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
                         $paramName = $param->var->name;
                         $injectedStmts[] = new Node\Stmt\Expression(
                             new Node\Expr\Assign(
@@ -141,6 +141,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                 new Node\Arg(new Node\Scalar\MagicConst\Method()),
                                 new Node\Arg($exprToWrap),
                                 new Node\Arg($this->thisArg),
+                                new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
                             ]
                         );
                     }
@@ -160,6 +161,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
                             new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
                             new Node\Arg($thisArg),
+                            new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
                         ]
                     )
                 );

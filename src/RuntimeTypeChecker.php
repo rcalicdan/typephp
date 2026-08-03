@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace TypePHP;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;
+use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
@@ -40,7 +42,7 @@ final class RuntimeTypeChecker
     /**
      * Binds or validates instance template types using a GenericTypeNode (e.g. Collection<int>).
      */
-    public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = ''): ?\TypeError
+    public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
         $className = $typeNode->type->name;
         if (! is_a($instance, $className)) {
@@ -69,12 +71,12 @@ final class RuntimeTypeChecker
                 // Fetch all template tags and their declared variances
                 $templates = [];
                 $classVariances = [];
-
+                
                 foreach ($classPhpDocNode->getTags() as $tagNode) {
                     if ($tagNode->value instanceof TemplateTagValueNode) {
                         $templates[] = $tagNode->value;
                         $tagName = strtolower($tagNode->name);
-
+                        
                         if (str_contains($tagName, 'covariant')) {
                             $classVariances[$tagNode->value->name] = GenericTypeNode::VARIANCE_COVARIANT;
                         } elseif (str_contains($tagName, 'contravariant')) {
@@ -88,23 +90,27 @@ final class RuntimeTypeChecker
                 if (self::$instanceTemplateBindings === null) {
                     self::$instanceTemplateBindings = new \WeakMap();
                 }
-                if (!isset(self::$instanceTemplateBindings[$instance])) {
-                    self::$instanceTemplateBindings[$instance] = [];
-                }
 
                 foreach ($templates as $index => $templateTag) {
                     if (isset($typeNode->genericTypes[$index])) {
                         $expectedTypeNode = $typeNode->genericTypes[$index];
-
+                        
                         // Class declared variance takes precedence, fallback to usage site variance
-                        $variance = $classVariances[$templateTag->name]
-                            ?? $typeNode->variances[$index]
+                        $variance = $classVariances[$templateTag->name] 
+                            ?? $typeNode->variances[$index] 
                             ?? GenericTypeNode::VARIANCE_INVARIANT;
-
+                            
                         $templateName = $templateTag->name;
 
-                        if (isset(self::$instanceTemplateBindings[$instance][$templateName])) {
-                            $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName];
+                        if ($forceBind) {
+                            if (!isset(self::$instanceTemplateBindings[$instance])) {
+                                self::$instanceTemplateBindings[$instance] = [];
+                            }
+                            self::$instanceTemplateBindings[$instance][$templateName] = $expectedTypeNode;
+                        } else {
+                            // If an object has no template binding recorded, treat it as mixed (unbound)
+                            $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName] 
+                                ?? new IdentifierTypeNode('mixed');
 
                             $valid = self::checkVariance(
                                 $existingTypeNode,
@@ -117,8 +123,6 @@ final class RuntimeTypeChecker
                                     $context . " expects {$className}<{$variance} {$expectedTypeNode}>, but {$className}<{$existingTypeNode}> was given"
                                 );
                             }
-                        } else {
-                            self::$instanceTemplateBindings[$instance][$templateName] = $expectedTypeNode;
                         }
                     }
                 }
@@ -147,7 +151,7 @@ final class RuntimeTypeChecker
             return true;
         }
 
-        $isSubclass = function (string $sub, string $super): bool {
+        $isSubclass = function(string $sub, string $super): bool {
             if ((class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
                 return is_a($sub, $super, true);
             }
@@ -188,7 +192,7 @@ final class RuntimeTypeChecker
             $typeNode = $typeParser->parse($tokens);
 
             if ($typeNode instanceof GenericTypeNode) {
-                self::bindInstanceFromNode($instance, $typeNode);
+                self::bindInstanceFromNode($instance, $typeNode, forceBind: true);
             }
         } catch (\Throwable $e) {
             // Ignore malformed docblock strings
@@ -235,14 +239,68 @@ final class RuntimeTypeChecker
                 $typeNode = $aliases[$typeNode->name];
             }
 
-            // Resolve / Infer template types (@template T)
+            // Resolve / Infer template types inside GenericTypeNode (e.g. class-string<T>)
+            if ($typeNode instanceof GenericTypeNode && isset($typeNode->genericTypes[0]) && $typeNode->genericTypes[0] instanceof IdentifierTypeNode) {
+                $baseType = strtolower($typeNode->type->name);
+                $innerType = $typeNode->genericTypes[0];
+                $templateName = $innerType->name;
+
+                if ($baseType === 'class-string' && isset($templates[$templateName])) {
+                    $templateNode = $templates[$templateName];
+                    $alreadyBound = false;
+                    $expectedTypeNode = null;
+
+                    if ($isInstanceMethod) {
+                        if (isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
+                            $alreadyBound = true;
+                            $expectedTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
+                        }
+                    } else {
+                        $callKey = "{$function}:{$templateName}";
+                        if (isset(self::$callTemplateBindings[$callKey])) {
+                            $alreadyBound = true;
+                            $expectedTypeNode = self::$callTemplateBindings[$callKey];
+                        }
+                    }
+
+                    if (! $alreadyBound) {
+                        if (! is_string($val) || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
+                            return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($val) . ' given');
+                        }
+
+                        if ($templateNode->bound !== null) {
+                            $boundName = $templateNode->bound instanceof IdentifierTypeNode ? $templateNode->bound->name : (string)$templateNode->bound;
+                            if (! is_a($val, $boundName, true)) {
+                                return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' (class-string<' . $templateName . '>) must be a class-string of ' . $boundName . ", '$val' given");
+                            }
+                        }
+
+                        $inferredType = new IdentifierTypeNode($val);
+
+                        if ($isInstanceMethod) {
+                            self::$instanceTemplateBindings[$thisObj][$templateName] = $inferredType;
+                        } else {
+                            self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
+                        }
+                    } else {
+                        $targetClass = $expectedTypeNode instanceof IdentifierTypeNode ? $expectedTypeNode->name : (string)$expectedTypeNode;
+                        if (! is_string($val) || ! is_a($val, $targetClass, true)) {
+                            return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a class-string of ' . $targetClass . ", '$val' given");
+                        }
+                    }
+
+                    continue;
+                }
+            }
+
+            // Resolve / Infer direct template types (@template T)
             if ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name])) {
                 $templateName = $typeNode->name;
                 $templateNode = $templates[$templateName];
-
+                
                 $alreadyBound = false;
                 $expectedTypeNode = null;
-
+                
                 if ($isInstanceMethod) {
                     if (!isset(self::$instanceTemplateBindings[$thisObj])) {
                         self::$instanceTemplateBindings[$thisObj] = [];
@@ -260,7 +318,6 @@ final class RuntimeTypeChecker
                 }
 
                 if (! $alreadyBound) {
-                    // First time seeing template T for this instance/call -> Infer type from $val
                     $inferredType = self::inferTypeFromValue($val);
 
                     if ($templateNode->bound !== null) {
@@ -275,7 +332,6 @@ final class RuntimeTypeChecker
                         self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
                     }
                 } else {
-                    // Template T was already inferred or pre-bound -> Enforce bound type
                     if ($err = self::$registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
                         return $err;
                     }
@@ -292,7 +348,7 @@ final class RuntimeTypeChecker
         return null;
     }
 
-    public static function checkReturn(string $function, mixed $value, ?object $thisObj = null): mixed
+    public static function checkReturn(string $function, mixed $value, ?object $thisObj = null, array $vars = []): mixed
     {
         $contract = self::extractContract($function);
         $returnTypeNode = $contract['return'] ?? null;
@@ -313,6 +369,61 @@ final class RuntimeTypeChecker
         // Resolve Type Aliases (@phpstan-type / @psalm-type) for return type
         if ($returnTypeNode instanceof IdentifierTypeNode && isset($aliases[$returnTypeNode->name])) {
             $returnTypeNode = $aliases[$returnTypeNode->name];
+        }
+
+        // 1. Handle Parameter-based Conditional Return Types: ($input is string ? int : bool)
+        if ($returnTypeNode instanceof ConditionalTypeForParameterNode) {
+            $paramName = ltrim($returnTypeNode->parameterName, '$');
+            $paramValue = $vars[$paramName] ?? null;
+
+            $targetErr = self::$registry->validate($paramValue, $returnTypeNode->targetType, 'condition');
+            $isTargetMatch = ($targetErr === null);
+
+            if ($returnTypeNode->negated) {
+                $isTargetMatch = ! $isTargetMatch;
+            }
+
+            $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
+
+            if ($err = self::$registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value')) {
+                throw $err;
+            }
+
+            return $value;
+        }
+
+        // 2. Handle Template-based Conditional Return Types: (T is string ? array : object)
+        if ($returnTypeNode instanceof ConditionalTypeNode) {
+            $subjectTypeNode = $returnTypeNode->subjectType;
+
+            if ($subjectTypeNode instanceof IdentifierTypeNode) {
+                $templateName = $subjectTypeNode->name;
+                $isInstanceMethod = $thisObj !== null;
+
+                if ($isInstanceMethod && isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
+                    $subjectTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
+                } elseif (isset(self::$callTemplateBindings["{$function}:{$templateName}"])) {
+                    $subjectTypeNode = self::$callTemplateBindings["{$function}:{$templateName}"];
+                }
+            }
+
+            $subStr = (string) $subjectTypeNode;
+            $targetStr = (string) $returnTypeNode->targetType;
+
+            $isTargetMatch = ($subStr === $targetStr) || 
+                ((class_exists($subStr) || interface_exists($subStr)) && (class_exists($targetStr) || interface_exists($targetStr)) && is_a($subStr, $targetStr, true));
+
+            if ($returnTypeNode->negated) {
+                $isTargetMatch = ! $isTargetMatch;
+            }
+
+            $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
+
+            if ($err = self::$registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value')) {
+                throw $err;
+            }
+
+            return $value;
         }
 
         $templates = $contract['templates'];
@@ -364,7 +475,6 @@ final class RuntimeTypeChecker
         $typeNode = $contract['types'][$paramName] ?? null;
         $aliases = $contract['aliases'] ?? [];
 
-        // Resolve Type Aliases (@phpstan-type) for callables
         if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
             $typeNode = $aliases[$typeNode->name];
         }

@@ -19,11 +19,44 @@ final class GenericValidator implements TypeValidatorInterface
         $baseType = strtolower($node->type->name);
 
         return match ($baseType) {
+            'int', 'integer' => $this->validateIntRange($value, $node, $context),
             'class-string' => $this->validateClassString($value, $node, $context),
-            'list' => $this->validateList($value, $node, $context, $registry),
-            'array', 'iterable', 'traversable', 'generator', 'iterator' => $this->validateArray($value, $node, $context, $registry),
+            'list', 'non-empty-list', 'non-empty-array-list' => $this->validateList($value, $node, $context, $registry),
+            'array', 'non-empty-array', 'iterable', 'traversable', 'generator', 'iterator' => $this->validateArray($value, $node, $context, $registry),
             default => $this->validateObjectGeneric($value, $node, $context),
         };
+    }
+
+    private function validateIntRange(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
+    {
+        if (! is_int($value)) {
+            return ErrorFactory::createError($context . ' must be of type int, ' . TypeFormatter::formatGivenValue($value) . ' given');
+        }
+
+        $minNode = $node->genericTypes[0] ?? null;
+        $maxNode = $node->genericTypes[1] ?? null;
+
+        if ($minNode !== null) {
+            $minStr = strtolower(trim((string) $minNode));
+            if ($minStr !== 'min' && $minStr !== '*') {
+                $minVal = (int) $minStr;
+                if ($value < $minVal) {
+                    return ErrorFactory::createError($context . " must be >= $minVal, $value given");
+                }
+            }
+        }
+
+        if ($maxNode !== null) {
+            $maxStr = strtolower(trim((string) $maxNode));
+            if ($maxStr !== 'max' && $maxStr !== '*') {
+                $maxVal = (int) $maxStr;
+                if ($value > $maxVal) {
+                    return ErrorFactory::createError($context . " must be <= $maxVal, $value given");
+                }
+            }
+        }
+
+        return null;
     }
 
     private function validateClassString(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
@@ -31,10 +64,14 @@ final class GenericValidator implements TypeValidatorInterface
         if (! is_string($value) || (! class_exists($value) && ! interface_exists($value) && ! trait_exists($value) && ! enum_exists($value))) {
             return ErrorFactory::createError($context . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
+
         $targetClassNode = $node->genericTypes[0] ?? null;
         if ($targetClassNode instanceof IdentifierTypeNode) {
-            if (! is_a($value, $targetClassNode->name, true)) {
-                return ErrorFactory::createError($context . ' must be a class-string of ' . $targetClassNode->name . ", '$value' given");
+            $targetName = $targetClassNode->name;
+            if (class_exists($targetName) || interface_exists($targetName) || trait_exists($targetName) || enum_exists($targetName)) {
+                if (! is_a($value, $targetName, true)) {
+                    return ErrorFactory::createError($context . ' must be a class-string of ' . $targetName . ", '$value' given");
+                }
             }
         }
 
@@ -43,9 +80,16 @@ final class GenericValidator implements TypeValidatorInterface
 
     private function validateList(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
+        $baseType = strtolower($node->type->name);
+
         if (! is_array($value) || (! empty($value) && ! array_is_list($value))) {
             return ErrorFactory::createError($context . ' must be a list, ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
+
+        if (str_contains($baseType, 'non-empty') && empty($value)) {
+            return ErrorFactory::createError($context . ' must be a non-empty list, empty array given');
+        }
+
         $valueTypeNode = $node->genericTypes[0] ?? null;
         if ($valueTypeNode) {
             foreach ($value as $k => $v) {
@@ -64,8 +108,14 @@ final class GenericValidator implements TypeValidatorInterface
 
     private function validateArray(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
+        $baseType = strtolower($node->type->name);
+
         if (! is_array($value) && ! ($value instanceof \Traversable)) {
             return ErrorFactory::createError($context . ' must be of type ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+        }
+
+        if (str_contains($baseType, 'non-empty') && empty($value)) {
+            return ErrorFactory::createError($context . ' must be a non-empty array, empty array given');
         }
 
         // Do not iterate non-array Traversables/Generators during upfront validation.
