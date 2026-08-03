@@ -311,9 +311,6 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         /** @var Node\Expr\Assign $assign */
         $assign = $node->expr;
-        if (! ($assign->expr instanceof Node\Expr\New_)) {
-            return;
-        }
 
         static $phpDocParser = null;
         static $lexer = null;
@@ -333,8 +330,27 @@ final class ContractVisitor extends NodeVisitorAbstract
 
             if (\count($varTags) > 0) {
                 $typeString = (string) $varTags[0]->type;
+                $varName = ltrim($varTags[0]->variableName, '$');
 
-                if (str_contains($typeString, '<')) {
+                if ($varName === '' && $assign->var instanceof Node\Expr\Variable && is_string($assign->var->name)) {
+                    $varName = $assign->var->name;
+                }
+
+                if ($varTags[0]->type instanceof \PHPStan\PhpDocParser\Ast\Type\CallableTypeNode) {
+                    $assign->expr = new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapCallableInline'),
+                        [
+                            new Node\Arg($assign->expr),
+                            new Node\Arg(new Node\Scalar\String_($typeString)),
+                            new Node\Arg(new Node\Scalar\String_($varName)),
+                            new Node\Arg(new Node\Scalar\MagicConst\File()),
+                        ]
+                    );
+
+                    return;
+                }
+
+                if ($assign->expr instanceof Node\Expr\New_ && str_contains($typeString, '<')) {
                     $assign->expr = new Node\Expr\FuncCall(
                         new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::bindInstance'),
                         [

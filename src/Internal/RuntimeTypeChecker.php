@@ -11,7 +11,15 @@ use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\PhpDocParser\Lexer\Lexer;
+use PHPStan\PhpDocParser\Parser\ConstExprParser;
+use PHPStan\PhpDocParser\Parser\TokenIterator;
+use PHPStan\PhpDocParser\Parser\TypeParser;
+use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Contract\ContractParser;
+use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 use TypePHP\Resolver\SpecialTypeResolver;
 use TypePHP\Resolver\TemplateManager;
 use TypePHP\Resolver\TemplateSubstitutor;
@@ -279,6 +287,38 @@ final class RuntimeTypeChecker
         }
 
         return $value;
+    }
+
+     public static function wrapCallableInline(mixed $callable, string $typeString, string $varName, string $file): mixed
+    {
+        if (! is_callable($callable)) {
+            return $callable;
+        }
+
+        /** @var TypeParser|null $typeParser */
+        static $typeParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($typeParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+        }
+
+        try {
+            $tokens = new TokenIterator($lexer->tokenize($typeString));
+            $typeNode = $typeParser->parse($tokens);
+
+            if ($file !== '') {
+                $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
+            }
+
+            return CallableWrapper::wrapTypeNode($typeNode, $callable, "Variable \$$varName: Callback", self::getRegistry());
+        } catch (\Throwable $e) {
+            return $callable;
+        }
     }
 
     public static function wrapCallable(string $function, string $paramName, mixed $callable): mixed

@@ -7,6 +7,8 @@ namespace TypePHP\Resolver;
 use PhpParser\Node\Stmt;
 use PhpParser\ParserFactory;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\CallableTypeParameterNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
@@ -54,6 +56,7 @@ final class SpecialTypeResolver
         $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
         $runtimeClass = $thisObj !== null ? get_class($thisObj) : $declaringClass;
 
+        // Preserve ThisTypeNode for strict identity checks ($value === $thisObj)
         if ($node instanceof ThisTypeNode) {
             return $node;
         }
@@ -61,6 +64,7 @@ final class SpecialTypeResolver
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
 
+            // Preserve $this and static dynamically
             if ($lower === '$this' || $lower === 'static') {
                 return $node;
             }
@@ -84,7 +88,7 @@ final class SpecialTypeResolver
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolve($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -92,6 +96,27 @@ final class SpecialTypeResolver
                 $genericType instanceof IdentifierTypeNode ? $genericType : $node->type,
                 $innerTypes,
                 $node->variances
+            );
+        }
+
+        if ($node instanceof CallableTypeNode) {
+            $resolvedParameters = array_map(function (CallableTypeParameterNode $param) use ($function, $thisObj) {
+                return new CallableTypeParameterNode(
+                    self::resolve($param->type, $function, $thisObj),
+                    $param->isReference,
+                    $param->isVariadic,
+                    $param->parameterName,
+                    $param->isOptional
+                );
+            }, $node->parameters);
+
+            $resolvedReturnType = self::resolve($node->returnType, $function, $thisObj);
+
+            return new CallableTypeNode(
+                $node->identifier,
+                $resolvedParameters,
+                $resolvedReturnType,
+                $node->templateTypes
             );
         }
 
@@ -105,14 +130,14 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
@@ -121,24 +146,15 @@ final class SpecialTypeResolver
     }
 
     /**
-     * Seeds the in-memory cache directly from StreamWrapper to prevent double file reads and re-parsing.
-     *
-     * @param array<string, string> $imports
-     */
-    public static function seedFileMetadata(string $fileName, string $namespace, array $imports): void
-    {
-        if ($fileName !== '') {
-            self::$fileNamespaces[$fileName] = $namespace;
-            self::$fileUseImports[$fileName] = $imports;
-        }
-    }
-
-    /**
      * Resolves nodes specifically using a file context instead of reflection.
      * Useful for pre-binding @var annotations where reflection is unavailable.
      */
     public static function resolveForFile(TypeNode $node, string $file): TypeNode
     {
+        if ($node instanceof ThisTypeNode) {
+            return clone $node;
+        }
+
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
             if (\in_array($lower, ['self', 'static', 'parent', '$this'], true)) {
@@ -154,7 +170,7 @@ final class SpecialTypeResolver
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolveForFile($node->type, $file);
             $innerTypes = array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->genericTypes
             );
 
@@ -162,6 +178,27 @@ final class SpecialTypeResolver
                 $genericType instanceof IdentifierTypeNode ? $genericType : $node->type,
                 $innerTypes,
                 $node->variances
+            );
+        }
+
+        if ($node instanceof CallableTypeNode) {
+            $resolvedParameters = array_map(function (CallableTypeParameterNode $param) use ($file) {
+                return new CallableTypeParameterNode(
+                    self::resolveForFile($param->type, $file),
+                    $param->isReference,
+                    $param->isVariadic,
+                    $param->parameterName,
+                    $param->isOptional
+                );
+            }, $node->parameters);
+
+            $resolvedReturnType = self::resolveForFile($node->returnType, $file);
+
+            return new CallableTypeNode(
+                $node->identifier,
+                $resolvedParameters,
+                $resolvedReturnType,
+                $node->templateTypes
             );
         }
 
@@ -175,19 +212,32 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
 
         return clone $node;
+    }
+
+    /**
+     * Seeds the in-memory cache directly from StreamWrapper to prevent double file reads and re-parsing.
+     *
+     * @param array<string, string> $imports
+     */
+    public static function seedFileMetadata(string $fileName, string $namespace, array $imports): void
+    {
+        if ($fileName !== '') {
+            self::$fileNamespaces[$fileName] = $namespace;
+            self::$fileUseImports[$fileName] = $imports;
+        }
     }
 
     /**
@@ -258,6 +308,7 @@ final class SpecialTypeResolver
      */
     private static function parseFileMetadata(string $fileName, string $source): void
     {
+        // Default to empty to prevent repeated parse attempts on failure
         self::$fileNamespaces[$fileName] = '';
         self::$fileUseImports[$fileName] = [];
 
@@ -325,52 +376,11 @@ final class SpecialTypeResolver
     {
         $lower = strtolower($name);
         if (\in_array($lower, [
-            'int',
-            'integer',
-            'string',
-            'float',
-            'double',
-            'bool',
-            'boolean',
-            'array',
-            'list',
-            'object',
-            'callable',
-            'iterable',
-            'resource',
-            'null',
-            'true',
-            'false',
-            'mixed',
-            'scalar',
-            'void',
-            'self',
-            'static',
-            'parent',
-            '$this',
-            'positive-int',
-            'negative-int',
-            'non-positive-int',
-            'non-negative-int',
-            'non-zero-int',
-            'unsigned-int',
-            'class-string',
-            'callable-string',
-            'numeric-string',
-            'non-empty-string',
-            'lowercase-string',
-            'non-empty-lowercase-string',
-            'literal-string',
-            'non-empty-array',
-            'non-empty-list',
-            'number',
-            'numeric',
-            'truthy',
-            'falsy',
-            'falsey',
-            'min',
-            'max',
-            '*',
+            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
+            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
+            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
+            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
+            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
         ], true)) {
             return $name;
         }
@@ -418,52 +428,11 @@ final class SpecialTypeResolver
     {
         $lower = strtolower($name);
         if (\in_array($lower, [
-            'int',
-            'integer',
-            'string',
-            'float',
-            'double',
-            'bool',
-            'boolean',
-            'array',
-            'list',
-            'object',
-            'callable',
-            'iterable',
-            'resource',
-            'null',
-            'true',
-            'false',
-            'mixed',
-            'scalar',
-            'void',
-            'self',
-            'static',
-            'parent',
-            '$this',
-            'positive-int',
-            'negative-int',
-            'non-positive-int',
-            'non-negative-int',
-            'non-zero-int',
-            'unsigned-int',
-            'class-string',
-            'callable-string',
-            'numeric-string',
-            'non-empty-string',
-            'lowercase-string',
-            'non-empty-lowercase-string',
-            'literal-string',
-            'non-empty-array',
-            'non-empty-list',
-            'number',
-            'numeric',
-            'truthy',
-            'falsy',
-            'falsey',
-            'min',
-            'max',
-            '*',
+            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
+            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
+            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
+            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
+            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
         ], true)) {
             return $name;
         }
