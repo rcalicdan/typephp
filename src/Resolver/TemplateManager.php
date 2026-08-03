@@ -191,7 +191,7 @@ final class TemplateManager
         return null;
     }
 
-    private static function resolveInheritedTemplates(object $instance, string $targetClassName): void
+    public static function resolveInheritedTemplates(object $instance, string $targetClassName): void
     {
         $actualClassName = get_class($instance);
 

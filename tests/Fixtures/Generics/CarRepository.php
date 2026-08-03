@@ -13,6 +13,6 @@ class CarRepository extends Repository
 {
     public function __construct()
     {
-        parent::__construct(null);
+        parent::__construct(new Car());
     }
 }

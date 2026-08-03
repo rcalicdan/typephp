@@ -6,6 +6,8 @@ namespace TypePHP\Contract;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\TypeAliasImportTagValueNode;
+use PHPStan\PhpDocParser\Ast\PhpDoc\TypeAliasTagValueNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
@@ -14,6 +16,7 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 final class ContractParser
 {
@@ -63,7 +66,6 @@ final class ContractParser
 
         /**
          * @param PhpDocNode $node
-         *
          * @return array<string, TemplateTagValueNode>
          */
         $getAllTemplates = function (PhpDocNode $node): array {
@@ -73,7 +75,6 @@ final class ContractParser
                     $tags[] = $tagNode->value;
                 }
             }
-
             return $tags;
         };
 
@@ -89,17 +90,7 @@ final class ContractParser
                     $templates[$templateTag->name] = $templateTag;
                 }
 
-                foreach ($classPhpDocNode->getTypeAliasTagValues() as $aliasTag) {
-                    $aliases[$aliasTag->alias] = $aliasTag->type;
-                }
-
-                foreach ($classPhpDocNode->getTypeAliasImportTagValues() as $importTag) {
-                    $localName = $importTag->importedAs ?? $importTag->importedAlias;
-                    $resolvedType = self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
-                    if ($resolvedType !== null) {
-                        $aliases[$localName] = $resolvedType;
-                    }
-                }
+                self::extractAliases($classPhpDocNode, $aliases, $ref);
             }
 
             $types = [];
@@ -113,17 +104,7 @@ final class ContractParser
                     $templates[$templateTag->name] = $templateTag;
                 }
 
-                foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
-                    $aliases[$aliasTag->alias] = $aliasTag->type;
-                }
-
-                foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
-                    $localName = $importTag->importedAs ?? $importTag->importedAlias;
-                    $resolvedType = self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
-                    if ($resolvedType !== null) {
-                        $aliases[$localName] = $resolvedType;
-                    }
-                }
+                self::extractAliases($phpDocNode, $aliases, $ref);
 
                 $refParams = [];
                 foreach ($ref->getParameters() as $p) {
@@ -159,14 +140,35 @@ final class ContractParser
         }
     }
 
-    private static function resolveImportedTypeAlias(string $sourceClassName, string $importedAlias): ?TypeNode
+    /**
+     * @param array<string, TypeNode> $aliases
+     */
+    private static function extractAliases(PhpDocNode $phpDocNode, array &$aliases, \ReflectionFunction|\ReflectionMethod $ref): void
     {
-        if (! class_exists($sourceClassName) && ! interface_exists($sourceClassName) && ! trait_exists($sourceClassName)) {
+        foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
+            $aliases[$aliasTag->alias] = $aliasTag->type;
+        }
+
+        foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
+            $localName = $importTag->importedAs ?? $importTag->importedAlias;
+            $fqcnSource = SpecialTypeResolver::resolveFqcn($importTag->importedFrom->name, $ref);
+            $resolvedType = self::resolveImportedTypeAlias($fqcnSource, $importTag->importedAlias, $ref);
+            if ($resolvedType !== null) {
+                $aliases[$localName] = $resolvedType;
+            }
+        }
+    }
+
+    private static function resolveImportedTypeAlias(string $sourceClassName, string $importedAlias, \ReflectionFunction|\ReflectionMethod $callingRef): ?TypeNode
+    {
+        $fqcn = SpecialTypeResolver::resolveFqcn($sourceClassName, $callingRef);
+
+        if (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn)) {
             return null;
         }
 
         try {
-            $ref = new \ReflectionClass($sourceClassName);
+            $ref = new \ReflectionClass($fqcn);
             $doc = $ref->getDocComment();
 
             if ($doc !== false) {
@@ -197,7 +199,7 @@ final class ContractParser
                 foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
                     $localName = $importTag->importedAs ?? $importTag->importedAlias;
                     if ($localName === $importedAlias) {
-                        return self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
+                        return self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias, $callingRef);
                     }
                 }
             }

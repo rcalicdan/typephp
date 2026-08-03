@@ -174,7 +174,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v29_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v36_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {

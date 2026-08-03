@@ -17,6 +17,9 @@ use TypePHP\Internal\TypeFormatter;
 
 final class SpecialTypeResolver
 {
+    /** @var array<string, array<string, string>> */
+    private static array $fileUseImports = [];
+
     public static function checkThisIdentity(TypeNode $returnTypeNode, mixed $value, ?object $thisObj, string $function): ?\TypeError
     {
         $isThisType = ($returnTypeNode instanceof ThisTypeNode)
@@ -31,6 +34,13 @@ final class SpecialTypeResolver
 
     public static function resolve(TypeNode $node, string $function, ?object $thisObj = null): TypeNode
     {
+        if (str_contains($function, '::')) {
+            [$className, $methodName] = explode('::', $function, 2);
+            $ref = new \ReflectionMethod($className, $methodName);
+        } else {
+            $ref = new \ReflectionFunction($function);
+        }
+
         $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
         $runtimeClass = $thisObj !== null ? get_class($thisObj) : $declaringClass;
 
@@ -57,12 +67,17 @@ final class SpecialTypeResolver
             if ($lower === '$this' && $runtimeClass !== null) {
                 return new IdentifierTypeNode($runtimeClass);
             }
+
+            $fqcn = self::resolveFqcn($node->name, $ref);
+            if ($fqcn !== $node->name) {
+                return new IdentifierTypeNode($fqcn);
+            }
         }
 
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolve($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -83,18 +98,165 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         return $node;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getUseImports(\ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): array
+    {
+        $fileName = $ref->getFileName();
+        if ($fileName === false || ! file_exists($fileName)) {
+            return [];
+        }
+
+        if (isset(self::$fileUseImports[$fileName])) {
+            return self::$fileUseImports[$fileName];
+        }
+
+        $source = file_get_contents($fileName);
+        if ($source === false) {
+            return self::$fileUseImports[$fileName] = [];
+        }
+
+        $imports = [];
+        $tokens = token_get_all($source);
+        $count = count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($tokens[$i][0] === T_USE) {
+                // Skip 'use' inside closures or traits
+                $j = $i - 1;
+                while ($j >= 0 && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    $j--;
+                }
+                if ($j >= 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_STRING && strtolower((string)$tokens[$j][1]) === 'function') {
+                    continue; // It's a closure `use ()`
+                }
+
+                $fqcn = '';
+                $alias = '';
+                $i++;
+
+                while ($i < $count && $tokens[$i] !== ';') {
+                    if (is_array($tokens[$i])) {
+                        if ($tokens[$i][0] === T_STRING || $tokens[$i][0] === T_NAME_QUALIFIED || $tokens[$i][0] === T_NAME_FULLY_QUALIFIED) {
+                            if ($fqcn === '') {
+                                $fqcn = $tokens[$i][1];
+                            } else {
+                                $alias = $tokens[$i][1]; // 'as Alias'
+                            }
+                        }
+                    }
+                    $i++;
+                }
+
+                if ($fqcn !== '') {
+                    $fqcn = ltrim($fqcn, '\\');
+                    $shortName = $alias !== '' ? $alias : (str_contains($fqcn, '\\') ? substr($fqcn, strrpos($fqcn, '\\') + 1) : $fqcn);
+                    $imports[$shortName] = $fqcn;
+                }
+            }
+        }
+
+        return self::$fileUseImports[$fileName] = $imports;
+    }
+
+    public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
+    {
+        $lower = strtolower($name);
+        if (in_array($lower, [
+            'int',
+            'integer',
+            'string',
+            'float',
+            'double',
+            'bool',
+            'boolean',
+            'array',
+            'list',
+            'object',
+            'callable',
+            'iterable',
+            'resource',
+            'null',
+            'true',
+            'false',
+            'mixed',
+            'scalar',
+            'void',
+            'self',
+            'static',
+            'parent',
+            '$this',
+            'positive-int',
+            'negative-int',
+            'non-positive-int',
+            'non-negative-int',
+            'non-zero-int',
+            'unsigned-int',
+            'class-string',
+            'callable-string',
+            'numeric-string',
+            'non-empty-string',
+            'lowercase-string',
+            'non-empty-lowercase-string',
+            'literal-string',
+            'non-empty-array',
+            'non-empty-list',
+            'number',
+            'numeric',
+            'truthy',
+            'falsy',
+            'falsey',
+            'min',
+            'max',
+            '*'
+        ], true)) {
+            return $name;
+        }
+
+        if (str_starts_with($name, '\\')) {
+            return ltrim($name, '\\');
+        }
+
+        // Check `use` imports in file
+        $imports = self::getUseImports($ref);
+        if (isset($imports[$name])) {
+            return $imports[$name];
+        }
+
+        // Check same namespace
+        $namespace = match (true) {
+            $ref instanceof \ReflectionClass => $ref->getNamespaceName(),
+            $ref instanceof \ReflectionMethod => $ref->getDeclaringClass()->getNamespaceName(),
+            $ref instanceof \ReflectionFunction => $ref->getNamespaceName(),
+        };
+
+        if ($namespace !== '') {
+            $namespacedClass = $namespace . '\\' . $name;
+            if (class_exists($namespacedClass) || interface_exists($namespacedClass) || trait_exists($namespacedClass) || enum_exists($namespacedClass)) {
+                return $namespacedClass;
+            }
+        }
+
+        if (class_exists($name) || interface_exists($name) || trait_exists($name) || enum_exists($name)) {
+            return $name;
+        }
+
+        return $name;
     }
 }

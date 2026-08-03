@@ -54,11 +54,18 @@ final class RuntimeTypeChecker
 
         if ($thisObj === null) {
             TemplateManager::clearCallBindings($function, $templates);
+        } elseif (str_contains($function, '::')) {
+            $declaringClass = explode('::', $function, 2)[0];
+            TemplateManager::resolveInheritedTemplates($thisObj, $declaringClass);
         }
 
         foreach ($contract['types'] as $paramName => $typeNode) {
             if (! \array_key_exists($paramName, $vars)) {
                 continue;
+            }
+
+            if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
+                $typeNode = $aliases[$typeNode->name];
             }
 
             $typeNode = SpecialTypeResolver::resolve($typeNode, $function, $thisObj);
@@ -74,7 +81,6 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
-
                 continue;
             }
 
@@ -84,7 +90,6 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
-
                 continue;
             }
 
@@ -296,7 +301,9 @@ final class RuntimeTypeChecker
             $inferredType = TemplateManager::inferTypeFromValue($sampleVal);
 
             if ($templateNode->bound !== null) {
-                $err = $registry->validate($sampleVal, $templateNode->bound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')');
+                // Resolve FQCN for the bound before checking
+                $resolvedBound = SpecialTypeResolver::resolve($templateNode->bound, $function, $thisObj);
+                $err = $registry->validate($sampleVal, $resolvedBound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')');
                 if ($err !== null) {
                     return $err;
                 }
