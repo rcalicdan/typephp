@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+class User {}
+
 /**
- * @return array<int, mixed>
+ * @return non-empty-list<User>
  */
 function test1(): array
 {
-    return ['a' => 'b', 'c' => 2];
+    return []; // Empty array!
 }
 
 test1();
