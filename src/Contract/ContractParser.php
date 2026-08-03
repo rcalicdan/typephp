@@ -37,12 +37,14 @@ final class ContractParser
             $ref = new \ReflectionMethod($className, $methodName);
             $fetchedClassDoc = $ref->getDeclaringClass()->getDocComment();
             $classDoc = $fetchedClassDoc !== false ? $fetchedClassDoc : null;
+            $doc = self::findEffectiveDocBlock($ref);
         } else {
             $ref = new \ReflectionFunction($function);
+            $fetchedDoc = $ref->getDocComment();
+            $doc = $fetchedDoc !== false ? $fetchedDoc : null;
         }
 
-        $doc = $ref->getDocComment();
-        if ($doc === false && $classDoc === null) {
+        if ($doc === null && $classDoc === null) {
             return self::$cache[$function] = ['types' => [], 'templates' => [], 'return' => null, 'aliases' => []];
         }
 
@@ -95,7 +97,7 @@ final class ContractParser
             $types = [];
             $returnType = null;
 
-            if ($doc !== false) {
+            if ($doc !== null) {
                 $tokens = new TokenIterator($lexer->tokenize($doc));
                 $phpDocNode = $phpDocParser->parse($tokens);
 
@@ -125,7 +127,7 @@ final class ContractParser
                 }
 
                 $returnTags = $phpDocNode->getReturnTagValues();
-                if (\count($returnTags) > 0) {
+                if (count($returnTags) > 0) {
                     $returnType = $returnTags[0]->type;
                 }
             }
@@ -139,5 +141,53 @@ final class ContractParser
         } catch (\Throwable $e) {
             return self::$cache[$function] = ['types' => [], 'templates' => [], 'return' => null, 'aliases' => []];
         }
+    }
+
+    private static function findEffectiveDocBlock(\ReflectionMethod $ref): ?string
+    {
+        $doc = $ref->getDocComment();
+        if ($doc !== false) {
+            return $doc;
+        }
+
+        $methodName = $ref->getName();
+        $declaringClass = $ref->getDeclaringClass();
+
+        //  Walk Parent Class Hierarchy (LSP)
+        $parent = $declaringClass->getParentClass();
+        while ($parent !== false) {
+            if ($parent->hasMethod($methodName)) {
+                $parentMethod = $parent->getMethod($methodName);
+                $parentDoc = $parentMethod->getDocComment();
+                if ($parentDoc !== false) {
+                    return $parentDoc;
+                }
+            }
+            $parent = $parent->getParentClass();
+        }
+
+        //  Check Implemented Interfaces
+        foreach ($declaringClass->getInterfaces() as $interface) {
+            if ($interface->hasMethod($methodName)) {
+                $interfaceMethod = $interface->getMethod($methodName);
+                $interfaceDoc = $interfaceMethod->getDocComment();
+                if ($interfaceDoc !== false) {
+                    return $interfaceDoc;
+                }
+            }
+        }
+
+        //  Check Traits
+        foreach ($declaringClass->getTraits() as $trait) {
+            if ($trait->hasMethod($methodName)) {
+                $traitMethod = $trait->getMethod($methodName);
+                $traitDoc = $traitMethod->getDocComment();
+                if ($traitDoc !== false) {
+                    return $traitDoc;
+                }
+            }
+        }
+
+        return null;
     }
 }

@@ -15,14 +15,12 @@ final class ContractVisitor extends NodeVisitorAbstract
         // Function / Method contract injection
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
             $this->injectFunctionContract($node);
-
             return null;
         }
 
         // @var Docblock Pre-binding on assignments ($var = new Class())
         if ($node instanceof Node\Stmt\Expression && $node->expr instanceof Node\Expr\Assign) {
             $this->injectVarPrebinding($node);
-
             return null;
         }
 
@@ -35,20 +33,24 @@ final class ContractVisitor extends NodeVisitorAbstract
             return;
         }
 
+        $isClassMethod = $node instanceof Node\Stmt\ClassMethod;
         $doc = $node->getDocComment();
-        if ($doc === null) {
+
+        if ($doc === null && ! $isClassMethod) {
             return;
         }
 
-        $docText = $doc->getText();
-        $hasParam = str_contains($docText, '@param');
-        $hasReturn = str_contains($docText, '@return') || str_contains($docText, '@phpstan-return') || str_contains($docText, '@psalm-return');
+        $docText = $doc !== null ? $doc->getText() : '';
+        $hasParam = $isClassMethod || str_contains($docText, '@param');
+        $hasReturn = $isClassMethod || str_contains($docText, '@return') || str_contains($docText, '@phpstan-return') || str_contains($docText, '@psalm-return');
 
         if (! $hasParam && ! $hasReturn) {
             return;
         }
 
-        $hasThis = ($node instanceof Node\Stmt\ClassMethod) && ! $node->isStatic();
+        $isNativeVoid = $node->returnType instanceof Node\Identifier && strtolower($node->returnType->name) === 'void';
+
+        $hasThis = $isClassMethod && ! $node->isStatic();
         $thisArg = $hasThis
             ? new Node\Expr\Variable('this')
             : new Node\Expr\ConstFetch(new Node\Name('null'));
@@ -78,7 +80,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             );
 
             // Callable wrapping
-            if (str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
+            if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
                 foreach ($node->params as $param) {
                     if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
                         $paramName = $param->var->name;
@@ -100,7 +102,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
 
             // Lazy Iterable/Generator wrapping
-            if (str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
+            if ($isClassMethod || str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
                 foreach ($node->params as $param) {
                     if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
                         $paramName = $param->var->name;
@@ -124,12 +126,14 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         if ($hasReturn) {
             $traverser = new NodeTraverser();
-            $traverser->addVisitor(new class ($thisArg) extends NodeVisitorAbstract {
-                public function __construct(private Node\Expr $thisArg)
-                {
+            $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+                public function __construct(
+                    private Node\Expr $thisArg,
+                    private bool $isNativeVoid
+                ) {
                 }
 
-                public function enterNode(Node $n): ?int
+                public function enterNode(Node $n): int|array|null
                 {
                     if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                         return NodeTraverser::DONT_TRAVERSE_CHILDREN;
@@ -138,7 +142,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                     if ($n instanceof Node\Stmt\Return_) {
                         $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
 
-                        $n->expr = new Node\Expr\FuncCall(
+                        $checkReturnCall = new Node\Expr\FuncCall(
                             new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
                             [
                                 new Node\Arg(new Node\Scalar\MagicConst\Method()),
@@ -147,6 +151,15 @@ final class ContractVisitor extends NodeVisitorAbstract
                                 new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
                             ]
                         );
+
+                        if ($this->isNativeVoid) {
+                            return [
+                                new Node\Stmt\Expression($checkReturnCall),
+                                new Node\Stmt\Return_(null),
+                            ];
+                        }
+
+                        $n->expr = $checkReturnCall;
                     }
 
                     return null;
@@ -159,17 +172,22 @@ final class ContractVisitor extends NodeVisitorAbstract
 
             $lastStmt = end($node->stmts);
             if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
-                $node->stmts[] = new Node\Stmt\Return_(
-                    new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
-                        [
-                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                            new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
-                            new Node\Arg($thisArg),
-                            new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                        ]
-                    )
+                $checkReturnCall = new Node\Expr\FuncCall(
+                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
+                    [
+                        new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                        new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
+                        new Node\Arg($thisArg),
+                        new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                    ]
                 );
+
+                if ($isNativeVoid) {
+                    $node->stmts[] = new Node\Stmt\Expression($checkReturnCall);
+                    $node->stmts[] = new Node\Stmt\Return_(null);
+                } else {
+                    $node->stmts[] = new Node\Stmt\Return_($checkReturnCall);
+                }
             }
         }
 
