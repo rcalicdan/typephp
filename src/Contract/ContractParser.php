@@ -63,7 +63,6 @@ final class ContractParser
 
         /**
          * @param PhpDocNode $node
-         *
          * @return array<string, TemplateTagValueNode>
          */
         $getAllTemplates = function (PhpDocNode $node): array {
@@ -73,7 +72,6 @@ final class ContractParser
                     $tags[] = $tagNode->value;
                 }
             }
-
             return $tags;
         };
 
@@ -92,6 +90,14 @@ final class ContractParser
                 foreach ($classPhpDocNode->getTypeAliasTagValues() as $aliasTag) {
                     $aliases[$aliasTag->alias] = $aliasTag->type;
                 }
+
+                foreach ($classPhpDocNode->getTypeAliasImportTagValues() as $importTag) {
+                    $localName = $importTag->importedAs ?? $importTag->importedAlias;
+                    $resolvedType = self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
+                    if ($resolvedType !== null) {
+                        $aliases[$localName] = $resolvedType;
+                    }
+                }
             }
 
             $types = [];
@@ -107,6 +113,14 @@ final class ContractParser
 
                 foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
                     $aliases[$aliasTag->alias] = $aliasTag->type;
+                }
+
+                foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
+                    $localName = $importTag->importedAs ?? $importTag->importedAlias;
+                    $resolvedType = self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
+                    if ($resolvedType !== null) {
+                        $aliases[$localName] = $resolvedType;
+                    }
                 }
 
                 $refParams = [];
@@ -143,6 +157,55 @@ final class ContractParser
         }
     }
 
+    private static function resolveImportedTypeAlias(string $sourceClassName, string $importedAlias): ?TypeNode
+    {
+        if (! class_exists($sourceClassName) && ! interface_exists($sourceClassName) && ! trait_exists($sourceClassName)) {
+            return null;
+        }
+
+        try {
+            $ref = new \ReflectionClass($sourceClassName);
+            $doc = $ref->getDocComment();
+
+            if ($doc !== false) {
+                /** @var PhpDocParser|null $phpDocParser */
+                static $phpDocParser = null;
+                /** @var Lexer|null $lexer */
+                static $lexer = null;
+
+                if ($phpDocParser === null || $lexer === null) {
+                    $config = new ParserConfig(usedAttributes: []);
+                    $lexer = new Lexer($config);
+                    $constExprParser = new ConstExprParser($config);
+                    $typeParser = new TypeParser($config, $constExprParser);
+                    $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+                }
+
+                $tokens = new TokenIterator($lexer->tokenize($doc));
+                $phpDocNode = $phpDocParser->parse($tokens);
+
+                // Direct type alias in source class
+                foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
+                    if ($aliasTag->alias === $importedAlias) {
+                        return $aliasTag->type;
+                    }
+                }
+
+                // Chained imported type alias in source class
+                foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
+                    $localName = $importTag->importedAs ?? $importTag->importedAlias;
+                    if ($localName === $importedAlias) {
+                        return self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore
+        }
+
+        return null;
+    }
+
     private static function findEffectiveDocBlock(\ReflectionMethod $ref): ?string
     {
         $doc = $ref->getDocComment();
@@ -153,7 +216,7 @@ final class ContractParser
         $methodName = $ref->getName();
         $declaringClass = $ref->getDeclaringClass();
 
-        //  Walk Parent Class Hierarchy (LSP)
+        // Walk Parent Class Hierarchy (LSP)
         $parent = $declaringClass->getParentClass();
         while ($parent !== false) {
             if ($parent->hasMethod($methodName)) {
@@ -166,7 +229,7 @@ final class ContractParser
             $parent = $parent->getParentClass();
         }
 
-        //  Check Implemented Interfaces
+        // Check Implemented Interfaces
         foreach ($declaringClass->getInterfaces() as $interface) {
             if ($interface->hasMethod($methodName)) {
                 $interfaceMethod = $interface->getMethod($methodName);
@@ -177,7 +240,7 @@ final class ContractParser
             }
         }
 
-        //  Check Traits
+        // Check Traits
         foreach ($declaringClass->getTraits() as $trait) {
             if ($trait->hasMethod($methodName)) {
                 $traitMethod = $trait->getMethod($methodName);

@@ -169,7 +169,7 @@ final class StreamWrapper
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v24_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v25_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {
