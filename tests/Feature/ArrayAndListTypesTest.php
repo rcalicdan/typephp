@@ -114,7 +114,8 @@ describe('Class Object Arrays (Dog[])', function () {
 
     test('throws TypeError when array contains an invalid class object', function () {
         expect(fn () => testDogArrayParam([new Dog(), new Car()]))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -126,13 +127,15 @@ describe('Generic Key-Value Arrays (array<K, V>)', function () {
     test('throws TypeError when key type is invalid', function () {
         // Integer key 0 instead of string key
         expect(fn () => testAssocScoreArrayParam([0 => 100]))
-            ->toThrow(TypeError::class, 'key');
+            ->toThrow(TypeError::class, 'key')
+        ;
     });
 
     test('throws TypeError when value type is invalid', function () {
         // Negative integer -10 instead of positive-int
         expect(fn () => testAssocScoreArrayParam(['alice' => -10]))
-            ->toThrow(TypeError::class, "['alice']");
+            ->toThrow(TypeError::class, "['alice']")
+        ;
     });
 });
 
@@ -143,19 +146,22 @@ describe('Lists & Non-Empty Lists (list<T> & non-empty-list<T>)', function () {
 
     test('throws TypeError when list contains associative keys', function () {
         expect(fn () => testTagListParam(['tag' => 'php']))
-            ->toThrow(TypeError::class, 'must be a list');
+            ->toThrow(TypeError::class, 'must be a list')
+        ;
     });
 
     test('throws TypeError when list contains an empty string', function () {
         expect(fn () => testTagListParam(['php', '']))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 
     test('accepts valid non-empty list and rejects empty array', function () {
         expect(testNonEmptyNumberListParam([1, 2, 3]))->toBe(3);
 
         expect(fn () => testNonEmptyNumberListParam([]))
-            ->toThrow(TypeError::class, 'non-empty list');
+            ->toThrow(TypeError::class, 'non-empty list')
+        ;
     });
 });
 
@@ -175,7 +181,8 @@ describe('Deeply Nested Arrays (array<K, list<V>>)', function () {
         ];
 
         expect(fn () => testNestedMatrixParam($invalidMatrix))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('throws TypeError when nested list is associative', function () {
@@ -184,7 +191,8 @@ describe('Deeply Nested Arrays (array<K, list<V>>)', function () {
         ];
 
         expect(fn () => testNestedMatrixParam($invalidMatrix))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -205,7 +213,8 @@ describe('Lists of Generic Objects (list<Producer<covariant Animal>>)', function
         ];
 
         expect(fn () => testGenericProducerListParam($producers))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -217,11 +226,13 @@ describe('Positional Tuple Shapes (array{0: T1, 1: T2})', function () {
     test('throws TypeError on invalid tuple element', function () {
         // First item -5 is not positive-int
         expect(fn () => testTupleShapeParam([-5, 'alice']))
-            ->toThrow(TypeError::class, "['0']");
+            ->toThrow(TypeError::class, "['0']")
+        ;
 
         // Second item '' is not non-empty-string
         expect(fn () => testTupleShapeParam([10, '']))
-            ->toThrow(TypeError::class, "['1']");
+            ->toThrow(TypeError::class, "['1']")
+        ;
     });
 });
 
@@ -243,7 +254,8 @@ describe('Unsealed Array Shapes (array{id: T, ...<K, V>})', function () {
         ];
 
         expect(fn () => testUnsealedShapeParam($payload))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 

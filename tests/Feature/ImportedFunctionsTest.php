@@ -18,18 +18,21 @@ describe('Imported Namespaced Function Contracts', function () {
     test('throws TypeError when imported function receives invalid positive-int parameter', function () {
         // Price -50 violates positive-int contract
         expect(fn () => calculateDiscount(-50, 20))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 
     test('throws TypeError when imported function receives invalid int range parameter', function () {
         // Percentage 150 violates int<1, 100> range
         expect(fn () => calculateDiscount(100, 150))
-            ->toThrow(TypeError::class, '100'); // <-- Look for '100' in the error message
+            ->toThrow(TypeError::class, '100') // <-- Look for '100' in the error message
+        ;
     });
 
     test('throws TypeError when aliased imported function receives empty string', function () {
         // Empty string violates non-empty-string contract
         expect(fn () => makeHashTag(''))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 });

@@ -56,18 +56,21 @@ describe('Extended Integer Types (negative-int, non-zero-int, int<1, 100>)', fun
 
     test('throws TypeError when negative-int parameter is >= 0', function () {
         expect(fn () => testIntegerConstraintsParam(0, 5, 50))
-            ->toThrow(TypeError::class, 'negative-int');
+            ->toThrow(TypeError::class, 'negative-int')
+        ;
     });
 
     test('throws TypeError when non-zero-int parameter is 0', function () {
         expect(fn () => testIntegerConstraintsParam(-10, 0, 50))
-            ->toThrow(TypeError::class, 'non-zero-int');
+            ->toThrow(TypeError::class, 'non-zero-int')
+        ;
     });
 
     test('throws TypeError when int range parameter violates bounds', function () {
         // 101 > max 100
         expect(fn () => testIntegerConstraintsParam(-10, 5, 101))
-            ->toThrow(TypeError::class, 'int');
+            ->toThrow(TypeError::class, 'int')
+        ;
     });
 });
 
@@ -78,17 +81,20 @@ describe('Extended String Types (numeric-string, lowercase-string, callable-stri
 
     test('throws TypeError when numeric-string is not numeric', function () {
         expect(fn () => testStringConstraintsParam('not_numeric', 'hello', 'strlen'))
-            ->toThrow(TypeError::class, 'numeric-string');
+            ->toThrow(TypeError::class, 'numeric-string')
+        ;
     });
 
     test('throws TypeError when lowercase-string contains uppercase characters', function () {
         expect(fn () => testStringConstraintsParam('123', 'Hello', 'strlen'))
-            ->toThrow(TypeError::class, 'lowercase-string');
+            ->toThrow(TypeError::class, 'lowercase-string')
+        ;
     });
 
     test('throws TypeError when callable-string is not a callable function', function () {
         expect(fn () => testStringConstraintsParam('123', 'hello', 'invalid_func_12345'))
-            ->toThrow(TypeError::class, 'callable-string');
+            ->toThrow(TypeError::class, 'callable-string')
+        ;
     });
 });
 
@@ -99,17 +105,20 @@ describe('Truthiness & Numeric Types (truthy, falsy, numeric)', function () {
 
     test('throws TypeError when truthy parameter evaluates to false', function () {
         expect(fn () => testTruthinessAndNumericParam(false, 0, '42.5'))
-            ->toThrow(TypeError::class, 'truthy');
+            ->toThrow(TypeError::class, 'truthy')
+        ;
     });
 
     test('throws TypeError when falsy parameter evaluates to true', function () {
         expect(fn () => testTruthinessAndNumericParam('truthy', 'not_falsy', '42.5'))
-            ->toThrow(TypeError::class, 'falsy');
+            ->toThrow(TypeError::class, 'falsy')
+        ;
     });
 
     test('throws TypeError when numeric parameter is not numeric', function () {
         expect(fn () => testTruthinessAndNumericParam('truthy', 0, 'not_a_number'))
-            ->toThrow(TypeError::class, 'numeric');
+            ->toThrow(TypeError::class, 'numeric')
+        ;
     });
 });
 
@@ -121,7 +130,8 @@ describe('Literal Value Enums (\'active\'|\'pending\', 200|404|500)', function (
 
     test('throws TypeError when string literal is not in union options', function () {
         expect(fn () => testLiteralUnionsParam('archived', 200))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('throws TypeError when integer literal is not in union options', function () {

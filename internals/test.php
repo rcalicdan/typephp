@@ -2,18 +2,28 @@
 
 declare(strict_types=1);
 
-class Animal {}
-class Dog extends Animal {}
-class Cat extends Animal {}
-class Car {}
+class Animal
+{
+}
+class Dog extends Animal
+{
+}
+class Cat extends Animal
+{
+}
+class Car
+{
+}
 
 // -------------------------------------------------------------
 // TEST A: T must stay consistent across multiple parameters
 // -------------------------------------------------------------
 /**
  * @template T of Animal
+ *
  * @param T $a
  * @param T $b
+ *
  * @return T
  */
 function pickFirst(mixed $a, mixed $b): mixed
@@ -59,6 +69,7 @@ class Box
 // -------------------------------------------------------------
 /**
  * @template T of Animal
+ *
  * @param T $seed
  * @param T[] $items
  */
@@ -74,7 +85,7 @@ try {
     pickFirst(new Dog(), new Dog());
     echo "   ✅ pickFirst(Dog, Dog) passed (T fixed to Dog)\n";
 } catch (TypeError $e) {
-    echo "   ❌ UNEXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ❌ UNEXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // Invalid: Dog then Cat — both satisfy bound Animal individually,
@@ -83,7 +94,7 @@ try {
     pickFirst(new Dog(), new Cat());
     echo "   ❌ Failed to catch T mismatch: pickFirst(Dog, Cat) should fail (T fixed to Dog, Cat given)\n";
 } catch (TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 echo "\n=== TEST B: T persistence across methods on same instance ===\n";
@@ -96,12 +107,12 @@ try {
     $box->set(new Cat());
     echo "   ❌ Failed to catch: Box<Dog>::set(Cat) should fail (T is Dog, not Cat)\n";
 } catch (TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // get() should still report/return Dog-typed value at this point
 $got = $box->get();
-echo "   ℹ️  Box<Dog>::get() returned instance of: " . get_class($got) . "\n";
+echo '   ℹ️  Box<Dog>::get() returned instance of: ' . get_class($got) . "\n";
 
 echo "\n=== TEST C: Array-shaped T bound consistency ===\n";
 
@@ -110,7 +121,7 @@ try {
     checkAll(new Dog(), [new Dog(), new Dog()]);
     echo "   ✅ checkAll(Dog, [Dog, Dog]) passed\n";
 } catch (TypeError $e) {
-    echo "   ❌ UNEXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ❌ UNEXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // Invalid: seed is Dog, but items contain a Cat — each item individually
@@ -119,7 +130,7 @@ try {
     checkAll(new Dog(), [new Dog(), new Cat()]);
     echo "   ❌ Failed to catch: checkAll(Dog, [Dog, Cat]) should fail (T fixed to Dog, Cat in array)\n";
 } catch (TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 echo "\n🎉 DONE — results above show whether T is bound per-call-site/per-instance, or just checked against the raw bound (Animal) each time.\n";

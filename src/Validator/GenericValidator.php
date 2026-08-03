@@ -11,8 +11,6 @@ use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\RuntimeTypeChecker;
 use TypePHP\Internal\TypeFormatter;
-use TypePHP\Validator\TypeValidatorInterface;
-use TypePHP\Validator\TypeValidatorRegistry;
 
 final class GenericValidator implements TypeValidatorInterface
 {

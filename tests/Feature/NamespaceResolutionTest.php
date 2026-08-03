@@ -5,15 +5,14 @@ declare(strict_types=1);
 namespace TypePHP\Tests\Feature;
 
 use DateTime;
-use TypePHP\Tests\Fixtures\Domain\Animal;
 use TypePHP\Tests\Fixtures\Domain\Car;
-use TypePHP\Tests\Fixtures\Domain\Dog;
 use TypePHP\Tests\Fixtures\Domain\Cat as Feline;
+use TypePHP\Tests\Fixtures\Domain\Dog;
 
 /**
  * 1. Fully Qualified Name with leading backslash
  *
- * @param \TypePHP\Tests\Fixtures\Domain\Dog $dog
+ * @param Dog $dog
  */
 function testFullyQualifiedParam(object $dog): bool
 {
@@ -55,27 +54,31 @@ describe('Namespace Resolution Strategies', function () {
         expect(testFullyQualifiedParam(new Dog()))->toBeTrue();
 
         expect(fn () => testFullyQualifiedParam(new Car()))
-            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('validates short imported class name without leading backslash (Dog)', function () {
         expect(testShortImportedParam(new Dog()))->toBeTrue();
 
         expect(fn () => testShortImportedParam(new Car()))
-            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('validates aliased imported class name (Feline for Cat)', function () {
-        expect(testAliasedImportedParam(new \TypePHP\Tests\Fixtures\Domain\Cat()))->toBeTrue();
+        expect(testAliasedImportedParam(new Feline()))->toBeTrue();
 
         expect(fn () => testAliasedImportedParam(new Dog()))
-            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Cat');
+            ->toThrow(\TypeError::class, 'TypePHP\Tests\Fixtures\Domain\Cat')
+        ;
     });
 
     test('validates global native class without leading backslash (DateTime)', function () {
         expect(testGlobalNativeClassParam(new DateTime()))->toBeTrue();
 
         expect(fn () => testGlobalNativeClassParam(new Dog()))
-            ->toThrow(\TypeError::class, 'DateTime');
+            ->toThrow(\TypeError::class, 'DateTime')
+        ;
     });
 });

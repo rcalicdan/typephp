@@ -88,7 +88,7 @@ try {
     $gen->send(-500);
     echo "   ❌ Failed to catch invalid TSend value!\n";
 } catch (TypeError $e) {
-    echo "   ✅ FIXED CAUGHT EXPECTED TSEND ERROR: " . $e->getMessage() . "\n";
+    echo '   ✅ FIXED CAUGHT EXPECTED TSEND ERROR: ' . $e->getMessage() . "\n";
 }
 
 echo "\n🎉 ALL GENERATOR & ITERATOR ENHANCEMENTS PASSED PERFECTLY!\n";

@@ -332,6 +332,7 @@ final class SpecialTypeResolver
                 if ($stmt instanceof Stmt\Namespace_) {
                     $namespace = $stmt->name ? $stmt->name->toString() : '';
                     $nodesToScan = $stmt->stmts;
+
                     break;
                 }
             }

@@ -111,7 +111,8 @@ describe('Lazy Generator Parameter Contracts (@param Generator<K, V>)', function
         $gen = $badValueGen();
 
         expect(fn () => testGeneratorParamContract($gen))
-            ->toThrow(TypeError::class, 'Iterator $gen value');
+            ->toThrow(TypeError::class, 'Iterator $gen value')
+        ;
     });
 
     test('throws TypeError lazily during iteration when generator yields bad key', function () {
@@ -122,7 +123,8 @@ describe('Lazy Generator Parameter Contracts (@param Generator<K, V>)', function
         $gen = $badKeyGen();
 
         expect(fn () => testGeneratorParamContract($gen))
-            ->toThrow(TypeError::class, 'Iterator $gen key');
+            ->toThrow(TypeError::class, 'Iterator $gen key')
+        ;
     });
 });
 
@@ -143,7 +145,8 @@ describe('Lazy Non-Array Traversable Parameter Contracts (@param Traversable<K, 
         ]);
 
         expect(fn () => testTraversableParamContract($badIterator))
-            ->toThrow(TypeError::class, 'Iterator $items value');
+            ->toThrow(TypeError::class, 'Iterator $items value')
+        ;
     });
 
     test('throws TypeError lazily during iteration when ArrayIterator has bad key', function () {
@@ -152,7 +155,8 @@ describe('Lazy Non-Array Traversable Parameter Contracts (@param Traversable<K, 
         ]);
 
         expect(fn () => testTraversableParamContract($badKeyIterator))
-            ->toThrow(TypeError::class, 'Iterator $items key');
+            ->toThrow(TypeError::class, 'Iterator $items key')
+        ;
     });
 });
 
@@ -234,6 +238,7 @@ describe('Generator Input Validation ($gen->send() TSend Contract)', function ()
 
         // -500 violates positive-int TSend contract
         expect(fn () => $gen->send(-500))
-            ->toThrow(TypeError::class, 'Generator sent value (TSend)');
+            ->toThrow(TypeError::class, 'Generator sent value (TSend)')
+        ;
     });
 });

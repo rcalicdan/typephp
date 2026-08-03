@@ -43,8 +43,10 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         $isGen = false;
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class($isGen) extends NodeVisitorAbstract {
-            public function __construct(private bool &$isGen) {}
+        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
+            public function __construct(private bool &$isGen)
+            {
+            }
 
             public function enterNode(Node $n): ?int
             {
@@ -170,7 +172,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             if ($isGeneratorFunc) {
                 // For generator functions, wrap yield/yield from expressions lazily
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class() extends NodeVisitorAbstract {
+                $traverser->addVisitor(new class () extends NodeVisitorAbstract {
                     public function enterNode(Node $n): int|Node|null
                     {
                         if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
@@ -229,11 +231,12 @@ final class ContractVisitor extends NodeVisitorAbstract
             } else {
                 // Non-generator functions: wrap return statements
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+                $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
                     public function __construct(
                         private Node\Expr $thisArg,
                         private bool $isNativeVoid
-                    ) {}
+                    ) {
+                    }
 
                     public function enterNode(Node $n): int|array|null
                     {

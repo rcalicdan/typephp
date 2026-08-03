@@ -9,7 +9,9 @@ namespace TypePHP\Tests\Fixtures\Generics;
  */
 class GenericCollection
 {
-    /** @var array<int, T> */
+    /**
+     * @var array<int, T>
+     */
     private array $items = [];
 
     /**

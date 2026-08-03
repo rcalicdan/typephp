@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 class User
 {
-    public function __construct(public string $name) {}
+    public function __construct(public string $name)
+    {
+    }
 }
 
 class Product
 {
-    public function __construct(public string $sku) {}
+    public function __construct(public string $sku)
+    {
+    }
 }
 
 /**
@@ -17,17 +21,24 @@ class Product
  */
 class Collection
 {
-    /** @var T[] */
+    /**
+     * @var T[]
+     */
     private array $items = [];
 
-    /** @param T $item */
+    /**
+     * @param T $item
+     */
     public function add(mixed $item): static
     {
         $this->items[] = $item;
+
         return $this;
     }
 
-    /** @return T[] */
+    /**
+     * @return T[]
+     */
     public function toArray(): array
     {
         return $this->items;
@@ -54,5 +65,5 @@ try {
     echo "       T is only inferred from first successful add(), the docblock annotation is not read at all.\n";
 } catch (TypeError $e) {
     echo "   ✅ users->add(Product) FAILED as the first call — @var Collection<User> genuinely prebinds T\n";
-    echo "       before any item exists: " . $e->getMessage() . "\n";
+    echo '       before any item exists: ' . $e->getMessage() . "\n";
 }

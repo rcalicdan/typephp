@@ -17,9 +17,6 @@ use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Contract\ContractParser;
-use TypePHP\Internal\ClassNameValidator;
-use TypePHP\Internal\ErrorFactory;
-use TypePHP\Internal\TypeFormatter;
 use TypePHP\Resolver\SpecialTypeResolver;
 use TypePHP\Resolver\TemplateManager;
 use TypePHP\Resolver\TemplateSubstitutor;
@@ -89,6 +86,7 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
+
                 continue;
             }
 
@@ -98,6 +96,7 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
+
                 continue;
             }
 
@@ -289,7 +288,7 @@ final class RuntimeTypeChecker
         return $value;
     }
 
-     public static function wrapCallableInline(mixed $callable, string $typeString, string $varName, string $file): mixed
+    public static function wrapCallableInline(mixed $callable, string $typeString, string $varName, string $file): mixed
     {
         if (! is_callable($callable)) {
             return $callable;

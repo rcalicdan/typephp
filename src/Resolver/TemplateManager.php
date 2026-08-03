@@ -16,7 +16,6 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
-use TypePHP\Resolver\SpecialTypeResolver;
 
 final class TemplateManager
 {
@@ -282,7 +281,7 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
@@ -293,10 +292,10 @@ final class TemplateManager
             return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;
@@ -351,7 +350,7 @@ final class TemplateManager
         return false;
     }
 
-      public static function bindInstance(object $instance, string $typeString, string $file = ''): object
+    public static function bindInstance(object $instance, string $typeString, string $file = ''): object
     {
         /** @var TypeParser|null $typeParser */
         static $typeParser = null;

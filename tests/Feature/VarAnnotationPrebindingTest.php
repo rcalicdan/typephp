@@ -23,7 +23,8 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
 
         // First call ever and it will fail immediately because @var pre-bound T = Dog
         expect(fn () => $dogs->add(new Car()))
-            ->toThrow(TypeError::class, 'Argument $item (template T = TypePHP\Tests\Fixtures\Domain\Dog) must be of type TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'Argument $item (template T = TypePHP\Tests\Fixtures\Domain\Dog) must be of type TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('prebinds nested generic structures via @var annotation', function () {
@@ -39,7 +40,8 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
         $producers = new GenericCollection();
 
         expect(fn () => $producers->add(new Producer(new Car())))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('prebinds template T with a multi-line generic type definition', function () {
@@ -54,18 +56,20 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
         expect($dogs->count())->toBe(1);
 
         expect(fn () => $dogs->add(new Car()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('prebinds template T with weird spacing and missing variable name', function () {
-        /** @var    GenericCollection<   Dog   > */
+        /** @var GenericCollection< Dog   > */
         $dogs = new GenericCollection();
 
         $dogs->add(new Dog());
         expect($dogs->count())->toBe(1);
 
         expect(fn () => $dogs->add(new Car()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('prebinds template T when variable name precedes the type', function () {
@@ -76,7 +80,8 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
         expect($dogs->count())->toBe(1);
 
         expect(fn () => $dogs->add(new Car()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('prebinds deeply nested multi-line generics with asterisks', function () {

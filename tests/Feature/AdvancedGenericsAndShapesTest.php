@@ -70,13 +70,15 @@ describe('class-string<T> Factory Contracts', function () {
 
     test('throws TypeError when class-string argument does not satisfy bound', function () {
         expect(fn () => testClassStringFactory(Car::class, new Car()))
-            ->toThrow(TypeError::class, 'must be a class-string of TypePHP\Tests\Fixtures\Domain\Animal');
+            ->toThrow(TypeError::class, 'must be a class-string of TypePHP\Tests\Fixtures\Domain\Animal')
+        ;
     });
 
     test('throws TypeError when returned object does not match bound class-string', function () {
         // Class string asks for Dog, but function returns Cat
         expect(fn () => testClassStringFactory(Dog::class, new Cat()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -89,7 +91,8 @@ describe('Variadic Generic Templates (@param T ...$items)', function () {
     test('throws TypeError when variadic items have inconsistent types', function () {
         // T is inferred as int from 1st item, 3rd item 'invalid' violates T = int
         expect(fn () => testCollectSameType(10, 20, 'invalid'))
-            ->toThrow(TypeError::class, 'template T = int');
+            ->toThrow(TypeError::class, 'template T = int')
+        ;
     });
 });
 
@@ -104,7 +107,8 @@ describe('Unbound Template Return Fallbacks (@template T of Bound)', function ()
     test('throws TypeError when unbound return value violates template bound', function () {
         // Car is not an Animal
         expect(fn () => testCreateAnimalFallback(new Car()))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -137,6 +141,7 @@ describe('Tagged / Discriminated Union Array Shapes', function () {
         ];
 
         expect(fn () => testProcessApiResponse(true, $badPayload))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });

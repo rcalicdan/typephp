@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-class User {}
+class User
+{
+}
 
 /**
  * @return non-empty-list<User>

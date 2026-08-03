@@ -90,17 +90,20 @@ describe('Extended Scalar Return Types', function () {
 
     test('throws TypeError when return value violates positive-int contract', function () {
         expect(fn () => testReturnPositiveInt(-10))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 
     test('throws TypeError when return value violates non-empty-string contract', function () {
         expect(fn () => testReturnNonEmptyString(''))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 
     test('throws TypeError when return value violates numeric-string contract', function () {
         expect(fn () => testReturnNumericString('not_numeric'))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -113,12 +116,14 @@ describe('List and Array Return Types', function () {
     test('throws TypeError when returned list contains invalid element', function () {
         // -5 is not positive-int
         expect(fn () => testReturnPositiveIntList([10, -5, 30]))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 
     test('throws TypeError when non-empty-list return is an empty array', function () {
         expect(fn () => testReturnNonEmptyList([]))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -130,7 +135,8 @@ describe('Positional Tuple Return Types', function () {
     test('throws TypeError when tuple return element is invalid', function () {
         // First element -5 is not positive-int
         expect(fn () => testReturnTupleShape([-5, 'success']))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -142,7 +148,8 @@ describe('Generic Template List Return Types', function () {
     test('throws TypeError when returned list contains item violating inferred T', function () {
         // T is inferred as int from 1st arg (10), list contains string 'invalid'
         expect(fn () => testReturnTemplateList(10, [20, 'invalid']))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 

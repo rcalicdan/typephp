@@ -2,10 +2,18 @@
 
 declare(strict_types=1);
 
-class Animal {}
-class Dog extends Animal {}
-class Cat extends Animal {}
-class Car {}
+class Animal
+{
+}
+class Dog extends Animal
+{
+}
+class Cat extends Animal
+{
+}
+class Car
+{
+}
 
 // -------------------------------------------------------------
 // Box with NO bound — T can be anything, including another Box
@@ -15,16 +23,24 @@ class Car {}
  */
 class Box
 {
-    /** @param T $item */
-    public function __construct(public mixed $item) {}
+    /**
+     * @param T $item
+     */
+    public function __construct(public mixed $item)
+    {
+    }
 
-    /** @return T */
+    /**
+     * @return T
+     */
     public function get(): mixed
     {
         return $this->item;
     }
 
-    /** @param T $item */
+    /**
+     * @param T $item
+     */
     public function set(mixed $item): void
     {
         $this->item = $item;
@@ -40,10 +56,16 @@ class Box
  */
 class Pack
 {
-    /** @param T[] $items */
-    public function __construct(public array $items) {}
+    /**
+     * @param T[] $items
+     */
+    public function __construct(public array $items)
+    {
+    }
 
-    /** @param T $item */
+    /**
+     * @param T $item
+     */
     public function add(mixed $item): void
     {
         $this->items[] = $item;
@@ -61,12 +83,12 @@ try {
     if ($unwrapped instanceof Box) {
         echo "   ✅ outerBox->get() returned a Box instance — nested structure preserved\n";
         $innerVal = $unwrapped->get();
-        echo "   ℹ️  innerBox->get() returned instance of: " . get_class($innerVal) . "\n";
+        echo '   ℹ️  innerBox->get() returned instance of: ' . get_class($innerVal) . "\n";
     } else {
         echo "   ⚠️  outerBox->get() did NOT return a Box\n";
     }
 } catch (TypeError $e) {
-    echo "   ❌ UNEXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ❌ UNEXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // Now test whether T, once bound to "Box" (from the Dog-holding box),
@@ -82,7 +104,7 @@ try {
     echo "       (This tells us whether nesting is type-erased at one level or fully recursive)\n";
 } catch (TypeError $e) {
     echo "   ℹ️  outerBox->set(Box<Cat>) FAILED — T is tracked recursively as 'Box<Dog>', rejecting Box<Cat>\n";
-    echo "       " . $e->getMessage() . "\n";
+    echo '       ' . $e->getMessage() . "\n";
 }
 
 // Sanity check: outer T should still reject a non-Box entirely (e.g. a plain Dog),
@@ -91,7 +113,7 @@ try {
     $outerBox->set(new Dog());
     echo "   ❌ POSSIBLE ISSUE: outerBox accepted a plain Dog, even though T was bound to Box on construction\n";
 } catch (TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: outerBox correctly rejected a plain Dog (T is bound to Box, not Animal): " . $e->getMessage() . "\n";
+    echo '   ✅ CAUGHT EXPECTED ERROR: outerBox correctly rejected a plain Dog (T is bound to Box, not Animal): ' . $e->getMessage() . "\n";
 }
 
 echo "\n=== TEST F-3: T[] resolving through a nested container (Pack<Box<Dog>>) ===\n";
@@ -102,7 +124,7 @@ try {
     $pack = new Pack([$box1, $box2]); // Pack<Box<Dog>>, T[] should mean "array of Box"
     echo "   ✅ Pack([Box(Dog), Box(Dog)]) constructed — T[] resolved to array of Box\n";
 } catch (TypeError $e) {
-    echo "   ❌ UNEXPECTED ERROR: " . $e->getMessage() . "\n";
+    echo '   ❌ UNEXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // Now try adding a mismatched element — a Box<Cat> instead of Box<Dog>,
@@ -111,7 +133,7 @@ try {
     $pack->add(new Dog()); // raw Dog, not wrapped in a Box — should fail if T = Box
     echo "   ❌ POSSIBLE ISSUE: Pack accepted a raw Dog even though T should be 'Box' based on constructor items\n";
 } catch (TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: Pack correctly rejected a raw Dog (T is Box, not Animal): " . $e->getMessage() . "\n";
+    echo '   ✅ CAUGHT EXPECTED ERROR: Pack correctly rejected a raw Dog (T is Box, not Animal): ' . $e->getMessage() . "\n";
 }
 
 try {
@@ -120,7 +142,7 @@ try {
     echo "   ℹ️  Pack->add(Box<Cat>) passed — T tracked only as 'Box' at this level, inner type not enforced across Pack\n";
 } catch (TypeError $e) {
     echo "   ℹ️  Pack->add(Box<Cat>) FAILED — T tracked recursively, rejecting Box<Cat> when Pack established Box<Dog>\n";
-    echo "       " . $e->getMessage() . "\n";
+    echo '       ' . $e->getMessage() . "\n";
 }
 
 echo "\n🎉 DONE — key question: does nesting stop at one level (T='Box') or resolve recursively (T='Box<Dog>')?\n";
