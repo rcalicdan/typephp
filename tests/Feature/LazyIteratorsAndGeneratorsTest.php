@@ -33,9 +33,41 @@ function testTraversableParamContract(Traversable $items): array
 }
 
 /**
- * 3. Generator Return Contracts (@return Generator<non-empty-string, positive-int>)
+ * 3. Multiple Iterations on Traversable Parameter (Rewindability)
  *
- * @return Generator<non-empty-string, positive-int>
+ * @param Traversable<string, positive-int> $items
+ */
+function testMultipleIterationTraversableParam(Traversable $items): int
+{
+    $count = 0;
+    foreach ($items as $k => $v) {
+        $count++;
+    }
+    foreach ($items as $k => $v) {
+        $count++;
+    }
+
+    return $count;
+}
+
+/**
+ * 4. Countable & Method Forwarding on Traversable Parameter
+ *
+ * @param Traversable<string, positive-int> $items
+ */
+function testCountableTraversableParam(Traversable $items): int
+{
+    if ($items instanceof Countable) {
+        return $items->count();
+    }
+
+    return 0;
+}
+
+/**
+ * 5. Generator Return Contracts (@return Generator<non-empty-string, positive-int, positive-int, void>)
+ *
+ * @return Generator<non-empty-string, positive-int, positive-int, void>
  */
 function testGeneratorReturnContract(bool $yieldBadValue = false, bool $yieldBadKey = false): Generator
 {
@@ -45,13 +77,13 @@ function testGeneratorReturnContract(bool $yieldBadValue = false, bool $yieldBad
     } elseif ($yieldBadKey) {
         yield '' => 10; // Invalid key (empty string)
     } else {
-        yield 'a' => 10;
+        $receivedValue = yield 'a' => 10;
         yield 'b' => 20;
     }
 }
 
 /**
- * 4. Traversable / Iterator Return Contracts (@return Traversable<non-empty-string, positive-int>)
+ * 6. Traversable / Iterator Return Contracts (@return Traversable<non-empty-string, positive-int>)
  *
  * @return Traversable<non-empty-string, positive-int>
  */
@@ -124,6 +156,18 @@ describe('Lazy Non-Array Traversable Parameter Contracts (@param Traversable<K, 
     });
 });
 
+describe('Traversable Rewindability & Method Forwarding (IteratorProxy)', function () {
+    test('allows multiple foreach iterations over wrapped Traversable parameter', function () {
+        $iterator = new ArrayIterator(['a' => 10, 'b' => 20]);
+        expect(testMultipleIterationTraversableParam($iterator))->toBe(4);
+    });
+
+    test('forwards Countable interface and custom method calls to inner iterator', function () {
+        $arrayIterator = new ArrayIterator(['a' => 10, 'b' => 20]);
+        expect(testCountableTraversableParam($arrayIterator))->toBe(2);
+    });
+});
+
 describe('Lazy Generator & Traversable Return Contracts', function () {
     test('iterates valid generator return cleanly', function () {
         $result = [];
@@ -172,5 +216,24 @@ describe('Lazy Generator & Traversable Return Contracts', function () {
                 // Iteration throws on 'item2' => -99
             }
         })->toThrow(TypeError::class, 'Return iterator value');
+    });
+});
+
+describe('Generator Input Validation ($gen->send() TSend Contract)', function () {
+    test('accepts valid TSend value sent into generator', function () {
+        $gen = testGeneratorReturnContract(false, false);
+        $gen->current(); // Reaches first yield
+        $gen->send(100); // 100 is positive-int (valid TSend)
+
+        expect($gen->valid())->toBeTrue();
+    });
+
+    test('throws TypeError when $gen->send() receives value violating TSend contract', function () {
+        $gen = testGeneratorReturnContract(false, false);
+        $gen->current(); // Reaches first yield
+
+        // -500 violates positive-int TSend contract
+        expect(fn () => $gen->send(-500))
+            ->toThrow(TypeError::class, 'Generator sent value (TSend)');
     });
 });

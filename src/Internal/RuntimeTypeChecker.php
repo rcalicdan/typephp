@@ -214,6 +214,31 @@ final class RuntimeTypeChecker
         return $value;
     }
 
+    public static function checkSend(string $function, mixed $sendValue): mixed
+    {
+        if ($sendValue === null) {
+            return null;
+        }
+
+        $contract = ContractParser::parse($function);
+        $returnTypeNode = $contract['return'] ?? null;
+
+        if ($returnTypeNode instanceof GenericTypeNode) {
+            // Generator<TKey, TValue, TSend, TReturn> -> index 2 is TSend
+            $sendTypeNode = $returnTypeNode->genericTypes[2] ?? null;
+
+            if ($sendTypeNode !== null) {
+                $registry = self::getRegistry();
+                $err = $registry->validate($sendValue, $sendTypeNode, "$function(): Generator sent value (TSend)");
+                if ($err !== null) {
+                    throw $err;
+                }
+            }
+        }
+
+        return $sendValue;
+    }
+
     public static function checkYield(string $function, mixed $key, mixed $value): mixed
     {
         $contract = ContractParser::parse($function);

@@ -26,38 +26,45 @@ final class IterableWrapper
             $typeNode = $aliases[$typeNode->name];
         }
 
-        return (function () use ($iterable, $typeNode, $registry, $function, $paramName) {
-            $itemTypeNode = null;
-            $keyTypeNode = null;
+        $itemTypeNode = null;
+        $keyTypeNode = null;
 
-            if ($typeNode instanceof GenericTypeNode) {
-                $typesCount = count($typeNode->genericTypes);
-                if ($typesCount === 1) {
-                    $itemTypeNode = $typeNode->genericTypes[0];
-                } elseif ($typesCount >= 2) {
-                    $keyTypeNode = $typeNode->genericTypes[0];
-                    $itemTypeNode = $typeNode->genericTypes[1];
-                }
-            } elseif ($typeNode instanceof ArrayTypeNode) {
-                $itemTypeNode = $typeNode->type;
+        if ($typeNode instanceof GenericTypeNode) {
+            $typesCount = count($typeNode->genericTypes);
+            if ($typesCount === 1) {
+                $itemTypeNode = $typeNode->genericTypes[0];
+            } elseif ($typesCount >= 2) {
+                $keyTypeNode = $typeNode->genericTypes[0];
+                $itemTypeNode = $typeNode->genericTypes[1];
             }
+        } elseif ($typeNode instanceof ArrayTypeNode) {
+            $itemTypeNode = $typeNode->type;
+        }
 
-            $prefix = ($paramName === 'return') ? "$function(): Return iterator" : "$function(): Iterator \$$paramName";
+        $prefix = ($paramName === 'return') ? "$function(): Return iterator" : "$function(): Iterator \$$paramName";
 
+        $typeCheckCallback = function (mixed $key, mixed $value) use ($registry, $keyTypeNode, $itemTypeNode, $prefix): void {
+            if ($keyTypeNode !== null && $key !== null) {
+                $err = $registry->validate($key, $keyTypeNode, "$prefix key");
+                if ($err !== null) {
+                    throw $err;
+                }
+            }
+            if ($itemTypeNode !== null) {
+                $err = $registry->validate($value, $itemTypeNode, "$prefix value");
+                if ($err !== null) {
+                    throw $err;
+                }
+            }
+        };
+
+        if ($iterable instanceof \Traversable && ! ($iterable instanceof \Generator)) {
+            return new IteratorProxy($iterable, $typeCheckCallback);
+        }
+
+        return (function () use ($iterable, $typeCheckCallback) {
             foreach ($iterable as $key => $value) {
-                if ($keyTypeNode !== null) {
-                    $err = $registry->validate($key, $keyTypeNode, "$prefix key");
-                    if ($err !== null) {
-                        throw $err;
-                    }
-                }
-                if ($itemTypeNode !== null) {
-                    $err = $registry->validate($value, $itemTypeNode, "$prefix value");
-                    if ($err !== null) {
-                        throw $err;
-                    }
-                }
-
+                $typeCheckCallback($key, $value);
                 yield $key => $value;
             }
         })();

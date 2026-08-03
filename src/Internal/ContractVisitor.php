@@ -37,9 +37,8 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         $isGen = false;
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
-            public function __construct(private bool &$isGen) {
-            }
+        $traverser->addVisitor(new class($isGen) extends NodeVisitorAbstract {
+            public function __construct(private bool &$isGen) {}
 
             public function enterNode(Node $n): ?int
             {
@@ -165,14 +164,20 @@ final class ContractVisitor extends NodeVisitorAbstract
             if ($isGeneratorFunc) {
                 // For generator functions, wrap yield/yield from expressions lazily
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class () extends NodeVisitorAbstract {
-                    public function enterNode(Node $n): int|array|null
+                $traverser->addVisitor(new class() extends NodeVisitorAbstract {
+                    public function enterNode(Node $n): int|Node|null
                     {
                         if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                             return NodeTraverser::DONT_TRAVERSE_CHILDREN;
                         }
 
                         if ($n instanceof Node\Expr\Yield_) {
+                            if ($n->getAttribute('typephp_wrapped') === true) {
+                                return null;
+                            }
+
+                            $n->setAttribute('typephp_wrapped', true);
+
                             $n->value = new Node\Expr\FuncCall(
                                 new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkYield'),
                                 [
@@ -181,7 +186,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                                     new Node\Arg($n->value ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
                                 ]
                             );
-                        } elseif ($n instanceof Node\Expr\YieldFrom) {
+
+                            return new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkSend'),
+                                [
+                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                    new Node\Arg($n),
+                                ]
+                            );
+                        }
+
+                        if ($n instanceof Node\Expr\YieldFrom) {
+                            if ($n->getAttribute('typephp_wrapped') === true) {
+                                return null;
+                            }
+
+                            $n->setAttribute('typephp_wrapped', true);
+
                             $n->expr = new Node\Expr\FuncCall(
                                 new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
                                 [
@@ -202,12 +223,11 @@ final class ContractVisitor extends NodeVisitorAbstract
             } else {
                 // Non-generator functions: wrap return statements
                 $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+                $traverser->addVisitor(new class($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
                     public function __construct(
                         private Node\Expr $thisArg,
                         private bool $isNativeVoid
-                    ) {
-                    }
+                    ) {}
 
                     public function enterNode(Node $n): int|array|null
                     {
