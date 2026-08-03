@@ -127,10 +127,12 @@ final class RuntimeTypeChecker
             $returnTypeNode = $aliases[$returnTypeNode->name];
         }
 
-        // Substitute template placeholders (T[] -> int[])
+        // Substitute template placeholders (T[] -> int[], or unbound T -> Animal/mixed)
         $boundTemplates = TemplateManager::getBoundTemplates($function, $thisObj, $contract['templates']);
-        if (count($boundTemplates) > 0) {
-            $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates);
+        $declaredTemplates = $contract['templates'];
+
+        if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
+            $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates, $declaredTemplates);
         }
 
         // Parameter-based Conditional Return Types
