@@ -44,12 +44,14 @@ final class IterableWrapper
 
             foreach ($iterable as $key => $value) {
                 if ($keyTypeNode !== null) {
-                    if ($err = $registry->validate($key, $keyTypeNode, "$function(): Iterator \$$paramName key")) {
+                    $err = $registry->validate($key, $keyTypeNode, "$function(): Iterator \$$paramName key");
+                    if ($err !== null) {
                         throw $err;
                     }
                 }
                 if ($itemTypeNode !== null) {
-                    if ($err = $registry->validate($value, $itemTypeNode, "$function(): Iterator \$$paramName value")) {
+                    $err = $registry->validate($value, $itemTypeNode, "$function(): Iterator \$$paramName value");
+                    if ($err !== null) {
                         throw $err;
                     }
                 }

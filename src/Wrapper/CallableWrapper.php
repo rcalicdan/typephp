@@ -39,7 +39,8 @@ final class CallableWrapper
         return function (...$args) use ($callable, $typeNode, $registry, $function, $paramName) {
             foreach ($typeNode->parameters as $index => $paramNode) {
                 if (array_key_exists($index, $args)) {
-                    if ($err = $registry->validate($args[$index], $paramNode->type, "$function(): Callback \$$paramName argument #" . ($index + 1))) {
+                    $err = $registry->validate($args[$index], $paramNode->type, "$function(): Callback \$$paramName argument #" . ($index + 1));
+                    if ($err !== null) {
                         throw $err;
                     }
                 }
@@ -47,7 +48,8 @@ final class CallableWrapper
 
             $result = $callable(...$args);
 
-            if ($err = $registry->validate($result, $typeNode->returnType, "$function(): Callback \$$paramName return value")) {
+            $err = $registry->validate($result, $typeNode->returnType, "$function(): Callback \$$paramName return value");
+            if ($err !== null) {
                 throw $err;
             }
 

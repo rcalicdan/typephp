@@ -40,19 +40,20 @@ final class StreamWrapper
     private static string $cacheDir = '';
 
     /**
-     * @param array{include?: array<int, string>, exclude?: array<int, string>, cache?: bool} $config
+     * @param array<string, mixed> $config
      */
     public static function register(array $config = []): void
     {
-        if (! self::$isInitialized || \count($config) > 0) {
+        if (! self::$isInitialized || count($config) > 0) {
             $cwd = getcwd();
             $base = $cwd !== false ? $cwd : '';
             self::$baseDir = rtrim(str_replace('\\', '/', $base), '/');
 
             /** @var array<int, string> $includes */
-            $includes = $config['include'] ?? ['**'];
+            $includes = is_array($config['include'] ?? null) ? $config['include'] : ['**'];
+
             /** @var array<int, string> $excludes */
-            $excludes = $config['exclude'] ?? ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+            $excludes = is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
             self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
             self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
