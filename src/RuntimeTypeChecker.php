@@ -24,9 +24,16 @@ final class RuntimeTypeChecker
     private static array $contractCache = [];
 
     /**
+     * Uses object references as keys. Solves spl_object_id collisions and memory leaks!
+     * @var \WeakMap<object, array<string, TypeNode>>|null
+     */
+    private static ?\WeakMap $instanceTemplateBindings = null;
+
+    /**
+     * Tracks templates for pure functions and static methods.
      * @var array<string, TypeNode>
      */
-    private static array $instanceTemplateBindings = [];
+    private static array $callTemplateBindings = [];
 
     private static ?TypeValidatorRegistry $registry = null;
 
@@ -59,25 +66,45 @@ final class RuntimeTypeChecker
                 $classTokens = new TokenIterator($lexer->tokenize($classDoc));
                 $classPhpDocNode = $phpDocParser->parse($classTokens);
 
-                // Fetch all template tags
+                // Fetch all template tags and their declared variances
                 $templates = [];
-                $prefixes = ['', '@phpstan-', '@psalm-'];
-                $suffixes = ['template', 'template-covariant', 'template-contravariant'];
-                foreach ($prefixes as $prefix) {
-                    foreach ($suffixes as $suffix) {
-                        $templates = array_merge($templates, $classPhpDocNode->getTemplateTagValues($prefix . $suffix));
+                $classVariances = [];
+                
+                foreach ($classPhpDocNode->getTags() as $tagNode) {
+                    if ($tagNode->value instanceof TemplateTagValueNode) {
+                        $templates[] = $tagNode->value;
+                        $tagName = strtolower($tagNode->name);
+                        
+                        if (str_contains($tagName, 'covariant')) {
+                            $classVariances[$tagNode->value->name] = GenericTypeNode::VARIANCE_COVARIANT;
+                        } elseif (str_contains($tagName, 'contravariant')) {
+                            $classVariances[$tagNode->value->name] = GenericTypeNode::VARIANCE_CONTRAVARIANT;
+                        } else {
+                            $classVariances[$tagNode->value->name] = GenericTypeNode::VARIANCE_INVARIANT;
+                        }
                     }
                 }
 
-                $instanceId = spl_object_id($instance);
+                if (self::$instanceTemplateBindings === null) {
+                    self::$instanceTemplateBindings = new \WeakMap();
+                }
+                if (!isset(self::$instanceTemplateBindings[$instance])) {
+                    self::$instanceTemplateBindings[$instance] = [];
+                }
+
                 foreach ($templates as $index => $templateTag) {
                     if (isset($typeNode->genericTypes[$index])) {
                         $expectedTypeNode = $typeNode->genericTypes[$index];
-                        $variance = $typeNode->variances[$index] ?? GenericTypeNode::VARIANCE_INVARIANT;
-                        $bindingKey = "{$instanceId}:{$templateTag->name}";
+                        
+                        // Class declared variance takes precedence, fallback to usage site variance
+                        $variance = $classVariances[$templateTag->name] 
+                            ?? $typeNode->variances[$index] 
+                            ?? GenericTypeNode::VARIANCE_INVARIANT;
+                            
+                        $templateName = $templateTag->name;
 
-                        if (isset(self::$instanceTemplateBindings[$bindingKey])) {
-                            $existingTypeNode = self::$instanceTemplateBindings[$bindingKey];
+                        if (isset(self::$instanceTemplateBindings[$instance][$templateName])) {
+                            $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName];
 
                             $valid = self::checkVariance(
                                 $existingTypeNode,
@@ -91,7 +118,7 @@ final class RuntimeTypeChecker
                                 );
                             }
                         } else {
-                            self::$instanceTemplateBindings[$bindingKey] = $expectedTypeNode;
+                            self::$instanceTemplateBindings[$instance][$templateName] = $expectedTypeNode;
                         }
                     }
                 }
@@ -120,18 +147,21 @@ final class RuntimeTypeChecker
             return true;
         }
 
-        // Covariant (covariant T): existing type must be a subtype of expected type (Dog extends Animal)
-        if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
-            if (class_exists($existingStr) && (class_exists($expectedStr) || interface_exists($expectedStr))) {
-                return is_a($existingStr, $expectedStr, true);
+        $isSubclass = function(string $sub, string $super): bool {
+            if ((class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
+                return is_a($sub, $super, true);
             }
+            return false;
+        };
+
+        // Covariant: existing type (e.g. Dog) must be a subtype of expected type (e.g. Animal)
+        if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
+            return $isSubclass($existingStr, $expectedStr);
         }
 
-        // Contravariant (contravariant T): expected type must be a subtype of existing type (Animal accepts Dog)
+        // Contravariant: expected type (e.g. Animal) must be a subtype of existing type (e.g. Dog)
         if ($variance === GenericTypeNode::VARIANCE_CONTRAVARIANT) {
-            if (class_exists($expectedStr) && (class_exists($existingStr) || interface_exists($existingStr))) {
-                return is_a($expectedStr, $existingStr, true);
-            }
+            return $isSubclass($expectedStr, $existingStr);
         }
 
         return false;
@@ -178,9 +208,20 @@ final class RuntimeTypeChecker
             self::$registry = new TypeValidatorRegistry();
         }
 
+        if (self::$instanceTemplateBindings === null) {
+            self::$instanceTemplateBindings = new \WeakMap();
+        }
+
         $templates = $contract['templates'];
         $aliases = $contract['aliases'];
-        $instanceId = $thisObj !== null ? spl_object_id($thisObj) : null;
+        $isInstanceMethod = $thisObj !== null;
+
+        // Clear previous call bindings for functions/static methods to prevent pollution across calls
+        if (!$isInstanceMethod) {
+            foreach ($templates as $templateName => $_) {
+                unset(self::$callTemplateBindings["{$function}:{$templateName}"]);
+            }
+        }
 
         foreach ($contract['types'] as $paramName => $typeNode) {
             if (! array_key_exists($paramName, $vars)) {
@@ -198,9 +239,27 @@ final class RuntimeTypeChecker
             if ($typeNode instanceof IdentifierTypeNode && isset($templates[$typeNode->name])) {
                 $templateName = $typeNode->name;
                 $templateNode = $templates[$templateName];
-                $bindingKey = $instanceId !== null ? "{$instanceId}:{$templateName}" : "call:{$function}:{$templateName}";
+                
+                $alreadyBound = false;
+                $expectedTypeNode = null;
+                
+                if ($isInstanceMethod) {
+                    if (!isset(self::$instanceTemplateBindings[$thisObj])) {
+                        self::$instanceTemplateBindings[$thisObj] = [];
+                    }
+                    if (isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
+                        $alreadyBound = true;
+                        $expectedTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
+                    }
+                } else {
+                    $callKey = "{$function}:{$templateName}";
+                    if (isset(self::$callTemplateBindings[$callKey])) {
+                        $alreadyBound = true;
+                        $expectedTypeNode = self::$callTemplateBindings[$callKey];
+                    }
+                }
 
-                if (! isset(self::$instanceTemplateBindings[$bindingKey])) {
+                if (! $alreadyBound) {
                     // First time seeing template T for this instance/call -> Infer type from $val
                     $inferredType = self::inferTypeFromValue($val);
 
@@ -210,10 +269,13 @@ final class RuntimeTypeChecker
                         }
                     }
 
-                    self::$instanceTemplateBindings[$bindingKey] = $inferredType;
+                    if ($isInstanceMethod) {
+                        self::$instanceTemplateBindings[$thisObj][$templateName] = $inferredType;
+                    } else {
+                        self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
+                    }
                 } else {
                     // Template T was already inferred or pre-bound -> Enforce bound type
-                    $expectedTypeNode = self::$instanceTemplateBindings[$bindingKey];
                     if ($err = self::$registry->validate($val, $expectedTypeNode, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
                         return $err;
                     }
@@ -244,21 +306,35 @@ final class RuntimeTypeChecker
             self::$registry = new TypeValidatorRegistry();
         }
 
+        if (self::$instanceTemplateBindings === null) {
+            self::$instanceTemplateBindings = new \WeakMap();
+        }
+
         // Resolve Type Aliases (@phpstan-type / @psalm-type) for return type
         if ($returnTypeNode instanceof IdentifierTypeNode && isset($aliases[$returnTypeNode->name])) {
             $returnTypeNode = $aliases[$returnTypeNode->name];
         }
 
         $templates = $contract['templates'];
-        $instanceId = $thisObj !== null ? spl_object_id($thisObj) : null;
+        $isInstanceMethod = $thisObj !== null;
 
         // Resolve / Check template return types (@return T)
         if ($returnTypeNode instanceof IdentifierTypeNode && isset($templates[$returnTypeNode->name])) {
             $templateName = $returnTypeNode->name;
-            $bindingKey = $instanceId !== null ? "{$instanceId}:{$templateName}" : "call:{$function}:{$templateName}";
+            $expectedTypeNode = null;
 
-            if (isset(self::$instanceTemplateBindings[$bindingKey])) {
-                $expectedTypeNode = self::$instanceTemplateBindings[$bindingKey];
+            if ($isInstanceMethod) {
+                if (isset(self::$instanceTemplateBindings[$thisObj][$templateName])) {
+                    $expectedTypeNode = self::$instanceTemplateBindings[$thisObj][$templateName];
+                }
+            } else {
+                $callKey = "{$function}:{$templateName}";
+                if (isset(self::$callTemplateBindings[$callKey])) {
+                    $expectedTypeNode = self::$callTemplateBindings[$callKey];
+                }
+            }
+
+            if ($expectedTypeNode !== null) {
                 if ($err = self::$registry->validate($value, $expectedTypeNode, $function . '(): Return value (template ' . $templateName . ' = ' . $expectedTypeNode . ')')) {
                     throw $err;
                 }
@@ -363,18 +439,14 @@ final class RuntimeTypeChecker
             $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
         }
 
-        // Helper to get ALL template tags (covariant, contravariant, phpstan, psalm)
+        // Helper to get ALL template tags reliably
         $getAllTemplates = function ($node) {
             $tags = [];
-            $prefixes = ['', '@phpstan-', '@psalm-'];
-            $suffixes = ['template', 'template-covariant', 'template-contravariant'];
-
-            foreach ($prefixes as $prefix) {
-                foreach ($suffixes as $suffix) {
-                    $tags = array_merge($tags, $node->getTemplateTagValues($prefix . $suffix));
+            foreach ($node->getTags() as $tagNode) {
+                if ($tagNode->value instanceof TemplateTagValueNode) {
+                    $tags[] = $tagNode->value;
                 }
             }
-
             return $tags;
         };
 

@@ -27,8 +27,8 @@ final class ContractVisitor extends NodeVisitorAbstract
 
     private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node)
     {
-        if ($node->stmts === null || empty($node->stmts)) {
-            return null;
+        if ($node->stmts === null) {
+            return null; // Interfaces and abstract methods have null stmts. Empty methods have []
         }
 
         $doc = $node->getDocComment();
@@ -98,23 +98,25 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         if ($hasReturn) {
             $traverser = new NodeTraverser();
-            $traverser->addVisitor(new class ($thisArg) extends NodeVisitorAbstract {
-                public function __construct(private Node $thisArg)
-                {
-                }
+            $traverser->addVisitor(new class($thisArg) extends NodeVisitorAbstract {
+                public function __construct(private Node $thisArg) {}
 
                 public function enterNode(Node $n)
                 {
+                    // Do not traverse into nested functions/closures
                     if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                         return NodeTraverser::DONT_TRAVERSE_CHILDREN;
                     }
 
-                    if ($n instanceof Node\Stmt\Return_ && $n->expr !== null) {
+                    // Fix #1: Handle both `return $expr;` and `return;`
+                    if ($n instanceof Node\Stmt\Return_) {
+                        $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
+
                         $n->expr = new Node\Expr\FuncCall(
                             new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
                             [
                                 new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                new Node\Arg($n->expr),
+                                new Node\Arg($exprToWrap),
                                 new Node\Arg($this->thisArg),
                             ]
                         );
@@ -125,6 +127,21 @@ final class ContractVisitor extends NodeVisitorAbstract
             });
 
             $node->stmts = $traverser->traverse($node->stmts);
+
+            //  Catch implicit fall-throughs by appending a return check at the very end
+            $lastStmt = end($node->stmts);
+            if (! $lastStmt instanceof Node\Stmt\Return_ && ! $lastStmt instanceof Node\Stmt\Throw_) {
+                $node->stmts[] = new Node\Stmt\Return_(
+                    new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
+                            new Node\Arg($thisArg),
+                        ]
+                    )
+                );
+            }
         }
 
         if (! empty($injectedStmts)) {

@@ -15,17 +15,29 @@ final class ErrorFactory
             $class = $frame['class'] ?? '';
             if (! str_starts_with($class, 'TypePHP\\')) {
                 $callerFrameIndex = $i;
-
                 break;
             }
         }
 
-        $callerFrame = $trace[$callerFrameIndex] ?? [];
-        $file = $callerFrame['file'] ?? 'unknown';
-        $line = $callerFrame['line'] ?? 0;
+        $isReturnError = str_contains($message, 'Return value');
 
-        $nativeMessage = \sprintf('%s, called in %s on line %d', $message, $file, $line);
-        $e = new \TypeError($nativeMessage);
+        if ($isReturnError) {
+            $blameFrame = $trace[$callerFrameIndex - 1] ?? [];
+            
+            if (str_contains($message, 'null given')) {
+                $message = str_replace('null given', 'none returned', $message);
+            } else {
+                $message = str_replace(' given', ' returned', $message);
+            }
+        } else {
+            // Blame the call site (where the function was called)
+            $blameFrame = $trace[$callerFrameIndex] ?? [];
+        }
+
+        $file = $blameFrame['file'] ?? 'unknown';
+        $line = $blameFrame['line'] ?? 0;
+
+        $e = new \TypeError($message);
 
         $ref = new \ReflectionObject($e);
         $properties = [

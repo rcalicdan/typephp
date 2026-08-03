@@ -87,7 +87,7 @@ final class StreamWrapper
         }
         $mtime = filemtime($resolvedPath);
 
-        $cacheKey = hash('xxh128', 'v18_' . $resolvedPath . $mtime);
+        $cacheKey = hash('xxh128', 'v19_' . $resolvedPath . $mtime);
         $cachedFile = "$cacheDir/$cacheKey.php";
 
         if (! file_exists($cachedFile)) {
