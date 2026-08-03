@@ -19,7 +19,7 @@ final class IterableWrapper
         }
 
         $contract = ContractParser::parse($function);
-        $typeNode = $contract['types'][$paramName] ?? null;
+        $typeNode = ($paramName === 'return') ? ($contract['return'] ?? null) : ($contract['types'][$paramName] ?? null);
         $aliases = $contract['aliases'] ?? [];
 
         if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
@@ -42,15 +42,17 @@ final class IterableWrapper
                 $itemTypeNode = $typeNode->type;
             }
 
+            $prefix = ($paramName === 'return') ? "$function(): Return iterator" : "$function(): Iterator \$$paramName";
+
             foreach ($iterable as $key => $value) {
                 if ($keyTypeNode !== null) {
-                    $err = $registry->validate($key, $keyTypeNode, "$function(): Iterator \$$paramName key");
+                    $err = $registry->validate($key, $keyTypeNode, "$prefix key");
                     if ($err !== null) {
                         throw $err;
                     }
                 }
                 if ($itemTypeNode !== null) {
-                    $err = $registry->validate($value, $itemTypeNode, "$function(): Iterator \$$paramName value");
+                    $err = $registry->validate($value, $itemTypeNode, "$prefix value");
                     if ($err !== null) {
                         throw $err;
                     }

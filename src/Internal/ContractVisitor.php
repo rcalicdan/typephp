@@ -29,6 +29,39 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
+    private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
+    {
+        if ($node->stmts === null) {
+            return false;
+        }
+
+        $isGen = false;
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
+            public function __construct(private bool &$isGen) {
+            }
+
+            public function enterNode(Node $n): ?int
+            {
+                if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                    return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+                }
+
+                if ($n instanceof Node\Expr\Yield_ || $n instanceof Node\Expr\YieldFrom) {
+                    $this->isGen = true;
+
+                    return NodeTraverser::STOP_TRAVERSAL;
+                }
+
+                return null;
+            }
+        });
+
+        $traverser->traverse($node->stmts);
+
+        return $isGen;
+    }
+
     private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): void
     {
         if ($node->stmts === null) {
@@ -127,68 +160,110 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         if ($hasReturn) {
-            $traverser = new NodeTraverser();
-            $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
-                public function __construct(
-                    private Node\Expr $thisArg,
-                    private bool $isNativeVoid
-                ) {
-                }
+            $isGeneratorFunc = $this->isGenerator($node);
 
-                public function enterNode(Node $n): int|array|null
-                {
-                    if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
-                        return NodeTraverser::DONT_TRAVERSE_CHILDREN;
-                    }
-
-                    if ($n instanceof Node\Stmt\Return_) {
-                        $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
-
-                        $checkReturnCall = new Node\Expr\FuncCall(
-                            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
-                            [
-                                new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                new Node\Arg($exprToWrap),
-                                new Node\Arg($this->thisArg),
-                                new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                            ]
-                        );
-
-                        if ($this->isNativeVoid) {
-                            return [
-                                new Node\Stmt\Expression($checkReturnCall),
-                                new Node\Stmt\Return_(null),
-                            ];
+            if ($isGeneratorFunc) {
+                // For generator functions, wrap yield/yield from expressions lazily
+                $traverser = new NodeTraverser();
+                $traverser->addVisitor(new class () extends NodeVisitorAbstract {
+                    public function enterNode(Node $n): int|array|null
+                    {
+                        if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
                         }
 
-                        $n->expr = $checkReturnCall;
+                        if ($n instanceof Node\Expr\Yield_) {
+                            $n->value = new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkYield'),
+                                [
+                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                    new Node\Arg($n->key ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
+                                    new Node\Arg($n->value ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
+                                ]
+                            );
+                        } elseif ($n instanceof Node\Expr\YieldFrom) {
+                            $n->expr = new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
+                                [
+                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                    new Node\Arg(new Node\Scalar\String_('return')),
+                                    new Node\Arg($n->expr),
+                                ]
+                            );
+                        }
+
+                        return null;
+                    }
+                });
+
+                /** @var array<Node\Stmt> $newStmts */
+                $newStmts = $traverser->traverse($node->stmts);
+                $node->stmts = $newStmts;
+            } else {
+                // Non-generator functions: wrap return statements
+                $traverser = new NodeTraverser();
+                $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+                    public function __construct(
+                        private Node\Expr $thisArg,
+                        private bool $isNativeVoid
+                    ) {
                     }
 
-                    return null;
-                }
-            });
+                    public function enterNode(Node $n): int|array|null
+                    {
+                        if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+                        }
 
-            /** @var array<Node\Stmt> $newStmts */
-            $newStmts = $traverser->traverse($node->stmts);
-            $node->stmts = $newStmts;
+                        if ($n instanceof Node\Stmt\Return_) {
+                            $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
 
-            $lastStmt = end($node->stmts);
-            if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
-                $checkReturnCall = new Node\Expr\FuncCall(
-                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
-                    [
-                        new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                        new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
-                        new Node\Arg($thisArg),
-                        new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                    ]
-                );
+                            $checkReturnCall = new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
+                                [
+                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                    new Node\Arg($exprToWrap),
+                                    new Node\Arg($this->thisArg),
+                                    new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                                ]
+                            );
 
-                if ($isNativeVoid) {
-                    $node->stmts[] = new Node\Stmt\Expression($checkReturnCall);
-                    $node->stmts[] = new Node\Stmt\Return_(null);
-                } else {
-                    $node->stmts[] = new Node\Stmt\Return_($checkReturnCall);
+                            if ($this->isNativeVoid) {
+                                return [
+                                    new Node\Stmt\Expression($checkReturnCall),
+                                    new Node\Stmt\Return_(null),
+                                ];
+                            }
+
+                            $n->expr = $checkReturnCall;
+                        }
+
+                        return null;
+                    }
+                });
+
+                /** @var array<Node\Stmt> $newStmts */
+                $newStmts = $traverser->traverse($node->stmts);
+                $node->stmts = $newStmts;
+
+                $lastStmt = end($node->stmts);
+                if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
+                    $checkReturnCall = new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
+                            new Node\Arg($thisArg),
+                            new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                        ]
+                    );
+
+                    if ($isNativeVoid) {
+                        $node->stmts[] = new Node\Stmt\Expression($checkReturnCall);
+                        $node->stmts[] = new Node\Stmt\Return_(null);
+                    } else {
+                        $node->stmts[] = new Node\Stmt\Return_($checkReturnCall);
+                    }
                 }
             }
         }

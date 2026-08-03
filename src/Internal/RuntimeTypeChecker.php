@@ -207,6 +207,52 @@ final class RuntimeTypeChecker
             throw $err;
         }
 
+        if ($value instanceof \Traversable) {
+            return self::wrapIterable($function, 'return', $value);
+        }
+
+        return $value;
+    }
+
+    public static function checkYield(string $function, mixed $key, mixed $value): mixed
+    {
+        $contract = ContractParser::parse($function);
+        $returnTypeNode = $contract['return'] ?? null;
+
+        if ($returnTypeNode === null) {
+            return $value;
+        }
+
+        $registry = self::getRegistry();
+        $itemTypeNode = null;
+        $keyTypeNode = null;
+
+        if ($returnTypeNode instanceof GenericTypeNode) {
+            $typesCount = count($returnTypeNode->genericTypes);
+            if ($typesCount === 1) {
+                $itemTypeNode = $returnTypeNode->genericTypes[0];
+            } elseif ($typesCount >= 2) {
+                $keyTypeNode = $returnTypeNode->genericTypes[0];
+                $itemTypeNode = $returnTypeNode->genericTypes[1];
+            }
+        } elseif ($returnTypeNode instanceof ArrayTypeNode) {
+            $itemTypeNode = $returnTypeNode->type;
+        }
+
+        if ($key !== null && $keyTypeNode !== null) {
+            $err = $registry->validate($key, $keyTypeNode, "$function(): Return iterator key");
+            if ($err !== null) {
+                throw $err;
+            }
+        }
+
+        if ($itemTypeNode !== null) {
+            $err = $registry->validate($value, $itemTypeNode, "$function(): Return iterator value");
+            if ($err !== null) {
+                throw $err;
+            }
+        }
+
         return $value;
     }
 
