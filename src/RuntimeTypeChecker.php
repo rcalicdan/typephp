@@ -12,6 +12,7 @@ use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\ThisTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
@@ -51,6 +52,12 @@ final class RuntimeTypeChecker
         $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
         $runtimeClass = $thisObj ? get_class($thisObj) : $declaringClass;
 
+        if ($node instanceof ThisTypeNode) {
+            if ($runtimeClass) {
+                return new IdentifierTypeNode($runtimeClass);
+            }
+        }
+
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
             if ($lower === 'self' && $declaringClass) {
@@ -70,7 +77,7 @@ final class RuntimeTypeChecker
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolveSpecialTypeNames($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -91,14 +98,14 @@ final class RuntimeTypeChecker
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn ($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
+                fn($t) => self::resolveSpecialTypeNames($t, $function, $thisObj),
                 $node->types
             ));
         }
@@ -166,10 +173,13 @@ final class RuntimeTypeChecker
                     if (isset($typeNode->genericTypes[$index])) {
                         $expectedTypeNode = $typeNode->genericTypes[$index];
 
-                        // Class declared variance takes precedence, fallback to usage site variance
-                        $variance = $classVariances[$templateTag->name]
-                            ?? $typeNode->variances[$index]
-                            ?? GenericTypeNode::VARIANCE_INVARIANT;
+                        $usageVariance = $typeNode->variances[$index] ?? GenericTypeNode::VARIANCE_INVARIANT;
+                        $declaredVariance = $classVariances[$templateTag->name] ?? GenericTypeNode::VARIANCE_INVARIANT;
+
+                        // Usage-site explicit variance (covariant/contravariant) takes precedence over class default
+                        $variance = ($usageVariance !== GenericTypeNode::VARIANCE_INVARIANT)
+                            ? $usageVariance
+                            : $declaredVariance;
 
                         $templateName = $templateTag->name;
 
@@ -442,7 +452,10 @@ final class RuntimeTypeChecker
         }
 
         // Check strict instance identity if return type is $this
-        if ($thisObj !== null && $returnTypeNode instanceof IdentifierTypeNode && strtolower($returnTypeNode->name) === '$this') {
+        $isThisType = ($returnTypeNode instanceof ThisTypeNode)
+            || ($returnTypeNode instanceof IdentifierTypeNode && strtolower($returnTypeNode->name) === '$this');
+
+        if ($thisObj !== null && $isThisType) {
             if ($value !== $thisObj) {
                 throw ErrorFactory::createError($function . '(): Return value must be $this instance, ' . TypeFormatter::formatGivenValue($value) . ' returned');
             }
@@ -791,7 +804,16 @@ final class RuntimeTypeChecker
             return new IdentifierTypeNode(array_is_list($value) ? 'list' : 'array');
         }
         if (is_object($value)) {
-            return new IdentifierTypeNode(get_class($value));
+            $className = get_class($value);
+
+            // If the object has bound generic templates (e.g. Producer<Dog>), preserve them!
+            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && ! empty(self::$instanceTemplateBindings[$value])) {
+                $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
+
+                return new GenericTypeNode(new IdentifierTypeNode($className), $genericTypes);
+            }
+
+            return new IdentifierTypeNode($className);
         }
         if ($value === null) {
             return new IdentifierTypeNode('null');
