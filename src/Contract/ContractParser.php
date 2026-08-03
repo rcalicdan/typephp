@@ -14,6 +14,7 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
+use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 final class ContractParser
@@ -161,8 +162,7 @@ final class ContractParser
 
     private static function resolveImportedTypeAlias(string $fqcn, string $importedAlias): ?TypeNode
     {
-        $isValidClass = preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $fqcn) === 1;
-        if (! $isValidClass || (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn))) {
+        if (! ClassNameValidator::isValid($fqcn) || (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn))) {
             return null;
         }
 

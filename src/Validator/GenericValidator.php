@@ -7,9 +7,12 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\RuntimeTypeChecker;
 use TypePHP\Internal\TypeFormatter;
+use TypePHP\Validator\TypeValidatorInterface;
+use TypePHP\Validator\TypeValidatorRegistry;
 
 final class GenericValidator implements TypeValidatorInterface
 {
@@ -62,10 +65,7 @@ final class GenericValidator implements TypeValidatorInterface
 
     private function validateClassString(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
     {
-        // GUARD: Validate valid string format before autoloading
-        $isValidClassStr = is_string($value) && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $value) === 1;
-
-        if (! $isValidClassStr || (! class_exists($value) && ! interface_exists($value) && ! trait_exists($value) && ! enum_exists($value))) {
+        if (! is_string($value) || ! ClassNameValidator::isValid($value) || (! class_exists($value) && ! interface_exists($value) && ! trait_exists($value) && ! enum_exists($value))) {
             return ErrorFactory::createError($context . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 

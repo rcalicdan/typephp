@@ -14,7 +14,9 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
+use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 final class TemplateManager
 {
@@ -103,9 +105,11 @@ final class TemplateManager
             return null;
         }
 
-        // Validate format before checking autoloader
-        $isValidClass = preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $className) === 1;
-        if (! $isValidClass || (! class_exists($className) && ! interface_exists($className) && ! trait_exists($className))) {
+        if (! is_a($instance, $className)) {
+            return null;
+        }
+
+        if (! ClassNameValidator::isValid($className) || (! class_exists($className) && ! interface_exists($className) && ! trait_exists($className))) {
             return null;
         }
 
@@ -228,9 +232,7 @@ final class TemplateManager
                     if ($genericTypeNode instanceof GenericTypeNode) {
                         $parentName = SpecialTypeResolver::resolveFqcn($genericTypeNode->type->name, $ref);
 
-                        $isValid = preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $parentName) === 1;
-
-                        if ($isValid && ($parentName === $targetClassName || is_a($parentName, $targetClassName, true))) {
+                        if (ClassNameValidator::isValid($parentName) && ($parentName === $targetClassName || is_a($parentName, $targetClassName, true))) {
                             if (! class_exists($parentName) && ! interface_exists($parentName)) {
                                 continue;
                             }
@@ -280,7 +282,7 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
@@ -291,10 +293,10 @@ final class TemplateManager
             return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;
@@ -331,11 +333,7 @@ final class TemplateManager
         }
 
         $isSubclass = function (string $sub, string $super): bool {
-            $isValid = function (string $name): bool {
-                return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $name) === 1;
-            };
-
-            if ($isValid($sub) && $isValid($super) && (class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
+            if (ClassNameValidator::isValid($sub) && ClassNameValidator::isValid($super) && (class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
                 return is_a($sub, $super, true);
             }
 

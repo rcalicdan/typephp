@@ -12,6 +12,7 @@ use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ThisTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
+use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\TypeFormatter;
 
@@ -193,10 +194,10 @@ final class SpecialTypeResolver
     /**
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      */
-    public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
+  public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
     {
         $lower = strtolower($name);
-        if (in_array($lower, [
+        if (\in_array($lower, [
             'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
             'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
             'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
@@ -211,7 +212,7 @@ final class SpecialTypeResolver
         }
 
         // Ensure the name is a valid class identifier before hitting autoloader
-        if (preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $name) !== 1) {
+        if (! ClassNameValidator::isValid($name)) {
             return $name;
         }
 

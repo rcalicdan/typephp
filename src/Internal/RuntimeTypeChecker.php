@@ -81,7 +81,6 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
-
                 continue;
             }
 
@@ -91,7 +90,6 @@ final class RuntimeTypeChecker
                 if ($err !== null) {
                     return $err;
                 }
-
                 continue;
             }
 
@@ -183,12 +181,7 @@ final class RuntimeTypeChecker
 
             $isTargetMatch = ($subStr === $targetStr);
             if (! $isTargetMatch) {
-                $isValid = function (string $name): bool {
-                    return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $name) === 1;
-                };
-
-                // FIX: Guard class_exists checks with a regex so we don't trigger Windows stat warnings
-                $isTargetMatch = $isValid($subStr) && $isValid($targetStr) &&
+                $isTargetMatch = ClassNameValidator::isValid($subStr) && ClassNameValidator::isValid($targetStr) &&
                     (class_exists($subStr) || interface_exists($subStr)) &&
                     (class_exists($targetStr) || interface_exists($targetStr)) &&
                     is_a($subStr, $targetStr, true);
@@ -254,10 +247,7 @@ final class RuntimeTypeChecker
         $templateNode = $templates[$templateName];
 
         if (! TemplateManager::isBound($function, $thisObj, $templateName)) {
-            // FIX: Validate the class string format before running class_exists
-            $isValidClassStr = is_string($val) && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $val) === 1;
-
-            if (! $isValidClassStr || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
+            if (! is_string($val) || ! ClassNameValidator::isValid($val) || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
                 return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($val) . ' given');
             }
 
