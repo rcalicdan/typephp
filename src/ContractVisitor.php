@@ -134,7 +134,7 @@ final class ContractVisitor extends NodeVisitorAbstract
 
                     if ($n instanceof Node\Stmt\Return_) {
                         $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
-                        
+
                         $n->expr = new Node\Expr\FuncCall(
                             new Node\Name('\TypePHP\RuntimeTypeChecker::checkReturn'),
                             [

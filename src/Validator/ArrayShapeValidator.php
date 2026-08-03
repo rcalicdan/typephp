@@ -36,6 +36,7 @@ final class ArrayShapeValidator implements TypeValidatorInterface
                     if (! $item->optional) {
                         return ErrorFactory::createError($context . " is missing required key '$key'");
                     }
+
                     continue;
                 }
 
@@ -50,6 +51,7 @@ final class ArrayShapeValidator implements TypeValidatorInterface
         if (! empty($extraKeys)) {
             if ($node->sealed) {
                 $firstExtraKey = array_key_first($extraKeys);
+
                 return ErrorFactory::createError($context . " contains unsealed unexpected key '$firstExtraKey'");
             }
 

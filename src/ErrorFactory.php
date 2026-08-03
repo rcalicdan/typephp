@@ -15,6 +15,7 @@ final class ErrorFactory
             $class = $frame['class'] ?? '';
             if (! str_starts_with($class, 'TypePHP\\')) {
                 $callerFrameIndex = $i;
+
                 break;
             }
         }
@@ -23,7 +24,7 @@ final class ErrorFactory
 
         if ($isReturnError) {
             $blameFrame = $trace[$callerFrameIndex - 1] ?? [];
-            
+
             if (str_contains($message, 'null given')) {
                 $message = str_replace('null given', 'none returned', $message);
             } else {

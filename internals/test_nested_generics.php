@@ -10,10 +10,14 @@ class Producer
     /**
      * @param T $item
      */
-    public function __construct(public mixed $item) {}
+    public function __construct(public mixed $item)
+    {
+    }
 }
 
-class BaseNode {}
+class BaseNode
+{
+}
 
 class Node extends BaseNode
 {
@@ -38,8 +42,12 @@ class Node extends BaseNode
     }
 }
 
-class SubNode extends Node {}
-class UnrelatedClass {}
+class SubNode extends Node
+{
+}
+class UnrelatedClass
+{
+}
 
 echo "=== Testing <self> with Generic Variance ===\n\n";
 
@@ -58,8 +66,8 @@ echo "   ✅ Producer<SubNode> passed for Producer<covariant self>!\n";
 try {
     $node->processCovariant(new Producer(new UnrelatedClass()));
     echo "   ❌ Failed to catch bad covariant argument!\n";
-} catch (\TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+} catch (TypeError $e) {
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // -------------------------------------------------------------
@@ -75,8 +83,8 @@ echo "   ✅ Producer<BaseNode> passed for Producer<contravariant self>!\n";
 try {
     $node->processContravariant(new Producer(new SubNode()));
     echo "   ❌ Failed to catch bad contravariant argument!\n";
-} catch (\TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+} catch (TypeError $e) {
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 echo "\n🎉 VARIANCE WITH <self> TEST PASSED PERFECTLY!\n";

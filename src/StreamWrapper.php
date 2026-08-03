@@ -25,7 +25,7 @@ final class StreamWrapper
 
     public static function register(array $config = []): void
     {
-        if (!self::$isInitialized || !empty($config)) {
+        if (! self::$isInitialized || ! empty($config)) {
             self::$baseDir = rtrim(str_replace('\\', '/', getcwd()), '/');
 
             $includes = $config['include'] ?? ['**'];
@@ -86,6 +86,7 @@ final class StreamWrapper
                 foreach (self::$excludePatterns as $pattern) {
                     if (preg_match($pattern, $normalizedPath)) {
                         $isExcluded = true;
+
                         break;
                     }
                 }
@@ -95,6 +96,7 @@ final class StreamWrapper
                     foreach (self::$includePatterns as $pattern) {
                         if (preg_match($pattern, $normalizedPath)) {
                             $isAppFile = true;
+
                             break;
                         }
                     }

@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 class User
 {
-    public function __construct(public int $id, public string $name) {}
+    public function __construct(public int $id, public string $name)
+    {
+    }
 }
 
 class UserProcessor
 {
     /**
      * 1. Validates SomeClass[]
+     *
      * @param User[] $users
      */
     public function processUsers(array $users)
@@ -20,6 +23,7 @@ class UserProcessor
 
     /**
      * 2. Validates array{id: int, name: string}[]
+     *
      * @param array{id: int, name: string}[] $userShapes
      */
     public function processUserShapes(array $userShapes)
@@ -29,6 +33,7 @@ class UserProcessor
 
     /**
      * 3. Validates Shape containing Object Array: array{users: User[], count: int}
+     *
      * @param array{users: User[], count: int} $payload
      */
     public function processPayload(array $payload)
@@ -38,6 +43,7 @@ class UserProcessor
 
     /**
      * 4. Validates self[]
+     *
      * @return self[]
      */
     public function getProcessors(): array
@@ -60,8 +66,8 @@ echo "   ✅ Valid User[] passed!\n";
 try {
     $processor->processUsers([new User(1, 'Alice'), 'not_a_user_object']);
     echo "   ❌ Failed to catch invalid User[]!\n";
-} catch (\TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+} catch (TypeError $e) {
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // -------------------------------------------------------------
@@ -70,7 +76,7 @@ try {
 echo "\n2. Testing array{id: int, name: string}[]...\n";
 $processor->processUserShapes([
     ['id' => 1, 'name' => 'Alice'],
-    ['id' => 2, 'name' => 'Bob']
+    ['id' => 2, 'name' => 'Bob'],
 ]);
 echo "   ✅ Valid array{id: int, name: string}[] passed!\n";
 
@@ -78,11 +84,11 @@ try {
     // Second shape is missing 'name'
     $processor->processUserShapes([
         ['id' => 1, 'name' => 'Alice'],
-        ['id' => 2] 
+        ['id' => 2],
     ]);
     echo "   ❌ Failed to catch invalid array shape in array!\n";
-} catch (\TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+} catch (TypeError $e) {
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // -------------------------------------------------------------
@@ -91,7 +97,7 @@ try {
 echo "\n3. Testing array{users: User[], count: int}...\n";
 $processor->processPayload([
     'users' => [new User(1, 'Alice')],
-    'count' => 1
+    'count' => 1,
 ]);
 echo "   ✅ Valid payload passed!\n";
 
@@ -99,11 +105,11 @@ try {
     // 'users' contains a string instead of User object
     $processor->processPayload([
         'users' => ['not_a_user'],
-        'count' => 1
+        'count' => 1,
     ]);
     echo "   ❌ Failed to catch invalid User object inside shape array!\n";
-} catch (\TypeError $e) {
-    echo "   ✅ CAUGHT EXPECTED ERROR: " . $e->getMessage() . "\n";
+} catch (TypeError $e) {
+    echo '   ✅ CAUGHT EXPECTED ERROR: ' . $e->getMessage() . "\n";
 }
 
 // -------------------------------------------------------------
