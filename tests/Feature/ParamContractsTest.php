@@ -62,17 +62,20 @@ describe('Function & Method Parameter Contracts', function () {
 
     test('throws TypeError on invalid positive-int parameter', function () {
         expect(fn () => testProcessUserParam(-5, 'Alice', ['role' => 'admin', 'active' => true]))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 
     test('throws TypeError on empty string for non-empty-string parameter', function () {
         expect(fn () => testProcessUserParam(10, '', ['role' => 'admin', 'active' => true]))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 
     test('throws TypeError on invalid array shape item', function () {
         expect(fn () => testProcessUserParam(10, 'Alice', ['role' => 'superadmin', 'active' => true]))
-            ->toThrow(TypeError::class, "['role']");
+            ->toThrow(TypeError::class, "['role']")
+        ;
     });
 });
 
@@ -88,14 +91,16 @@ describe('Lazy Wrapped Callable Parameter Contracts', function () {
         $callback = fn (int $id): string => 'ok';
 
         expect(fn () => testExecuteBadArgCallback($callback))
-            ->toThrow(TypeError::class, 'Callback $callback argument');
+            ->toThrow(TypeError::class, 'Callback $callback argument')
+        ;
     });
 
     test('throws TypeError when wrapped callback returns invalid return type', function () {
         $badReturnCallback = fn (int $id, string $name): int => 123;
 
         expect(fn () => testExecuteCallback($badReturnCallback))
-            ->toThrow(TypeError::class, 'Callback $callback return value');
+            ->toThrow(TypeError::class, 'Callback $callback return value')
+        ;
     });
 });
 
@@ -113,11 +118,12 @@ describe('Lazy Wrapped Iterable/Generator Parameter Contracts', function () {
     test('throws TypeError lazily when generator yields invalid value', function () {
         $badValueGenerator = function () {
             yield 'a' => 10;
-            yield 'b' => -50; 
+            yield 'b' => -50;
         };
 
         expect(fn () => testProcessGenerator($badValueGenerator()))
-            ->toThrow(TypeError::class, 'Iterator $items value');
+            ->toThrow(TypeError::class, 'Iterator $items value')
+        ;
     });
 
     test('throws TypeError lazily when generator yields invalid key', function () {

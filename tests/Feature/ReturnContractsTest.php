@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use TypePHP\Tests\Fixtures\Services\FluentService;
 
-
 /**
  * @return array{status: 'success'|'error', code: positive-int}
  */
@@ -48,7 +47,8 @@ describe('Return Type Contracts & Shapes', function () {
 
     test('throws TypeError when return shape item is invalid', function () {
         expect(fn () => testReturnShape(-5))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -61,7 +61,8 @@ describe('Strict $this Identity Return Contracts', function () {
     test('throws TypeError when method returns new instance instead of $this', function () {
         $service = new FluentService();
         expect(fn () => $service->setInvalidSelf())
-            ->toThrow(TypeError::class, 'Return value must be $this instance');
+            ->toThrow(TypeError::class, 'Return value must be $this instance')
+        ;
     });
 });
 
@@ -71,7 +72,8 @@ describe('Parameter-based Conditional Return Types', function () {
         expect($result)->toBe(42);
 
         expect(fn () => testConditionalParamReturn(true, 'not_an_int'))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 
     test('returns non-empty-string when condition parameter asInt is false', function () {
@@ -79,7 +81,8 @@ describe('Parameter-based Conditional Return Types', function () {
         expect($result)->toBe('hello');
 
         expect(fn () => testConditionalParamReturn(false, ''))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });
 
@@ -89,7 +92,8 @@ describe('Template-based Conditional Return Types', function () {
         expect($result)->toBe(100);
 
         expect(fn () => testConditionalTemplateReturn('input_string', 'invalid_return'))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 
     test('returns bool when template T is inferred as int', function () {

@@ -15,7 +15,6 @@ use TypePHP\Tests\Fixtures\Generics\Repository;
 use TypePHP\Tests\Fixtures\Services\UserService;
 use TypePHP\Tests\Fixtures\Types\UserApi;
 
-
 /**
  * @param Repository<covariant Animal> $repo
  */
@@ -32,22 +31,23 @@ function handleNestedProducerRepoFixture(Repository $repo): mixed
     return $repo->item;
 }
 
-
 describe('Generics, Bounds & Variance Contracts', function () {
     test('generic container respects template bounds', function () {
         $container = new Container(new Dog());
         expect($container->item)->toBeInstanceOf(Dog::class);
 
-        expect(fn() => new Container(new Car()))
-            ->toThrow(TypeError::class);
+        expect(fn () => new Container(new Car()))
+            ->toThrow(TypeError::class)
+        ;
     });
 
     test('validates covariance on inherited generic class @extends', function () {
         $repo = new DogRepository();
         expect(handleAnimalRepoFixture($repo))->toBeInstanceOf(Dog::class);
 
-        expect(fn() => handleAnimalRepoFixture(new CarRepository()))
-            ->toThrow(TypeError::class, 'Repository<TypePHP\Tests\Fixtures\Domain\Car> was given');
+        expect(fn () => handleAnimalRepoFixture(new CarRepository()))
+            ->toThrow(TypeError::class, 'Repository<TypePHP\Tests\Fixtures\Domain\Car> was given')
+        ;
     });
 
     test('validates nested generic structures in @extends', function () {
@@ -68,12 +68,14 @@ describe('Non-Generic DocBlock Method Contract Inheritance (LSP)', function () {
         expect($service->find(10))->toBe(['id' => 10, 'name' => 'Alice']);
 
         // Invalid param
-        expect(fn() => $service->find(-5))
-            ->toThrow(TypeError::class, 'positive-int');
+        expect(fn () => $service->find(-5))
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         // Invalid return
-        expect(fn() => $service->find(999))
-            ->toThrow(TypeError::class, 'positive-int');
+        expect(fn () => $service->find(999))
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 });
 
@@ -83,7 +85,8 @@ describe('Imported Type Aliases (@phpstan-import-type ... as)', function () {
 
         expect($api->saveUser(['id' => 1, 'name' => 'Alice']))->toBeTrue();
 
-        expect(fn() => $api->saveUser(['id' => -1, 'name' => 'Alice']))
-            ->toThrow(TypeError::class, "['id']");
+        expect(fn () => $api->saveUser(['id' => -1, 'name' => 'Alice']))
+            ->toThrow(TypeError::class, "['id']")
+        ;
     });
 });

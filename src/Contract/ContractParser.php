@@ -6,8 +6,6 @@ namespace TypePHP\Contract;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
-use PHPStan\PhpDocParser\Ast\PhpDoc\TypeAliasImportTagValueNode;
-use PHPStan\PhpDocParser\Ast\PhpDoc\TypeAliasTagValueNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
@@ -66,6 +64,7 @@ final class ContractParser
 
         /**
          * @param PhpDocNode $node
+         *
          * @return array<string, TemplateTagValueNode>
          */
         $getAllTemplates = function (PhpDocNode $node): array {
@@ -75,6 +74,7 @@ final class ContractParser
                     $tags[] = $tagNode->value;
                 }
             }
+
             return $tags;
         };
 
@@ -161,7 +161,8 @@ final class ContractParser
 
     private static function resolveImportedTypeAlias(string $fqcn, string $importedAlias): ?TypeNode
     {
-        if (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn)) {
+        $isValidClass = preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $fqcn) === 1;
+        if (! $isValidClass || (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn))) {
             return null;
         }
 
@@ -196,6 +197,7 @@ final class ContractParser
                     $localName = $importTag->importedAs ?? $importTag->importedAlias;
                     if ($localName === $importedAlias) {
                         $nextFqcn = SpecialTypeResolver::resolveFqcn($importTag->importedFrom->name, $ref);
+
                         return self::resolveImportedTypeAlias($nextFqcn, $importTag->importedAlias);
                     }
                 }

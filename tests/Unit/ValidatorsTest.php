@@ -138,7 +138,7 @@ describe('ArrayShapeValidator', function () {
         expect($this->registry->validate(['id' => 1], $sealedShape, 'arg'))->toBeNull();
         expect($this->registry->validate(['id' => 1, 'extra' => 'value'], $sealedShape, 'arg'))->toBeInstanceOf(TypeError::class);
     });
-    
+
     test('edge case: unsealed shapes allow extra keys matching unsealed type', function () {
         $unsealedShape = parseType('array{id: int, ...<string, string>}', $this->lexer, $this->typeParser);
 
@@ -252,7 +252,7 @@ describe('IntersectionValidator', function () {
     test('edge case: object failing one interface in intersection', function () {
         $intersection = parseType('Countable&ArrayAccess', $this->lexer, $this->typeParser);
 
-        $countableOnly = new class implements Countable {
+        $countableOnly = new class () implements Countable {
             public function count(): int
             {
                 return 0;
