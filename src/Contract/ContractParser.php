@@ -152,17 +152,15 @@ final class ContractParser
         foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
             $localName = $importTag->importedAs ?? $importTag->importedAlias;
             $fqcnSource = SpecialTypeResolver::resolveFqcn($importTag->importedFrom->name, $ref);
-            $resolvedType = self::resolveImportedTypeAlias($fqcnSource, $importTag->importedAlias, $ref);
+            $resolvedType = self::resolveImportedTypeAlias($fqcnSource, $importTag->importedAlias);
             if ($resolvedType !== null) {
                 $aliases[$localName] = $resolvedType;
             }
         }
     }
 
-    private static function resolveImportedTypeAlias(string $sourceClassName, string $importedAlias, \ReflectionFunction|\ReflectionMethod $callingRef): ?TypeNode
+    private static function resolveImportedTypeAlias(string $fqcn, string $importedAlias): ?TypeNode
     {
-        $fqcn = SpecialTypeResolver::resolveFqcn($sourceClassName, $callingRef);
-
         if (! class_exists($fqcn) && ! interface_exists($fqcn) && ! trait_exists($fqcn)) {
             return null;
         }
@@ -188,18 +186,17 @@ final class ContractParser
                 $tokens = new TokenIterator($lexer->tokenize($doc));
                 $phpDocNode = $phpDocParser->parse($tokens);
 
-                // Direct type alias in source class
                 foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
                     if ($aliasTag->alias === $importedAlias) {
                         return $aliasTag->type;
                     }
                 }
 
-                // Chained imported type alias in source class
                 foreach ($phpDocNode->getTypeAliasImportTagValues() as $importTag) {
                     $localName = $importTag->importedAs ?? $importTag->importedAlias;
                     if ($localName === $importedAlias) {
-                        return self::resolveImportedTypeAlias($importTag->importedFrom->name, $importTag->importedAlias, $callingRef);
+                        $nextFqcn = SpecialTypeResolver::resolveFqcn($importTag->importedFrom->name, $ref);
+                        return self::resolveImportedTypeAlias($nextFqcn, $importTag->importedAlias);
                     }
                 }
             }

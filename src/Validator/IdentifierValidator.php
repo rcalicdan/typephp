@@ -40,7 +40,9 @@ final class IdentifierValidator implements TypeValidatorInterface
             'non-negative-int' => is_int($value) && $value >= 0,
             'non-zero-int' => is_int($value) && $value !== 0,
             'unsigned-int' => is_int($value) && $value >= 0,
-            'class-string' => \is_string($value) && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
+            'class-string' => \is_string($value)
+                && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $value) === 1
+                && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
             'callable-string' => \is_string($value) && is_callable($value),
             'numeric-string' => \is_string($value) && is_numeric($value),
             'non-empty-string' => \is_string($value) && $value !== '',

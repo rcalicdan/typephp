@@ -224,7 +224,7 @@ final class TemplateManager
                 foreach ($inheritedTags as $inheritedTag) {
                     $genericTypeNode = $inheritedTag->type;
                     if ($genericTypeNode instanceof GenericTypeNode) {
-                        $parentName = $genericTypeNode->type->name;
+                        $parentName = SpecialTypeResolver::resolveFqcn($genericTypeNode->type->name, $ref);
 
                         if ($parentName === $targetClassName || is_a($parentName, $targetClassName, true)) {
                             if (! class_exists($parentName) && ! interface_exists($parentName)) {
@@ -248,7 +248,8 @@ final class TemplateManager
                                 $bindings = self::$instanceTemplateBindings[$instance] ?? [];
                                 foreach ($parentTemplateNames as $idx => $templateName) {
                                     if (isset($genericTypeNode->genericTypes[$idx])) {
-                                        $bindings[$templateName] = $genericTypeNode->genericTypes[$idx];
+                                        // FIX: Deeply resolve the AST nodes extracted from @extends before binding
+                                        $bindings[$templateName] = self::resolveTypeNodeAst($genericTypeNode->genericTypes[$idx], $ref);
                                     }
                                 }
 
@@ -264,6 +265,34 @@ final class TemplateManager
         } catch (\Throwable $e) {
             // Ignore
         }
+    }
+
+    private static function resolveTypeNodeAst(TypeNode $n, \ReflectionClass $ref): TypeNode
+    {
+        if ($n instanceof IdentifierTypeNode) {
+            return new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->name, $ref));
+        }
+        if ($n instanceof GenericTypeNode) {
+            $base = $n->type instanceof IdentifierTypeNode
+                ? new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref))
+                : $n->type;
+            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            return new GenericTypeNode($base, $generics, $n->variances);
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+        
+        return $n;
     }
 
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
@@ -298,7 +327,12 @@ final class TemplateManager
         }
 
         $isSubclass = function (string $sub, string $super): bool {
-            if ((class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
+            // FIX: Only trigger autoloader if string looks like a standard valid class name
+            $isValid = function(string $name): bool {
+                return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $name) === 1;
+            };
+
+            if ($isValid($sub) && $isValid($super) && (class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
                 return is_a($sub, $super, true);
             }
 

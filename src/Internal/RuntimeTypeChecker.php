@@ -138,6 +138,7 @@ final class RuntimeTypeChecker
 
         if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
             $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates, $declaredTemplates);
+            $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $function, $thisObj);
         }
 
         // Parameter-based Conditional Return Types
@@ -178,8 +179,18 @@ final class RuntimeTypeChecker
             $targetTypeNode = $returnTypeNode->targetType;
             $targetStr = (string) $targetTypeNode;
 
-            $isTargetMatch = ($subStr === $targetStr) ||
-                ((class_exists($subStr) || interface_exists($subStr)) && (class_exists($targetStr) || interface_exists($targetStr)) && is_a($subStr, $targetStr, true));
+            $isTargetMatch = ($subStr === $targetStr);
+            if (! $isTargetMatch) {
+                $isValid = function(string $name): bool {
+                    return preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $name) === 1;
+                };
+                
+                // FIX: Guard class_exists checks with a regex so we don't trigger Windows stat warnings
+                $isTargetMatch = $isValid($subStr) && $isValid($targetStr) && 
+                    (class_exists($subStr) || interface_exists($subStr)) && 
+                    (class_exists($targetStr) || interface_exists($targetStr)) && 
+                    is_a($subStr, $targetStr, true);
+            }
 
             if ($returnTypeNode->negated) {
                 $isTargetMatch = ! $isTargetMatch;
@@ -241,12 +252,16 @@ final class RuntimeTypeChecker
         $templateNode = $templates[$templateName];
 
         if (! TemplateManager::isBound($function, $thisObj, $templateName)) {
-            if (! is_string($val) || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
+            // FIX: Validate the class string format before running class_exists
+            $isValidClassStr = is_string($val) && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $val) === 1;
+            
+            if (! $isValidClassStr || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
                 return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($val) . ' given');
             }
 
             if ($templateNode->bound !== null) {
-                $boundName = $templateNode->bound instanceof IdentifierTypeNode ? $templateNode->bound->name : (string) $templateNode->bound;
+                $resolvedBound = SpecialTypeResolver::resolve($templateNode->bound, $function, $thisObj);
+                $boundName = $resolvedBound instanceof IdentifierTypeNode ? $resolvedBound->name : (string) $resolvedBound;
                 if (! is_a($val, $boundName, true)) {
                     return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' (class-string<' . $templateName . '>) must be a class-string of ' . $boundName . ", '" . $val . "' given");
                 }

@@ -47,7 +47,7 @@ describe('Generics, Bounds & Variance Contracts', function () {
         expect(handleAnimalRepoFixture($repo))->toBeInstanceOf(Dog::class);
 
         expect(fn() => handleAnimalRepoFixture(new CarRepository()))
-            ->toThrow(TypeError::class, 'Repository<Car> was given');
+            ->toThrow(TypeError::class, 'Repository<TypePHP\Tests\Fixtures\Domain\Car> was given');
     });
 
     test('validates nested generic structures in @extends', function () {
