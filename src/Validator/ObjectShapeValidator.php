@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace TypePHP\Validator;
+
+use PHPStan\PhpDocParser\Ast\Type\ObjectShapeNode;
+use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
+
+/**
+ * Validates stdClass dynamic properties and custom class instances against PHPDoc object shape structures.
+ */
+final class ObjectShapeValidator implements TypeValidatorInterface
+{
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    {
+        if (! is_object($value)) {
+            return ErrorFactory::createError($context . ' must be of type object, ' . TypeFormatter::formatGivenValue($value) . ' given');
+        }
+
+        /** @var ObjectShapeNode $shapeNode */
+        $shapeNode = $node;
+        $refObject = new \ReflectionObject($value);
+
+        foreach ($shapeNode->items as $item) {
+            $propName = (string) $item->keyName;
+
+            // @phpstan-ignore property.dynamicName
+            if (! $refObject->hasProperty($propName) && ! isset($value->$propName)) {
+                if (! $item->optional) {
+                    return ErrorFactory::createError($context . " is missing required property '$propName'");
+                }
+
+                continue;
+            }
+
+            if ($refObject->hasProperty($propName)) {
+                $refProp = $refObject->getProperty($propName);
+                if (! $refProp->isInitialized($value)) {
+                    if (! $item->optional) {
+                        return ErrorFactory::createError($context . " property '$propName' is uninitialized");
+                    }
+
+                    continue;
+                }
+
+                $propValue = $refProp->getValue($value);
+            } else {
+                // @phpstan-ignore property.dynamicName
+                $propValue = $value->$propName;
+            }
+
+            $err = $registry->validate($propValue, $item->valueType, $context . "->{$propName}");
+            if ($err !== null) {
+                return $err;
+            }
+        }
+
+        return null;
+    }
+}

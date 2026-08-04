@@ -23,7 +23,7 @@ function testScalarUnionContract(mixed $val): bool
 /**
  * Contract function accepting Intersection Types
  *
- * @param \Countable&\ArrayAccess $collection
+ * @param Countable&ArrayAccess $collection
  */
 function testIntersectionContract(object $collection): bool
 {
@@ -53,7 +53,7 @@ function testGenericWithUnionContract(Producer $producer): mixed
 /**
  * Contract function accepting Generics with Intersections
  *
- * @param Producer<\Countable&\ArrayAccess> $producer
+ * @param Producer<Countable&ArrayAccess> $producer
  */
 function testGenericWithIntersectionContract(Producer $producer): mixed
 {
@@ -63,7 +63,7 @@ function testGenericWithIntersectionContract(Producer $producer): mixed
 /**
  * Contract function accepting Complex Unions of Intersections
  *
- * @param (\Countable&\ArrayAccess)|(\Iterator&\Countable) $payload
+ * @param (Countable&ArrayAccess)|(Iterator&Countable) $payload
  */
 function testUnionOfIntersectionsContract(object $payload): bool
 {
@@ -134,13 +134,16 @@ describe('Scalar and Literal Union Types', function () {
 
     test('throws TypeError when value violates all options in union', function () {
         expect(fn () => testScalarUnionContract(-50))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         expect(fn () => testScalarUnionContract(''))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         expect(fn () => testScalarUnionContract(false))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -152,10 +155,12 @@ describe('Intersection Types (Countable & ArrayAccess)', function () {
 
     test('throws TypeError when object only implements one interface in intersection', function () {
         expect(fn () => testIntersectionContract(new CountableOnly()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         expect(fn () => testIntersectionContract(new ArrayAccessOnly()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -181,12 +186,14 @@ describe('Unions of Array Shapes and Lists', function () {
         ];
 
         expect(fn () => testUnionOfShapesAndListsContract($invalidShapes))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         $invalidTags = ['php', ''];
 
         expect(fn () => testUnionOfShapesAndListsContract($invalidTags))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -203,7 +210,8 @@ describe('Generics with Unions (Producer<Dog|Cat>)', function () {
         $carProducer = new Producer(new Car());
 
         expect(fn () => testGenericWithUnionContract($carProducer))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -218,7 +226,8 @@ describe('Generics with Intersections (Producer<Countable & ArrayAccess>)', func
         $producer = new Producer(new CountableOnly());
 
         expect(fn () => testGenericWithIntersectionContract($producer))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -239,7 +248,8 @@ describe('Complex Nested Unions of Intersections', function () {
         $fixture = new CountableOnly();
 
         expect(fn () => testUnionOfIntersectionsContract($fixture))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -266,7 +276,8 @@ describe('Variadic Unions ((Dog|Cat) ...$animals)', function () {
 
     test('throws TypeError when any variadic argument violates the union', function () {
         expect(fn () => testVariadicUnionContract(new Dog(), new Car()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -283,7 +294,8 @@ describe('Unions of Generic Objects (Producer<Dog> | Producer<Cat>)', function (
         $carProducer = new Producer(new Car());
 
         expect(fn () => testUnionOfGenericsContract($carProducer))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -299,10 +311,12 @@ describe('Type Aliases with Unions and Intersections (@phpstan-type)', function 
         $collection = new CountableArrayAccess();
 
         expect(fn () => testTypeAliasUnionAndIntersectionContract('invalid_status', $collection))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         expect(fn () => testTypeAliasUnionAndIntersectionContract('active', new CountableOnly()))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });
 
@@ -322,7 +336,8 @@ describe('Associative Arrays with Union Keys and Values (array<K1|K2, V1|V2>)', 
         ];
 
         expect(fn () => testAssocUnionArrayContract($badKeyMap))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
 
         $badValueMap = [
             10 => new Car(),

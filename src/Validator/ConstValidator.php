@@ -10,17 +10,22 @@ use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprIntegerNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprNullNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprStringNode;
 use PHPStan\PhpDocParser\Ast\ConstExpr\ConstExprTrueNode;
+use PHPStan\PhpDocParser\Ast\ConstExpr\ConstFetchNode;
 use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * Validates literal values, class constants, and PHP 8.1 Enum cases against ConstTypeNode ASTs.
+ */
 final class ConstValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
-        /** @var ConstTypeNode $node */
-        $constExpr = $node->constExpr;
+        /** @var ConstTypeNode $constTypeNode */
+        $constTypeNode = $node;
+        $constExpr = $constTypeNode->constExpr;
 
         if ($constExpr instanceof ConstExprStringNode) {
             $expected = $constExpr->value;
@@ -34,6 +39,16 @@ final class ConstValidator implements TypeValidatorInterface
             $expected = (int) $constExpr->value;
         } elseif ($constExpr instanceof ConstExprFloatNode) {
             $expected = (float) $constExpr->value;
+        } elseif ($constExpr instanceof ConstFetchNode) {
+            $fqcnConstant = $constExpr->className !== ''
+                ? $constExpr->className . '::' . $constExpr->name
+                : $constExpr->name;
+
+            if (defined($fqcnConstant)) {
+                $expected = constant($fqcnConstant);
+            } else {
+                $expected = (string) $constExpr;
+            }
         } else {
             $expected = (string) $constExpr;
         }

@@ -11,9 +11,13 @@ use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\ObjectShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 
+/**
+ * Registry mapping AST TypeNodes to their corresponding validator strategy implementations.
+ */
 final class TypeValidatorRegistry
 {
     /**
@@ -31,15 +35,19 @@ final class TypeValidatorRegistry
             NullableTypeNode::class => new NullableValidator(),
             ArrayTypeNode::class => new ArrayValidator(),
             ArrayShapeNode::class => new ArrayShapeValidator(),
+            ObjectShapeNode::class => new ObjectShapeValidator(),
             ConstTypeNode::class => new ConstValidator(),
         ];
     }
 
+    /**
+     * Validates a value against an AST TypeNode.
+     */
     public function validate(mixed $value, TypeNode $node, string $context): ?\TypeError
     {
         $validator = $this->validators[get_class($node)] ?? null;
         if ($validator === null) {
-            return null; // Fallback for unhandled AST nodes
+            return null;
         }
 
         return $validator->validate($value, $node, $context, $this);

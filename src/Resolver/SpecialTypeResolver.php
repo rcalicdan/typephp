@@ -6,9 +6,11 @@ namespace TypePHP\Resolver;
 
 use PhpParser\Node\Stmt;
 use PhpParser\ParserFactory;
+use PHPStan\PhpDocParser\Ast\ConstExpr\ConstFetchNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\CallableTypeParameterNode;
+use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
@@ -21,7 +23,7 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * @internal Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
+ * Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
  */
 final class SpecialTypeResolver
 {
@@ -55,7 +57,7 @@ final class SpecialTypeResolver
     }
 
     /**
-     * Recursively resolves special type identifiers (self, static, parent, FQCNs) in a TypeNode AST using Reflection context.
+     * Recursively resolves special type identifiers (self, static, parent, FQCNs, ConstFetch class names) in a TypeNode AST using Reflection context.
      */
     public static function resolve(TypeNode $node, string $function, ?object $thisObj = null): TypeNode
     {
@@ -96,10 +98,20 @@ final class SpecialTypeResolver
             }
         }
 
+        if ($node instanceof ConstTypeNode) {
+            if ($node->constExpr instanceof ConstFetchNode && $node->constExpr->className !== '') {
+                $resolvedClass = self::resolveFqcn($node->constExpr->className, $ref);
+
+                return new ConstTypeNode(new ConstFetchNode($resolvedClass, $node->constExpr->name));
+            }
+
+            return $node;
+        }
+
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolve($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -141,14 +153,14 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
@@ -177,10 +189,20 @@ final class SpecialTypeResolver
             }
         }
 
+        if ($node instanceof ConstTypeNode) {
+            if ($node->constExpr instanceof ConstFetchNode && $node->constExpr->className !== '') {
+                $resolvedClass = self::resolveFqcnForFile($node->constExpr->className, $file);
+
+                return new ConstTypeNode(new ConstFetchNode($resolvedClass, $node->constExpr->name));
+            }
+
+            return clone $node;
+        }
+
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolveForFile($node->type, $file);
             $innerTypes = array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->genericTypes
             );
 
@@ -222,14 +244,14 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn($t) => self::resolveForFile($t, $file),
+                fn ($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
@@ -410,52 +432,11 @@ final class SpecialTypeResolver
     private static function isBuiltInTypeKeyword(string $name): bool
     {
         return in_array(strtolower($name), [
-            'int',
-            'integer',
-            'string',
-            'float',
-            'double',
-            'bool',
-            'boolean',
-            'array',
-            'list',
-            'object',
-            'callable',
-            'iterable',
-            'resource',
-            'null',
-            'true',
-            'false',
-            'mixed',
-            'scalar',
-            'void',
-            'self',
-            'static',
-            'parent',
-            '$this',
-            'positive-int',
-            'negative-int',
-            'non-positive-int',
-            'non-negative-int',
-            'non-zero-int',
-            'unsigned-int',
-            'class-string',
-            'callable-string',
-            'numeric-string',
-            'non-empty-string',
-            'lowercase-string',
-            'non-empty-lowercase-string',
-            'literal-string',
-            'non-empty-array',
-            'non-empty-list',
-            'number',
-            'numeric',
-            'truthy',
-            'falsy',
-            'falsey',
-            'min',
-            'max',
-            '*',
+            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
+            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
+            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
+            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
+            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
         ], true);
     }
 

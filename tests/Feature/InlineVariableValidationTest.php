@@ -36,7 +36,8 @@ describe('Inline @var Scalar Validations', function () {
         expect($age)->toBe(10);
 
         expect(fn () => $age = -5)
-            ->toThrow(TypeError::class, 'Variable $age must be of type positive-int');
+            ->toThrow(TypeError::class, 'Variable $age must be of type positive-int')
+        ;
     });
 
     test('ignores scalar validation when disabled in config', function () {
@@ -58,7 +59,8 @@ describe('Inline @var Object Validations', function () {
         expect($animal)->toBeInstanceOf(Dog::class);
 
         expect(fn () => $animal = new Car())
-            ->toThrow(TypeError::class, 'Variable $animal must be of type TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'Variable $animal must be of type TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('ignores object validation when disabled in config', function () {
@@ -79,7 +81,8 @@ describe('Inline @var Array Shape Validations', function () {
         expect($user['name'])->toBe('Alice');
 
         expect(fn () => $user = ['id' => 2])
-            ->toThrow(TypeError::class, "Variable \$user is missing required key 'name'");
+            ->toThrow(TypeError::class, "Variable \$user is missing required key 'name'")
+        ;
     });
 
     test('ignores shape validation when disabled in config', function () {
@@ -104,7 +107,8 @@ describe('Inline @var Nullable and Union Types', function () {
         expect($username)->toBeNull();
 
         expect(fn () => $username = 123)
-            ->toThrow(TypeError::class, 'Variable $username must be of type (string | null)');
+            ->toThrow(TypeError::class, 'Variable $username must be of type (string | null)')
+        ;
     });
 
     test('allows values matching either side of a union', function () {
@@ -116,7 +120,8 @@ describe('Inline @var Nullable and Union Types', function () {
         expect($identifier)->toBe('user_42');
 
         expect(fn () => $identifier = false)
-            ->toThrow(TypeError::class, 'Variable $identifier must be of type (int | string)');
+            ->toThrow(TypeError::class, 'Variable $identifier must be of type (int | string)')
+        ;
     });
 });
 
@@ -130,10 +135,12 @@ describe('Inline @var Advanced Unions and Intersections', function () {
         expect($identifier)->toBe('user_10');
 
         expect(fn () => $identifier = -5)
-            ->toThrow(TypeError::class, 'Variable $identifier');
+            ->toThrow(TypeError::class, 'Variable $identifier')
+        ;
 
         expect(fn () => $identifier = '')
-            ->toThrow(TypeError::class, 'Variable $identifier');
+            ->toThrow(TypeError::class, 'Variable $identifier')
+        ;
     });
 
     test('enforces inline intersection of Countable and ArrayAccess', function () {
@@ -142,10 +149,12 @@ describe('Inline @var Advanced Unions and Intersections', function () {
         expect($collection)->toBeInstanceOf(CountableArrayAccess::class);
 
         expect(fn () => $collection = new CountableOnly())
-            ->toThrow(TypeError::class, 'Variable $collection');
+            ->toThrow(TypeError::class, 'Variable $collection')
+        ;
 
         expect(fn () => $collection = new ArrayAccessOnly())
-            ->toThrow(TypeError::class, 'Variable $collection');
+            ->toThrow(TypeError::class, 'Variable $collection')
+        ;
     });
 
     test('enforces inline union of array shapes', function () {
@@ -157,7 +166,8 @@ describe('Inline @var Advanced Unions and Intersections', function () {
         expect($response['code'])->toBe(500);
 
         expect(fn () => $response = ['id' => 3, 'status' => 'pending'])
-            ->toThrow(TypeError::class, 'Variable $response');
+            ->toThrow(TypeError::class, 'Variable $response')
+        ;
     });
 
     test('enforces inline generics holding unions', function () {
@@ -169,7 +179,8 @@ describe('Inline @var Advanced Unions and Intersections', function () {
         expect($producer->item)->toBeInstanceOf(Cat::class);
 
         expect(fn () => $producer = new Producer(new Car()))
-            ->toThrow(TypeError::class, 'Variable $producer');
+            ->toThrow(TypeError::class, 'Variable $producer')
+        ;
     });
 });
 
@@ -192,7 +203,8 @@ describe('Inline @var Initial Assignment vs Reassignment', function () {
         /** @var non-empty-string $token */
 
         expect(fn () => $token = '')
-            ->toThrow(TypeError::class, 'Variable $token must be of type non-empty-string');
+            ->toThrow(TypeError::class, 'Variable $token must be of type non-empty-string')
+        ;
 
         $token = 'valid_token';
         expect($token)->toBe('valid_token');

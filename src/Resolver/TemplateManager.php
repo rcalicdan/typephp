@@ -20,7 +20,6 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
-use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
  * Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
