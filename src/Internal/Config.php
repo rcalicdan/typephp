@@ -35,4 +35,22 @@ final class Config
 
         return self::$cachedConfig = [];
     }
+
+    /**
+     * Overrides the current configuration at runtime.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function set(array $config): void
+    {
+        self::$cachedConfig = array_replace_recursive(self::get(), $config);
+    }
+
+    /**
+     * Resets the configuration cache. Useful for test isolation.
+     */
+    public static function reset(): void
+    {
+        self::$cachedConfig = null;
+    }
 }

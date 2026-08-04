@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace TypePHP\Internal;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\ArrayShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeForParameterNode;
 use PHPStan\PhpDocParser\Ast\Type\ConditionalTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\ConstExprParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
@@ -38,9 +43,108 @@ final class RuntimeTypeChecker
         return TemplateManager::bindInstanceFromNode($instance, $typeNode, $context, $forceBind);
     }
 
-    public static function bindInstance(object $instance, string $typeString, string $file = ''): object
+    /**
+     * Evaluates inline variable validation dynamically based on configuration.
+     */
+    public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
     {
-        return TemplateManager::bindInstance($instance, $typeString, $file);
+        $config = Config::get()['inline_vars'] ?? [];
+        $checkGenerics = $config['generics'] ?? true;
+
+        // Fast return if absolutely everything is disabled
+        if (!($config['generics'] ?? true) && !($config['callables'] ?? true) && !($config['scalars'] ?? false) && !($config['shapes'] ?? false) && !($config['objects'] ?? false)) {
+            return $value;
+        }
+
+        /** @var TypeParser|null $typeParser */
+        static $typeParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($typeParser === null || $lexer === null) {
+            $configParser = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($configParser);
+            $constExprParser = new ConstExprParser($configParser);
+            $typeParser = new TypeParser($configParser, $constExprParser);
+        }
+
+        try {
+            $tokens = new TokenIterator($lexer->tokenize($typeString));
+            $typeNode = $typeParser->parse($tokens);
+
+            if ($file !== '') {
+                $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
+            }
+
+            if (!self::shouldValidateType($typeNode, $config)) {
+                return $value; // Skip validation entirely if disabled by config or type is 'mixed'
+            }
+
+            // Special Handling for Callables
+            if ($typeNode instanceof CallableTypeNode || (isset($typeNode->name) && strtolower($typeNode->name) === 'callable')) {
+                return CallableWrapper::wrapTypeNode($typeNode, $value, "Variable \$$varName: Callback", self::getRegistry());
+            }
+
+            // Special Handling for Generics Instance Binding
+            if ($typeNode instanceof GenericTypeNode && $checkGenerics && is_object($value)) {
+                $err = self::bindInstanceFromNode($value, $typeNode, "Variable \$$varName", true);
+                if ($err !== null) throw $err;
+            }
+
+            // Standard Validation for everything else (Scalars, Shapes, Objects, etc.)
+            $registry = self::getRegistry();
+            $err = $registry->validate($value, $typeNode, "Variable \$$varName");
+            if ($err !== null) {
+                throw $err;
+            }
+
+        } catch (\Throwable $e) {
+            if ($e instanceof \TypeError) throw $e;
+        }
+
+        return $value;
+    }
+
+    private static function shouldValidateType(TypeNode $node, array $config): bool
+    {
+        if ($node instanceof CallableTypeNode) return $config['callables'] ?? true;
+        if ($node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) return $config['shapes'] ?? false;
+        
+        if ($node instanceof IdentifierTypeNode) {
+            $lower = strtolower($node->name);
+            
+            // Fast-path: Never waste CPU cycles validating `mixed`
+            if ($lower === 'mixed') return false; 
+            
+            if ($lower === 'callable') return $config['callables'] ?? true;
+            if (in_array($lower, ['array', 'list', 'iterable'])) return $config['shapes'] ?? false;
+            
+            if (in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'])) {
+                return $config['scalars'] ?? false;
+            }
+            
+            return $config['objects'] ?? false;
+        }
+
+        if ($node instanceof GenericTypeNode) {
+            $lower = strtolower($node->type->name);
+            if (in_array($lower, ['array', 'list', 'iterable'])) return $config['shapes'] ?? false;
+            if ($config['generics'] ?? true) return true; 
+            return $config['objects'] ?? false;
+        }
+
+        if ($node instanceof NullableTypeNode) {
+            return self::shouldValidateType($node->type, $config);
+        }
+
+        if ($node instanceof UnionTypeNode || $node instanceof IntersectionTypeNode) {
+            foreach ($node->types as $t) {
+                if (self::shouldValidateType($t, $config)) return true;
+            }
+            return false;
+        }
+
+        return $config['scalars'] ?? false;
     }
 
     /**
@@ -286,38 +390,6 @@ final class RuntimeTypeChecker
         }
 
         return $value;
-    }
-
-    public static function wrapCallableInline(mixed $callable, string $typeString, string $varName, string $file): mixed
-    {
-        if (! is_callable($callable)) {
-            return $callable;
-        }
-
-        /** @var TypeParser|null $typeParser */
-        static $typeParser = null;
-        /** @var Lexer|null $lexer */
-        static $lexer = null;
-
-        if ($typeParser === null || $lexer === null) {
-            $config = new ParserConfig(usedAttributes: []);
-            $lexer = new Lexer($config);
-            $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-        }
-
-        try {
-            $tokens = new TokenIterator($lexer->tokenize($typeString));
-            $typeNode = $typeParser->parse($tokens);
-
-            if ($file !== '') {
-                $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
-            }
-
-            return CallableWrapper::wrapTypeNode($typeNode, $callable, "Variable \$$varName: Callback", self::getRegistry());
-        } catch (\Throwable $e) {
-            return $callable;
-        }
     }
 
     public static function wrapCallable(string $function, string $paramName, mixed $callable): mixed

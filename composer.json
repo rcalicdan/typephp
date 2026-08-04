@@ -25,7 +25,6 @@
             "TypePHP\\Tests\\": "tests/"
         },
         "files": [
-            "tests/bootstrap.php",
             "tests/Fixtures/Functions/MathUtils.php"
         ]
     },

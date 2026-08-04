@@ -16,22 +16,113 @@ use PHPStan\PhpDocParser\ParserConfig;
 
 final class ContractVisitor extends NodeVisitorAbstract
 {
+    private array $scopeStack = [[]]; // Start with global scope
+
     public function enterNode(Node $node): ?int
     {
-        // Function / Method contract injection
+        // 1. Scope Tracking
+        if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
+            $this->scopeStack[] = [];
+        }
+
+        // 2. Function / Method contract injection
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
             $this->injectFunctionContract($node);
-
             return null;
         }
 
-        // @var Docblock Pre-binding on assignments ($var = new Class())
-        if ($node instanceof Node\Stmt\Expression && $node->expr instanceof Node\Expr\Assign) {
-            $this->injectVarPrebinding($node);
-
-            return null;
+        // 3. Extract @var annotations from expression statements (e.g. `/** @var int $x */ $x = 1;` or `/** @var int $x */ $x;`)
+        if ($node instanceof Node\Stmt\Expression) {
+            $doc = $node->getDocComment();
+            if ($doc !== null && str_contains($doc->getText(), '@var')) {
+                $this->extractVarDocblock($doc->getText(), $node->expr);
+            }
         }
 
+        // 4. Extract @var annotations from foreach loops (e.g. `/** @var string $item */ foreach ($items as $item)`)
+        if ($node instanceof Node\Stmt\Foreach_) {
+            $doc = $node->getDocComment();
+            if ($doc !== null && str_contains($doc->getText(), '@var')) {
+                $this->extractVarDocblock($doc->getText(), $node->valueVar);
+            }
+        }
+
+        // 5. Intercept Assignments for Inline Variable Validation
+        if ($node instanceof Node\Expr\Assign && $node->var instanceof Node\Expr\Variable && is_string($node->var->name)) {
+            $varName = $node->var->name;
+            $typeString = $this->getVarTypeFromScope($varName);
+
+            if ($typeString !== null) {
+                $node->expr = new Node\Expr\FuncCall(
+                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkVariable'),
+                    [
+                        new Node\Arg($node->expr),
+                        new Node\Arg(new Node\Scalar\String_($typeString)),
+                        new Node\Arg(new Node\Scalar\String_($varName)),
+                        new Node\Arg(new Node\Scalar\MagicConst\File()),
+                    ]
+                );
+            }
+        }
+
+        return null;
+    }
+
+    public function leaveNode(Node $node): ?int
+    {
+        if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
+            array_pop($this->scopeStack);
+        }
+
+        return null;
+    }
+
+    private function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
+    {
+        static $phpDocParser = null;
+        static $lexer = null;
+
+        if ($phpDocParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+        }
+
+        try {
+            $tokens = new TokenIterator($lexer->tokenize($docText));
+            $phpDocNode = $phpDocParser->parse($tokens);
+            $varTags = $phpDocNode->getVarTagValues();
+
+            if (\count($varTags) > 0) {
+                $typeString = (string) $varTags[0]->type;
+                $varName = ltrim($varTags[0]->variableName, '$');
+
+                // If no varName in docblock, try to infer from expression: /** @var int */ $x = 1;
+                if ($varName === '' && $expr instanceof Node\Expr\Assign && $expr->var instanceof Node\Expr\Variable && is_string($expr->var->name)) {
+                    $varName = $expr->var->name;
+                } elseif ($varName === '' && $expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+                    $varName = $expr->name;
+                }
+
+                if ($varName !== '') {
+                    $currentScopeIndex = count($this->scopeStack) - 1;
+                    $this->scopeStack[$currentScopeIndex][$varName] = $typeString;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore malformed docblocks
+        }
+    }
+
+    private function getVarTypeFromScope(string $varName): ?string
+    {
+        for ($i = count($this->scopeStack) - 1; $i >= 0; $i--) {
+            if (isset($this->scopeStack[$i][$varName])) {
+                return $this->scopeStack[$i][$varName];
+            }
+        }
         return null;
     }
 
@@ -294,9 +385,11 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        $allStmts = [...$injectedStmts, ...$node->stmts];
+        // Combine the injected parameter checks with the actual modified body
+        $allStmts = array_merge($injectedStmts, $node->stmts);
 
-        if (\count($allStmts) > 0) {
+        // Wrap EVERYTHING in try { ... } finally { TemplateManager::popCallFrame() }
+        if (count($allStmts) > 0) {
             $popCallFrameStmt = new Node\Stmt\Expression(
                 new Node\Expr\StaticCall(
                     new Node\Name('\TypePHP\Resolver\TemplateManager'),
@@ -312,71 +405,6 @@ final class ContractVisitor extends NodeVisitorAbstract
             );
 
             $node->stmts = [$tryFinallyStmt];
-        }
-    }
-
-
-    private function injectVarPrebinding(Node\Stmt\Expression $node): void
-    {
-        $doc = $node->getDocComment();
-        if ($doc === null || ! str_contains($doc->getText(), '@var')) {
-            return;
-        }
-
-        /** @var Node\Expr\Assign $assign */
-        $assign = $node->expr;
-
-        static $phpDocParser = null;
-        static $lexer = null;
-
-        if ($phpDocParser === null || $lexer === null) {
-            $config = new ParserConfig(usedAttributes: []);
-            $lexer = new Lexer($config);
-            $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-        }
-
-        try {
-            $tokens = new TokenIterator($lexer->tokenize($doc->getText()));
-            $phpDocNode = $phpDocParser->parse($tokens);
-            $varTags = $phpDocNode->getVarTagValues();
-
-            if (\count($varTags) > 0) {
-                $typeString = (string) $varTags[0]->type;
-                $varName = ltrim($varTags[0]->variableName, '$');
-
-                if ($varName === '' && $assign->var instanceof Node\Expr\Variable && is_string($assign->var->name)) {
-                    $varName = $assign->var->name;
-                }
-
-                if ($varTags[0]->type instanceof \PHPStan\PhpDocParser\Ast\Type\CallableTypeNode) {
-                    $assign->expr = new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapCallableInline'),
-                        [
-                            new Node\Arg($assign->expr),
-                            new Node\Arg(new Node\Scalar\String_($typeString)),
-                            new Node\Arg(new Node\Scalar\String_($varName)),
-                            new Node\Arg(new Node\Scalar\MagicConst\File()),
-                        ]
-                    );
-
-                    return;
-                }
-
-                if ($assign->expr instanceof Node\Expr\New_ && str_contains($typeString, '<')) {
-                    $assign->expr = new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::bindInstance'),
-                        [
-                            new Node\Arg($assign->expr),
-                            new Node\Arg(new Node\Scalar\String_($typeString)),
-                            new Node\Arg(new Node\Scalar\MagicConst\File()),
-                        ]
-                    );
-                }
-            }
-        } catch (\Throwable $e) {
-            // Silently ignore malformed docblocks
         }
     }
 }
