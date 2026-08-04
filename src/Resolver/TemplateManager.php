@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace TypePHP\Resolver;
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
+use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\ConstExprParser;
 use PHPStan\PhpDocParser\Parser\PhpDocParser;
@@ -16,9 +20,10 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
- * @internal Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
+ * Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
  */
 final class TemplateManager
 {
@@ -35,6 +40,14 @@ final class TemplateManager
      * @var array<string, list<array<string, TypeNode>>>
      */
     private static array $callStackBindings = [];
+
+    /**
+     * Checks whether a function has at least one active call frame on the stack.
+     */
+    private static function hasCallFrame(string $function): bool
+    {
+        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
+    }
 
     /**
      * Pushes a new empty call frame onto the stack for a function execution.
@@ -308,7 +321,8 @@ final class TemplateManager
     }
 
     /**
-     * Checks if an existing type node satisfies an expected type node under a given variance modifier.
+     * Recursively checks if an existing type node satisfies an expected type node under a given variance modifier.
+     * Handles Identifiers, Generics, Unions, and Intersections as AST nodes.
      */
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
     {
@@ -321,6 +335,94 @@ final class TemplateManager
 
         if ($variance === GenericTypeNode::VARIANCE_BIVARIANT || $expectedStr === 'mixed') {
             return true;
+        }
+
+        if ($expected instanceof UnionTypeNode) {
+            if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
+                foreach ($expected->types as $unionVariant) {
+                    if (self::checkVariance($existing, $unionVariant, $variance)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if ($variance === GenericTypeNode::VARIANCE_CONTRAVARIANT) {
+                foreach ($expected->types as $unionVariant) {
+                    if (! self::checkVariance($existing, $unionVariant, $variance)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        if ($existing instanceof UnionTypeNode) {
+            if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
+                foreach ($existing->types as $existingVariant) {
+                    if (! self::checkVariance($existingVariant, $expected, $variance)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if ($variance === GenericTypeNode::VARIANCE_CONTRAVARIANT) {
+                foreach ($existing->types as $existingVariant) {
+                    if (self::checkVariance($existingVariant, $expected, $variance)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        if ($expected instanceof IntersectionTypeNode) {
+            if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
+                foreach ($expected->types as $intersectionMember) {
+                    if (! self::checkVariance($existing, $intersectionMember, $variance)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if ($variance === GenericTypeNode::VARIANCE_CONTRAVARIANT) {
+                foreach ($expected->types as $intersectionMember) {
+                    if (self::checkVariance($existing, $intersectionMember, $variance)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        if ($existing instanceof IntersectionTypeNode) {
+            if ($variance === GenericTypeNode::VARIANCE_COVARIANT) {
+                foreach ($existing->types as $existingMember) {
+                    if (self::checkVariance($existingMember, $expected, $variance)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if ($variance === GenericTypeNode::VARIANCE_CONTRAVARIANT) {
+                foreach ($existing->types as $existingMember) {
+                    if (! self::checkVariance($existingMember, $expected, $variance)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
 
         if ($existing instanceof GenericTypeNode && $expected instanceof GenericTypeNode) {
@@ -424,14 +526,6 @@ final class TemplateManager
     }
 
     /**
-     * Checks whether a function has at least one active call frame on the stack.
-     */
-    private static function hasCallFrame(string $function): bool
-    {
-        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
-    }
-
-    /**
      * Resolves FQCNs inside an inherited generic TypeNode AST.
      *
      * @param \ReflectionClass<object> $ref
@@ -443,27 +537,29 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        if ($n instanceof ArrayTypeNode) {
+            return new ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        if ($n instanceof NullableTypeNode) {
+            return new NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        if ($n instanceof UnionTypeNode) {
+            return new UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        if ($n instanceof IntersectionTypeNode) {
+            return new IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;
     }
 
     /**
+     * Returns shared static instances of PHPStan's PhpDocParser and Lexer.
+     *
      * @return array{PhpDocParser, Lexer}
      */
     private static function getPhpDocParserComponents(): array
@@ -485,6 +581,8 @@ final class TemplateManager
     }
 
     /**
+     * Returns shared static instances of PHPStan's TypeParser and Lexer.
+     *
      * @return array{TypeParser, Lexer}
      */
     private static function getTypeParserComponents(): array

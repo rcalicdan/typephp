@@ -70,6 +70,60 @@ function testUnionOfIntersectionsContract(object $payload): bool
     return true;
 }
 
+/**
+ * Contract function accepting Unions of Callables
+ *
+ * @param (callable(positive-int): non-empty-string)|(callable(non-empty-string): positive-int) $callback
+ */
+function testUnionOfCallablesContract(callable $callback): mixed
+{
+    return $callback;
+}
+
+/**
+ * Contract function accepting Variadic Unions
+ *
+ * @param (Dog|Cat) ...$animals
+ */
+function testVariadicUnionContract(object ...$animals): int
+{
+    return count($animals);
+}
+
+/**
+ * Contract function accepting Unions of Generic Objects
+ *
+ * @param Producer<Dog>|Producer<Cat> $producer
+ */
+function testUnionOfGenericsContract(Producer $producer): mixed
+{
+    return $producer->item;
+}
+
+/**
+ * Contract function using @phpstan-type Aliases with Unions and Intersections
+ *
+ * @phpstan-type StatusUnion 'active'|'pending'|'archived'
+ * @phpstan-type CollectionIntersection \Countable&\ArrayAccess
+ *
+ * @param StatusUnion $status
+ * @param CollectionIntersection $collection
+ */
+function testTypeAliasUnionAndIntersectionContract(string $status, object $collection): bool
+{
+    return true;
+}
+
+/**
+ * Contract function accepting Associative Arrays with Union Keys and Values
+ *
+ * @param array<positive-int|non-empty-string, Dog|Cat> $map
+ */
+function testAssocUnionArrayContract(array $map): int
+{
+    return count($map);
+}
+
 describe('Scalar and Literal Union Types', function () {
     test('accepts positive-int, non-empty-string, or enum literals in union', function () {
         expect(testScalarUnionContract(100))->toBeTrue();
@@ -185,6 +239,96 @@ describe('Complex Nested Unions of Intersections', function () {
         $fixture = new CountableOnly();
 
         expect(fn () => testUnionOfIntersectionsContract($fixture))
+            ->toThrow(TypeError::class);
+    });
+});
+
+describe('Unions of Callables', function () {
+    test('accepts callback matching first variant in callable union', function () {
+        $cb1 = fn (int $id): string => "id_{$id}";
+        $wrapped = testUnionOfCallablesContract($cb1);
+
+        expect($wrapped(10))->toBe('id_10');
+    });
+
+    test('accepts callback matching second variant in callable union', function () {
+        $cb2 = fn (string $str): int => strlen($str);
+        $wrapped = testUnionOfCallablesContract($cb2);
+
+        expect($wrapped('hello'))->toBe(5);
+    });
+});
+
+describe('Variadic Unions ((Dog|Cat) ...$animals)', function () {
+    test('accepts multiple variadic arguments matching union member types', function () {
+        expect(testVariadicUnionContract(new Dog(), new Cat(), new Dog()))->toBe(3);
+    });
+
+    test('throws TypeError when any variadic argument violates the union', function () {
+        expect(fn () => testVariadicUnionContract(new Dog(), new Car()))
+            ->toThrow(TypeError::class);
+    });
+});
+
+describe('Unions of Generic Objects (Producer<Dog> | Producer<Cat>)', function () {
+    test('accepts Producer<Dog> or Producer<Cat>', function () {
+        $dogProducer = new Producer(new Dog());
+        $catProducer = new Producer(new Cat());
+
+        expect(testUnionOfGenericsContract($dogProducer))->toBeInstanceOf(Dog::class);
+        expect(testUnionOfGenericsContract($catProducer))->toBeInstanceOf(Cat::class);
+    });
+
+    test('throws TypeError when Producer holds an unrelated type', function () {
+        $carProducer = new Producer(new Car());
+
+        expect(fn () => testUnionOfGenericsContract($carProducer))
+            ->toThrow(TypeError::class);
+    });
+});
+
+describe('Type Aliases with Unions and Intersections (@phpstan-type)', function () {
+    test('accepts valid status and collection matching type alias definitions', function () {
+        $collection = new CountableArrayAccess();
+
+        expect(testTypeAliasUnionAndIntersectionContract('active', $collection))->toBeTrue();
+        expect(testTypeAliasUnionAndIntersectionContract('archived', $collection))->toBeTrue();
+    });
+
+    test('throws TypeError when parameter violates type alias union or intersection', function () {
+        $collection = new CountableArrayAccess();
+
+        expect(fn () => testTypeAliasUnionAndIntersectionContract('invalid_status', $collection))
+            ->toThrow(TypeError::class);
+
+        expect(fn () => testTypeAliasUnionAndIntersectionContract('active', new CountableOnly()))
+            ->toThrow(TypeError::class);
+    });
+});
+
+describe('Associative Arrays with Union Keys and Values (array<K1|K2, V1|V2>)', function () {
+    test('accepts valid associative array with mixed union keys and values', function () {
+        $map = [
+            10 => new Dog(),
+            'cat_key' => new Cat(),
+        ];
+
+        expect(testAssocUnionArrayContract($map))->toBe(2);
+    });
+
+    test('throws TypeError when array key or value violates union specifications', function () {
+        $badKeyMap = [
+            -5 => new Dog(),
+        ];
+
+        expect(fn () => testAssocUnionArrayContract($badKeyMap))
+            ->toThrow(TypeError::class);
+
+        $badValueMap = [
+            10 => new Car(),
+        ];
+
+        expect(fn () => testAssocUnionArrayContract($badValueMap))
             ->toThrow(TypeError::class);
     });
 });
