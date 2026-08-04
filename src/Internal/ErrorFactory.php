@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace TypePHP\Internal;
 
 /**
- * Factory creating ErrorMessage value objects and manipulating native Caller traces.
+ * Factory creating ErrorMessage value objects and preparing native TypeError instances with exact caller traces.
  */
 final class ErrorFactory
 {
@@ -22,16 +22,16 @@ final class ErrorFactory
     }
 
     /**
-     * Prepares an exception before throwing.
-     * For parameter errors, it extracts the caller's file and line to accurately blame the call site.
+     * Prepares a native TypeError exception before throwing.
+     * For parameter errors, it sets the file and line to accurately blame the caller site.
      */
     public static function prepareException(\TypeError $e): \TypeError
     {
         $message = $e->getMessage();
-        $isParamError = ! str_contains($message, 'Return value')
-            && ! str_contains($message, 'Variable $')
-            && ! str_contains($message, 'Property ')
-            && ! str_contains($message, 'Return iterator')
+        $isParamError = ! str_contains($message, 'Return value') 
+            && ! str_contains($message, 'Variable $') 
+            && ! str_contains($message, 'Property ') 
+            && ! str_contains($message, 'Return iterator') 
             && ! str_contains($message, 'Generator sent value');
 
         if ($isParamError) {
@@ -39,7 +39,17 @@ final class ErrorFactory
             $callerFrame = $trace[0] ?? [];
 
             if (isset($callerFrame['file'], $callerFrame['line'])) {
-                return new ExactTypeError($message, $callerFrame['file'], $callerFrame['line']);
+                $ref = new \ReflectionObject($e);
+
+                if ($ref->hasProperty('file')) {
+                    $propFile = $ref->getProperty('file');
+                    $propFile->setValue($e, $callerFrame['file']);
+                }
+
+                if ($ref->hasProperty('line')) {
+                    $propLine = $ref->getProperty('line');
+                    $propLine->setValue($e, $callerFrame['line']);
+                }
             }
         }
 

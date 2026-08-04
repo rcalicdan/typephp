@@ -2,16 +2,6 @@
 
 declare(strict_types=1);
 
-class Numbers
-{
-    /**
-     * @param int[] $numbers
-     */
-    public function __construct(public array $numbers)
-    {
-    }
-}
-
 class Strings
 {
     /**
