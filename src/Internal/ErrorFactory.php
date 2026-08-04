@@ -28,9 +28,9 @@ final class ErrorFactory
     public static function prepareException(\TypeError $e): \TypeError
     {
         $message = $e->getMessage();
-        $isParamError = ! str_contains($message, 'Return value') 
-            && ! str_contains($message, 'Variable $') 
-            && ! str_contains($message, 'Return iterator') 
+        $isParamError = ! str_contains($message, 'Return value')
+            && ! str_contains($message, 'Variable $')
+            && ! str_contains($message, 'Return iterator')
             && ! str_contains($message, 'Generator sent value');
 
         if ($isParamError) {

@@ -52,6 +52,7 @@ final class IterableWrapper
      * Extracts key and value TypeNodes from an iterable type node AST or type alias.
      *
      * @param array<string, TypeNode> $aliases
+     *
      * @return array{?TypeNode, ?TypeNode}
      */
     private static function extractKeyAndItemTypeNodes(?TypeNode $typeNode, array $aliases): array

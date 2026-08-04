@@ -92,7 +92,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                             ),
                                         ]
                                     )
-                                )
+                                ),
                             ]
                         )
                     ),
@@ -271,7 +271,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         )
@@ -367,10 +367,10 @@ final class ContractVisitor extends NodeVisitorAbstract
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
-                                                )
+                                                ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -401,10 +401,10 @@ final class ContractVisitor extends NodeVisitorAbstract
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
-                                                )
+                                                ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -498,7 +498,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                                     ),
                                                                 ]
                                                             )
-                                                        )
+                                                        ),
                                                     ]
                                                 )
                                             )
@@ -535,7 +535,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -591,7 +591,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                         ),
                                                     ]
                                                 )
-                                            )
+                                            ),
                                         ]
                                     )
                                 )
@@ -627,7 +627,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),

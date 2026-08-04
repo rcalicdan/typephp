@@ -15,7 +15,7 @@ class Numbers
 class Strings
 {
     /**
-     * @var string[] $strings
+     * @var string[]
      */
     public array $strings;
 
@@ -24,6 +24,5 @@ class Strings
         $this->strings = $strings;
     }
 }
-
 
 new Strings(['a', 'b', 'c', 1]);
