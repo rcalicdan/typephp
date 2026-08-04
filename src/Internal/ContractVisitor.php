@@ -99,8 +99,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $propName = $node->var->name->toString();
                 $classExpr = $node->var->class;
 
-                $classArg = $classExpr instanceof Node\Name
-                    ? new Node\Expr\ClassConstFetch($classExpr, 'class')
+                $classArg = $classExpr instanceof Node\Name 
+                    ? new Node\Expr\ClassConstFetch($classExpr, 'class') 
                     : $classExpr;
 
                 $checkCall = $this->createPropertyCheckCall($node->expr, $classArg, $propName);
@@ -236,18 +236,16 @@ final class ContractVisitor extends NodeVisitorAbstract
      * Wraps return statements inside a get property hook body.
      *
      * @param array<Node\Stmt> $stmts
-     *
      * @return array<Node\Stmt>
      */
     private function wrapHookReturnStatements(array $stmts, string $propertyName): array
     {
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($propertyName, $this) extends NodeVisitorAbstract {
+        $traverser->addVisitor(new class($propertyName, $this) extends NodeVisitorAbstract {
             public function __construct(
                 private string $propertyName,
                 private ContractVisitor $visitor
-            ) {
-            }
+            ) {}
 
             public function enterNode(Node $n): ?Node
             {
@@ -403,7 +401,7 @@ final class ContractVisitor extends NodeVisitorAbstract
      * Builds parameter validation and wrapper statements.
      *
      * Injects:
-     * - Single-level IF statement to initialize scope and evaluate parameter constraints without line drift.
+     * - Single-level IF statement with typephp_no_newline attribute to prevent line drift.
      * - Callable parameter wrappers for runtime callback checks.
      * - Lazy iterable and generator parameter wrappers.
      *
@@ -417,7 +415,7 @@ final class ContractVisitor extends NodeVisitorAbstract
     ): array {
         $injectedStmts = [];
 
-        $injectedStmts[] = new Node\Stmt\If_(
+        $ifStmt = new Node\Stmt\If_(
             new Node\Expr\Instanceof_(
                 new Node\Expr\Assign(
                     new Node\Expr\Variable('__typephpErr'),
@@ -452,7 +450,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         )
@@ -460,6 +458,9 @@ final class ContractVisitor extends NodeVisitorAbstract
                 ],
             ]
         );
+
+        $ifStmt->setAttribute('typephp_no_newline', true);
+        $injectedStmts[] = $ifStmt;
 
         if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
             foreach ($node->params as $param) {
@@ -555,10 +556,10 @@ final class ContractVisitor extends NodeVisitorAbstract
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
-                                                ),
+                                                )
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -589,10 +590,10 @@ final class ContractVisitor extends NodeVisitorAbstract
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
-                                                ),
+                                                )
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -693,7 +694,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                                     ),
                                                                 ]
                                                             )
-                                                        ),
+                                                        )
                                                     ]
                                                 )
                                             )
@@ -730,7 +731,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -786,7 +787,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                         ),
                                                     ]
                                                 )
-                                            ),
+                                            )
                                         ]
                                     )
                                 )
@@ -822,7 +823,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),

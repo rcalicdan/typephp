@@ -7,7 +7,6 @@ namespace TypePHP\Internal;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\CloningVisitor;
 use PhpParser\ParserFactory;
-use PhpParser\PrettyPrinter\Standard;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
@@ -98,6 +97,49 @@ final class StreamWrapper implements StreamWrapperInterface
     }
 
     /**
+     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
+     *
+     * Performs the following steps:
+     * 1. Parses raw PHP source into AST statement nodes.
+     * 2. Scans namespace and use import statements to seed file metadata.
+     * 3. Traverses AST with CloningVisitor and ContractVisitor.
+     * 4. Prints format-preserved source code using custom TypePHPPrinter.
+     */
+    public static function transformSource(string $source, string $filePath = ''): string
+    {
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+
+        $oldStmts = $parser->parse($source);
+        if ($oldStmts === null) {
+            return $source;
+        }
+
+        self::extractAndSeedFileMetadata($oldStmts, $filePath);
+
+        $oldTokens = $parser->getTokens();
+
+        $traverser1 = new NodeTraverser();
+        $traverser1->addVisitor(new CloningVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
+        $nodesToTraverse = $oldStmts;
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser1->traverse($nodesToTraverse);
+
+        $traverser2 = new NodeTraverser();
+        $traverser2->addVisitor(new ContractVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser2->traverse($newStmts);
+
+        $printer = new TypePHPPrinter();
+        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
+
+        return $transformed;
+    }
+
+    /**
      * Opens a file stream, intercepting application files for AST transformation.
      *
      * Performs the following steps:
@@ -172,7 +214,6 @@ final class StreamWrapper implements StreamWrapperInterface
             return true;
         }
 
-        // @phpstan-ignore-next-line
         return @flock($this->handle, $operation);
     }
 
@@ -397,8 +438,8 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
         foreach ($trace as $frame) {
-            $func = strtolower($frame['function']);
-            if (\in_array($func, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all', 'file_exists'], true)) {
+            $func = strtolower($frame['function'] ?? '');
+            if (in_array($func, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all', 'file_exists'], true)) {
                 return true;
             }
         }
@@ -540,57 +581,5 @@ final class StreamWrapper implements StreamWrapperInterface
         }
 
         SpecialTypeResolver::seedFileMetadata($filePath, $namespace, $imports);
-    }
-
-    /**
-     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
-     *
-     * Performs the following steps:
-     * 1. Parses raw PHP source into AST statement nodes.
-     * 2. Scans namespace and use import statements to seed file metadata.
-     * 3. Traverses AST with CloningVisitor and ContractVisitor.
-     * 4. Prints format-preserved source code.
-     * 5. Squashes single-level scope setup statements to guarantee zero line-number drift.
-     */
-    private static function transformSource(string $source, string $filePath = ''): string
-    {
-        $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-        $oldStmts = $parser->parse($source);
-        if ($oldStmts === null) {
-            return $source;
-        }
-
-        self::extractAndSeedFileMetadata($oldStmts, $filePath);
-
-        $oldTokens = $parser->getTokens();
-
-        $traverser1 = new NodeTraverser();
-        $traverser1->addVisitor(new CloningVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
-        $nodesToTraverse = $oldStmts;
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser1->traverse($nodesToTraverse);
-
-        $traverser2 = new NodeTraverser();
-        $traverser2->addVisitor(new ContractVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser2->traverse($newStmts);
-
-        $printer = new Standard();
-        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
-
-        $result = preg_replace_callback(
-            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypePHP\\\\Internal\\\\ErrorMessage\)\s*\{[^}]*\}\r?\n?\s*/s',
-            function (array $match): string {
-                return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
-            },
-            $transformed
-        );
-
-        return $result ?? $transformed;
     }
 }
