@@ -112,6 +112,7 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         try {
+            $docText = DocblockNormalizer::normalize($docText);
             $tokens = new TokenIterator($lexer->tokenize($docText));
             $phpDocNode = $phpDocParser->parse($tokens);
             $varTags = $phpDocNode->getVarTagValues();
@@ -153,7 +154,7 @@ final class ContractVisitor extends NodeVisitorAbstract
     /**
      * Determines if a function or class method body contains yield or yield from expressions.
      */
-    private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
+   private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
     {
         if ($node->stmts === null) {
             return false;

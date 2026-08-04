@@ -1,4 +1,6 @@
-<?php 
+<?php
+
+declare(strict_types=1);
 
 use TypePHP\Tests\Fixtures\Types\UserObjectShape;
 
@@ -15,7 +17,7 @@ function testStrictStdClassShapeContract(object $payload): bool
 $std = new stdClass();
 $std->id = 100;
 $std->name = 'Alice';
-testStrictStdClassShapeContract($std); 
+testStrictStdClassShapeContract($std);
 
 $user = new UserObjectShape(100, 'Alice');
 testStrictStdClassShapeContract($user); // ❌ Throws TypeError!

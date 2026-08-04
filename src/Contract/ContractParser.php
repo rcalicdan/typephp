@@ -15,6 +15,7 @@ use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\DocblockNormalizer;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
@@ -119,12 +120,13 @@ final class ContractParser
             [$className, $methodName] = explode('::', $function, 2);
             $ref = new \ReflectionMethod($className, $methodName);
             $fetchedClassDoc = $ref->getDeclaringClass()->getDocComment();
-            $classDoc = $fetchedClassDoc !== false ? $fetchedClassDoc : null;
-            $doc = self::findEffectiveDocBlock($ref);
+            $classDoc = $fetchedClassDoc !== false ? DocblockNormalizer::normalize($fetchedClassDoc) : null;
+            $fetchedDoc = self::findEffectiveDocBlock($ref);
+            $doc = $fetchedDoc !== null ? DocblockNormalizer::normalize($fetchedDoc) : null;
         } else {
             $ref = new \ReflectionFunction($function);
             $fetchedDoc = $ref->getDocComment();
-            $doc = $fetchedDoc !== false ? $fetchedDoc : null;
+            $doc = $fetchedDoc !== false ? DocblockNormalizer::normalize($fetchedDoc) : null;
         }
 
         return [$ref, $doc, $classDoc];
@@ -254,6 +256,7 @@ final class ContractParser
             $doc = $ref->getDocComment();
 
             if ($doc !== false) {
+                $doc = DocblockNormalizer::normalize($doc);
                 [$phpDocParser, $lexer] = self::getParserComponents();
 
                 $tokens = new TokenIterator($lexer->tokenize($doc));

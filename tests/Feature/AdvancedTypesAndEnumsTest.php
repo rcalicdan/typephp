@@ -26,11 +26,21 @@ afterEach(function () {
 });
 
 /**
- * Parameter contract accepting Object Shapes
+ * Parameter contract accepting general Object Shapes (any object or stdClass)
  *
  * @param object{id: positive-int, name: non-empty-string, role?: 'admin'|'user'} $payload
  */
 function testObjectShapeContract(object $payload): bool
+{
+    return true;
+}
+
+/**
+ * Parameter contract strictly accepting stdClass instances with Object Shapes
+ *
+ * @param stdClass{id: positive-int, name: non-empty-string} $payload
+ */
+function testStrictStdClassShapeContract(object $payload): bool
 {
     return true;
 }
@@ -161,6 +171,34 @@ describe('PHPDoc Object Shapes (object{prop: type})', function () {
 
         expect(fn () => $data = new UserObjectShape(-5, 'Alice'))
             ->toThrow(TypeError::class, 'Variable $data')
+        ;
+    });
+});
+
+describe('Strict stdClass Shapes (stdClass{prop: type})', function () {
+    test('accepts stdClass instance matching the required shape', function () {
+        $payload = new stdClass();
+        $payload->id = 100;
+        $payload->name = 'Alice';
+
+        expect(testStrictStdClassShapeContract($payload))->toBeTrue();
+    });
+
+    test('throws TypeError when custom class instance is passed to stdClass shape', function () {
+        $user = new UserObjectShape(100, 'Alice');
+
+        expect(fn () => testStrictStdClassShapeContract($user))
+            ->toThrow(TypeError::class)
+        ;
+    });
+
+    test('throws TypeError when stdClass property violates shape constraint', function () {
+        $payload = new stdClass();
+        $payload->id = -50;
+        $payload->name = 'Alice';
+
+        expect(fn () => testStrictStdClassShapeContract($payload))
+            ->toThrow(TypeError::class)
         ;
     });
 });

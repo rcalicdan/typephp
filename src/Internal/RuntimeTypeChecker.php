@@ -30,7 +30,7 @@ use TypePHP\Wrapper\CallableWrapper;
 use TypePHP\Wrapper\IterableWrapper;
 
 /**
- * @internal Core runtime type checking engine for parameter validation, return type enforcement, and variable tracking.
+ * Core runtime type checking engine for parameter validation, return type enforcement, and variable tracking.
  */
 final class RuntimeTypeChecker
 {
@@ -79,11 +79,12 @@ final class RuntimeTypeChecker
      *
      * Performs the following steps:
      * 1. Checks configuration toggles for inline variables.
-     * 2. Tokenizes and parses the variable type string.
-     * 3. Resolves FQCNs for file context.
-     * 4. Evaluates whether the type category requires validation.
-     * 5. Wraps callables or binds generic instances if applicable.
-     * 6. Validates the assigned value against the parsed type node.
+     * 2. Normalizes class shape syntax (e.g. stdClass{id: int}) into intersection shapes.
+     * 3. Tokenizes and parses the variable type string.
+     * 4. Resolves FQCNs for file context.
+     * 5. Evaluates whether the type category requires validation.
+     * 6. Wraps callables or binds generic instances if applicable.
+     * 7. Validates the assigned value against the parsed type node.
      */
     public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
     {
@@ -96,6 +97,7 @@ final class RuntimeTypeChecker
         }
 
         try {
+            $typeString = DocblockNormalizer::normalize($typeString);
             [$typeParser, $lexer] = self::getTypeParserComponents();
 
             $tokens = new TokenIterator($lexer->tokenize($typeString));
