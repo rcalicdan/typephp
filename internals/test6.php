@@ -15,18 +15,15 @@ class Numbers
 class Strings
 {
     /**
-     * @param string[] $strings
+     * @var string[] $strings
      */
     public array $strings;
 
-    /**
-     * @param string[] $strings
-    */
     public function __construct(array $strings)
     {
         $this->strings = $strings;
     }
 }
 
-// new Numbers([1, 2, 3, 4, '5']);
+
 new Strings(['a', 'b', 'c', 1]);

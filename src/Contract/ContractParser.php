@@ -38,6 +38,7 @@ final class ContractParser
      * 2. Reflects function or method and fetches declared docblocks.
      * 3. Parses class-level templates and type aliases if parsing a class method.
      * 4. Parses function-level templates, type aliases, parameter types, and return types.
+     * 5. Falls back to class property @var docblocks for un-annotated method parameters.
      *
      * @return array{types: array<string, TypeNode>, templates: array<string, TemplateTagValueNode>, return: ?TypeNode, aliases: array<string, TypeNode>}
      */
@@ -48,8 +49,9 @@ final class ContractParser
         }
 
         [$ref, $doc, $classDoc] = self::reflectAndFetchDocs($function);
+        $hasMethodParams = $ref instanceof \ReflectionMethod && $ref->getNumberOfParameters() > 0;
 
-        if ($doc === null && $classDoc === null) {
+        if ($doc === null && $classDoc === null && ! $hasMethodParams) {
             return self::$cache[$function] = [
                 'types' => [],
                 'templates' => [],
@@ -89,6 +91,8 @@ final class ContractParser
                 self::extractAliases($phpDocNode, $aliases, $ref);
                 $types = self::parseParameters($phpDocNode, $ref, $function);
                 $returnType = self::parseReturnType($phpDocNode, $function);
+            } else {
+                $types = self::parseParameters(null, $ref, $function);
             }
 
             return self::$cache[$function] = [
@@ -174,11 +178,12 @@ final class ContractParser
 
     /**
      * Parses @param tags from a PHPDoc node and resolves parameter types.
+     * Falls back to property @var docblocks for matching un-annotated method parameters.
      *
      * @return array<string, TypeNode>
      */
     private static function parseParameters(
-        PhpDocNode $phpDocNode,
+        ?PhpDocNode $phpDocNode,
         \ReflectionFunction|\ReflectionMethod $ref,
         string $function
     ): array {
@@ -189,26 +194,89 @@ final class ContractParser
             $refParams[$p->getName()] = $p->isVariadic();
         }
 
-        foreach ($phpDocNode->getParamTagValues() as $paramTag) {
-            $paramName = ltrim($paramTag->parameterName, '$');
-            $type = $paramTag->type;
+        if ($phpDocNode !== null) {
+            foreach ($phpDocNode->getParamTagValues() as $paramTag) {
+                $paramName = ltrim($paramTag->parameterName, '$');
+                $type = $paramTag->type;
 
-            $isVariadic = $paramTag->isVariadic || ($refParams[$paramName] ?? false);
-            if ($isVariadic) {
-                $type = new ArrayTypeNode($type);
+                $isVariadic = $paramTag->isVariadic || ($refParams[$paramName] ?? false);
+                if ($isVariadic) {
+                    $type = new ArrayTypeNode($type);
+                }
+
+                $types[$paramName] = SpecialTypeResolver::resolve($type, $function);
             }
+        }
 
-            $types[$paramName] = SpecialTypeResolver::resolve($type, $function);
+        if ($ref instanceof \ReflectionMethod) {
+            $declaringClass = $ref->getDeclaringClass();
+
+            foreach ($ref->getParameters() as $p) {
+                $paramName = $p->getName();
+
+                if (! isset($types[$paramName]) && $declaringClass->hasProperty($paramName)) {
+                    $propertyRef = $declaringClass->getProperty($paramName);
+                    $propDoc = $propertyRef->getDocComment();
+
+                    if ($propDoc !== false) {
+                        $propType = self::extractTypeFromPropertyDoc($propDoc, $paramName);
+                        if ($propType !== null) {
+                            $isVariadic = $refParams[$paramName] ?? false;
+                            if ($isVariadic) {
+                                $propType = new ArrayTypeNode($propType);
+                            }
+
+                            $types[$paramName] = SpecialTypeResolver::resolve($propType, $function);
+                        }
+                    }
+                }
+            }
         }
 
         return $types;
     }
 
     /**
+     * Extracts a TypeNode from a property's @var or @param docblock.
+     */
+    private static function extractTypeFromPropertyDoc(string $doc, string $propName): ?TypeNode
+    {
+        try {
+            $doc = DocblockNormalizer::normalize($doc);
+            [$phpDocParser, $lexer] = self::getParserComponents();
+
+            $tokens = new TokenIterator($lexer->tokenize($doc));
+            $phpDocNode = $phpDocParser->parse($tokens);
+
+            foreach ($phpDocNode->getVarTagValues() as $varTag) {
+                $tagVarName = ltrim($varTag->variableName, '$');
+                if ($tagVarName === '' || $tagVarName === $propName) {
+                    return $varTag->type;
+                }
+            }
+
+            foreach ($phpDocNode->getParamTagValues() as $paramTag) {
+                $tagParamName = ltrim($paramTag->parameterName, '$');
+                if ($tagParamName === '' || $tagParamName === $propName) {
+                    return $paramTag->type;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore malformed property docblocks
+        }
+
+        return null;
+    }
+
+    /**
      * Parses @return tags from a PHPDoc node and resolves the return type.
      */
-    private static function parseReturnType(PhpDocNode $phpDocNode, string $function): ?TypeNode
+    private static function parseReturnType(?PhpDocNode $phpDocNode, string $function): ?TypeNode
     {
+        if ($phpDocNode === null) {
+            return null;
+        }
+
         $returnTags = $phpDocNode->getReturnTagValues();
 
         if (count($returnTags) > 0) {

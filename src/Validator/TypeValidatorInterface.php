@@ -7,6 +7,9 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ErrorMessage;
 
+/**
+ * Strategy interface for validating values against specific PHPDoc AST TypeNodes.
+ */
 interface TypeValidatorInterface
 {
     /**

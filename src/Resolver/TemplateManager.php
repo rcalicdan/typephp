@@ -20,6 +20,7 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
  * Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
@@ -154,8 +155,7 @@ final class TemplateManager
      * 1. Resolves actual class name for self/static/$this keywords.
      * 2. Resolves inherited @extends and @implements template declarations.
      * 3. Reflects target class to extract declared @template tags and variance modifiers.
-     * 4. Validates existing bindings against expected generic types under variance rules.
-     * 5. Binds or updates expected generic types on the instance.
+     * 4. Binds expected generic types to the instance or enforces variance constraints.
      */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
@@ -228,6 +228,31 @@ final class TemplateManager
                             if (! $valid) {
                                 return ErrorFactory::createError(
                                     $context . " expects {$className}<{$variance} {$expectedTypeNode}>, but {$className}<{$existingTypeNode}> was given"
+                                );
+                            }
+                        } else {
+                            $refObj = new \ReflectionObject($instance);
+                            $matchedAny = false;
+                            $scannedProps = false;
+
+                            foreach ($refObj->getProperties() as $prop) {
+                                if ($prop->isInitialized($instance)) {
+                                    $scannedProps = true;
+                                    $inferredTypeNode = self::inferTypeFromValue($prop->getValue($instance));
+
+                                    if (self::checkVariance($inferredTypeNode, $expectedTypeNode, $variance)) {
+                                        $matchedAny = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if ($scannedProps && ! $matchedAny) {
+                                $initialProp = $refObj->getProperties()[0];
+                                $valueString = (string) self::inferTypeFromValue($initialProp->isInitialized($instance) ? $initialProp->getValue($instance) : null);
+
+                                return ErrorFactory::createError(
+                                    $context . " expects {$className}<{$variance} {$expectedTypeNode}>, but {$className}<{$valueString}> was given"
                                 );
                             }
                         }

@@ -26,16 +26,6 @@ final class ContractVisitor extends NodeVisitorAbstract
      */
     private array $scopeStack = [[]];
 
-    /**
-     * Traverses and transforms AST nodes during entry.
-     *
-     * Performs the following steps:
-     * 1. Tracks lexical scope frames for variables across functions, closures, and methods.
-     * 2. Injects runtime contract checks on function and method declarations.
-     * 3. Extracts @var annotations from expression statements.
-     * 4. Extracts @var annotations from foreach loop value variables.
-     * 5. Intercepts variable assignments to apply inline type validation wrappers with native throw expressions.
-     */
     public function enterNode(Node $node): ?int
     {
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
@@ -86,15 +76,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                         new Node\Name('\TypePHP\Internal\ErrorMessage')
                     ),
                     new Node\Expr\Throw_(
-                        new Node\Expr\New_(
-                            new Node\Name('\TypeError'),
+                        new Node\Expr\StaticCall(
+                            new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                            'prepareException',
                             [
                                 new Node\Arg(
-                                    new Node\Expr\MethodCall(
-                                        new Node\Expr\Variable('__typephpVal'),
-                                        'getMessage'
+                                    new Node\Expr\New_(
+                                        new Node\Name('\TypeError'),
+                                        [
+                                            new Node\Arg(
+                                                new Node\Expr\MethodCall(
+                                                    new Node\Expr\Variable('__typephpVal'),
+                                                    'getMessage'
+                                                )
+                                            ),
+                                        ]
                                     )
-                                ),
+                                )
                             ]
                         )
                     ),
@@ -106,9 +104,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
-    /**
-     * Pops the current lexical scope stack frame when leaving a function, method, or closure.
-     */
     public function leaveNode(Node $node): ?int
     {
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
@@ -118,11 +113,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
-    /**
-     * Parses @var docblock tags and records variable types into the current scope frame.
-     *
-     * Infers variable names from expressions or variable declarations if unnamed in the tag.
-     */
     private function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
     {
         try {
@@ -153,9 +143,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
     }
 
-    /**
-     * Resolves the recorded type of a variable by searching from the innermost scope frame outwards.
-     */
     private function getVarTypeFromScope(string $varName): ?string
     {
         for ($i = count($this->scopeStack) - 1; $i >= 0; $i--) {
@@ -167,9 +154,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
-    /**
-     * Determines if a function or class method body contains yield or yield from expressions.
-     */
     private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
     {
         if ($node->stmts === null) {
@@ -202,9 +186,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return $visitor->isGen;
     }
 
-    /**
-     * Prepends parameter contract checks and wraps return statements for function and method declarations.
-     */
     private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): void
     {
         if ($node->stmts === null) {
@@ -247,16 +228,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         $node->stmts = array_merge($injectedStmts, $node->stmts);
     }
 
-    /**
-     * Builds parameter validation and wrapper statements.
-     *
-     * Injects:
-     * - Single-level IF statement to initialize scope and evaluate parameter constraints without line drift.
-     * - Callable parameter wrappers for runtime callback checks.
-     * - Lazy iterable and generator parameter wrappers.
-     *
-     * @return array<Node\Stmt>
-     */
     private function buildParamInjections(
         Node\Stmt\Function_|Node\Stmt\ClassMethod $node,
         string $docText,
@@ -284,15 +255,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                 'stmts' => [
                     new Node\Stmt\Expression(
                         new Node\Expr\Throw_(
-                            new Node\Expr\New_(
-                                new Node\Name('\TypeError'),
+                            new Node\Expr\StaticCall(
+                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                'prepareException',
                                 [
                                     new Node\Arg(
-                                        new Node\Expr\MethodCall(
-                                            new Node\Expr\Variable('__typephpErr'),
-                                            'getMessage'
+                                        new Node\Expr\New_(
+                                            new Node\Name('\TypeError'),
+                                            [
+                                                new Node\Arg(
+                                                    new Node\Expr\MethodCall(
+                                                        new Node\Expr\Variable('__typephpErr'),
+                                                        'getMessage'
+                                                    )
+                                                ),
+                                            ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         )
@@ -346,13 +325,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return $injectedStmts;
     }
 
-    /**
-     * Wraps yield/yield from expressions lazily for generator functions.
-     *
-     * @param array<Node\Stmt> $stmts
-     *
-     * @return array<Node\Stmt>
-     */
     private function wrapGeneratorReturns(array $stmts): array
     {
         $traverser = new NodeTraverser();
@@ -370,7 +342,7 @@ final class ContractVisitor extends NodeVisitorAbstract
 
                     $n->setAttribute('typephp_wrapped', true);
 
-                    $n->value = new Node\Expr\FuncCall(
+                    $checkYieldCall = new Node\Expr\FuncCall(
                         new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkYield'),
                         [
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
@@ -379,12 +351,64 @@ final class ContractVisitor extends NodeVisitorAbstract
                         ]
                     );
 
-                    return new Node\Expr\FuncCall(
+                    $n->value = new Node\Expr\Ternary(
+                        new Node\Expr\Instanceof_(
+                            new Node\Expr\Assign(new Node\Expr\Variable('__typephpYld'), $checkYieldCall),
+                            new Node\Name('\TypePHP\Internal\ErrorMessage')
+                        ),
+                        new Node\Expr\Throw_(
+                            new Node\Expr\StaticCall(
+                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                'prepareException',
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\New_(
+                                            new Node\Name('\TypeError'),
+                                            [
+                                                new Node\Arg(
+                                                    new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
+                                                )
+                                            ]
+                                        )
+                                    )
+                                ]
+                            )
+                        ),
+                        new Node\Expr\Variable('__typephpYld')
+                    );
+
+                    $checkSendCall = new Node\Expr\FuncCall(
                         new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkSend'),
                         [
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
                             new Node\Arg($n),
                         ]
+                    );
+
+                    return new Node\Expr\Ternary(
+                        new Node\Expr\Instanceof_(
+                            new Node\Expr\Assign(new Node\Expr\Variable('__typephpSnd'), $checkSendCall),
+                            new Node\Name('\TypePHP\Internal\ErrorMessage')
+                        ),
+                        new Node\Expr\Throw_(
+                            new Node\Expr\StaticCall(
+                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                'prepareException',
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\New_(
+                                            new Node\Name('\TypeError'),
+                                            [
+                                                new Node\Arg(
+                                                    new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
+                                                )
+                                            ]
+                                        )
+                                    )
+                                ]
+                            )
+                        ),
+                        new Node\Expr\Variable('__typephpSnd')
                     );
                 }
 
@@ -415,13 +439,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         return $newStmts;
     }
 
-    /**
-     * Wraps return statements and injects trailing return checks for non-generator functions.
-     *
-     * @param array<Node\Stmt> $stmts
-     *
-     * @return array<Node\Stmt>
-     */
     private function wrapNonGeneratorReturns(array $stmts, Node\Expr $thisArg, bool $isNativeVoid): array
     {
         $traverser = new NodeTraverser();
@@ -465,15 +482,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                                     'stmts' => [
                                         new Node\Stmt\Expression(
                                             new Node\Expr\Throw_(
-                                                new Node\Expr\New_(
-                                                    new Node\Name('\TypeError'),
+                                                new Node\Expr\StaticCall(
+                                                    new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                                    'prepareException',
                                                     [
                                                         new Node\Arg(
-                                                            new Node\Expr\MethodCall(
-                                                                new Node\Expr\Variable('__typephpRet'),
-                                                                'getMessage'
+                                                            new Node\Expr\New_(
+                                                                new Node\Name('\TypeError'),
+                                                                [
+                                                                    new Node\Arg(
+                                                                        new Node\Expr\MethodCall(
+                                                                            new Node\Expr\Variable('__typephpRet'),
+                                                                            'getMessage'
+                                                                        )
+                                                                    ),
+                                                                ]
                                                             )
-                                                        ),
+                                                        )
                                                     ]
                                                 )
                                             )
@@ -494,15 +519,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                             new Node\Name('\TypePHP\Internal\ErrorMessage')
                         ),
                         new Node\Expr\Throw_(
-                            new Node\Expr\New_(
-                                new Node\Name('\TypeError'),
+                            new Node\Expr\StaticCall(
+                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                'prepareException',
                                 [
                                     new Node\Arg(
-                                        new Node\Expr\MethodCall(
-                                            new Node\Expr\Variable('__typephpRet'),
-                                            'getMessage'
+                                        new Node\Expr\New_(
+                                            new Node\Name('\TypeError'),
+                                            [
+                                                new Node\Arg(
+                                                    new Node\Expr\MethodCall(
+                                                        new Node\Expr\Variable('__typephpRet'),
+                                                        'getMessage'
+                                                    )
+                                                ),
+                                            ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -542,15 +575,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                         'stmts' => [
                             new Node\Stmt\Expression(
                                 new Node\Expr\Throw_(
-                                    new Node\Expr\New_(
-                                        new Node\Name('\TypeError'),
+                                    new Node\Expr\StaticCall(
+                                        new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                        'prepareException',
                                         [
                                             new Node\Arg(
-                                                new Node\Expr\MethodCall(
-                                                    new Node\Expr\Variable('__typephpRet'),
-                                                    'getMessage'
+                                                new Node\Expr\New_(
+                                                    new Node\Name('\TypeError'),
+                                                    [
+                                                        new Node\Arg(
+                                                            new Node\Expr\MethodCall(
+                                                                new Node\Expr\Variable('__typephpRet'),
+                                                                'getMessage'
+                                                            )
+                                                        ),
+                                                    ]
                                                 )
-                                            ),
+                                            )
                                         ]
                                     )
                                 )
@@ -570,15 +611,23 @@ final class ContractVisitor extends NodeVisitorAbstract
                             new Node\Name('\TypePHP\Internal\ErrorMessage')
                         ),
                         new Node\Expr\Throw_(
-                            new Node\Expr\New_(
-                                new Node\Name('\TypeError'),
+                            new Node\Expr\StaticCall(
+                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                'prepareException',
                                 [
                                     new Node\Arg(
-                                        new Node\Expr\MethodCall(
-                                            new Node\Expr\Variable('__typephpRet'),
-                                            'getMessage'
+                                        new Node\Expr\New_(
+                                            new Node\Name('\TypeError'),
+                                            [
+                                                new Node\Arg(
+                                                    new Node\Expr\MethodCall(
+                                                        new Node\Expr\Variable('__typephpRet'),
+                                                        'getMessage'
+                                                    )
+                                                ),
+                                            ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),

@@ -42,7 +42,7 @@ final class TypeValidatorRegistry
     }
 
     /**
-     * Validates a value against an AST TypeNode.
+     * Validates a value against an AST TypeNode and returns an ErrorMessage on failure or null on success.
      */
     public function validate(mixed $value, TypeNode $node, string $context): ?ErrorMessage
     {
