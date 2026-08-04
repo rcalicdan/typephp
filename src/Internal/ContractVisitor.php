@@ -189,17 +189,21 @@ final class ContractVisitor extends NodeVisitorAbstract
         $injectedStmts = [];
 
         if ($hasParam) {
+            // Flattened single-level IF statement for zero line drift
             $injectedStmts[] = new Node\Stmt\If_(
-                new Node\Expr\Assign(
-                    new Node\Expr\Variable('__typephpErr'),
-                    new Node\Expr\FuncCall(
-                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkParams'),
-                        [
-                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                            new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                            new Node\Arg($thisArg),
-                        ]
-                    )
+                new Node\Expr\Instanceof_(
+                    new Node\Expr\Assign(
+                        new Node\Expr\Variable('__typephpErr'),
+                        new Node\Expr\FuncCall(
+                            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::setupScope'),
+                            [
+                                new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                                new Node\Arg($thisArg),
+                            ]
+                        )
+                    ),
+                    new Node\Name('\TypeError')
                 ),
                 [
                     'stmts' => [
@@ -385,26 +389,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        // Combine the injected parameter checks with the actual modified body
-        $allStmts = array_merge($injectedStmts, $node->stmts);
-
-        // Wrap EVERYTHING in try { ... } finally { TemplateManager::popCallFrame() }
-        if (count($allStmts) > 0) {
-            $popCallFrameStmt = new Node\Stmt\Expression(
-                new Node\Expr\StaticCall(
-                    new Node\Name('\TypePHP\Resolver\TemplateManager'),
-                    'popCallFrame',
-                    [new Node\Arg(new Node\Scalar\MagicConst\Method())]
-                )
-            );
-
-            $tryFinallyStmt = new Node\Stmt\TryCatch(
-                $allStmts,
-                [],
-                new Node\Stmt\Finally_([$popCallFrameStmt])
-            );
-
-            $node->stmts = [$tryFinallyStmt];
-        }
+        // Prepend our injected headers natively without wrapping the user's code inside a block
+        $node->stmts = array_merge($injectedStmts, $node->stmts);
     }
 }

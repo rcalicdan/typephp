@@ -24,8 +24,8 @@ return [
         'generics'  => true,  // Prebinds Generic instances (e.g. Collection<Dog>)
         'callables' => true,  // Wraps inline callables (e.g. callable(int): string)
         'scalars'   => true, // Enforces scalar constraints (e.g. positive-int)
-        'shapes'    => false, // Enforces array shapes (e.g. array{id: int})
-        'objects'   => false, // Enforces class instances (e.g. /** @var User $user */)
+        'shapes'    => true, // Enforces array shapes (e.g. array{id: int})
+        'objects'   => true, // Enforces class instances (e.g. /** @var User $user */)
     ],
 
     /*

@@ -148,6 +148,24 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Initializes generic call frames and returns a ScopeCleaner that pops the frame on destruction
+     */
+    public static function setupScope(string $function, array $vars, ?object $thisObj = null): \TypeError|ScopeCleaner|null
+    {
+        $err = self::checkParams($function, $vars, $thisObj);
+        
+        if ($err !== null) {
+            // CheckParams pushed the frame before evaluating, so we must pop it immediately on failure
+            if ($thisObj === null) {
+                TemplateManager::popCallFrame($function);
+            }
+            return $err;
+        }
+
+        return $thisObj === null ? new ScopeCleaner($function) : null;
+    }
+
+    /**
      * @param array<string, mixed> $vars
      */
     public static function checkParams(string $function, array $vars, ?object $thisObj = null): ?\TypeError

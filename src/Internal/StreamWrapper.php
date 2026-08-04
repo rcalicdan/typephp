@@ -287,8 +287,9 @@ final class StreamWrapper implements StreamWrapperInterface
         $printer = new Standard();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
+        // Squashes the flattened single-level `if (...) instanceof \TypeError` statement onto a single line to preserve line numbers perfectly.
         $result = preg_replace_callback(
-            '/if\s*\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::checkParams\(.*?\)\)\s*\{[^}]*\}\r?\n?\s*/s',
+            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypeError\)\s*\{[^}]*\}\r?\n?\s*/s',
             function (array $match): string {
                 return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
             },
