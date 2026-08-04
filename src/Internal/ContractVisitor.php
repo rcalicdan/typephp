@@ -15,7 +15,7 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 
 /**
- * AST Node Visitor that injects contract checks, scope tracking, and parameter/return wrappers into functions and methods.
+ * AST Node Visitor that injects contract checks, scope tracking, property hook validation, and parameter/return wrappers into functions and methods.
  */
 final class ContractVisitor extends NodeVisitorAbstract
 {
@@ -32,10 +32,11 @@ final class ContractVisitor extends NodeVisitorAbstract
      * Performs the following steps:
      * 1. Tracks lexical scope frames for variables across functions, closures, and methods.
      * 2. Injects runtime contract checks on function and method declarations.
-     * 3. Extracts @var annotations from expression statements.
-     * 4. Extracts @var annotations from foreach loop value variables.
-     * 5. Intercepts variable assignments to apply inline type validation wrappers with native throw expressions.
-     * 6. Intercepts property and static property assignments to apply validation wrappers.
+     * 3. Intercepts PHP 8.4 Property Hooks (get and set) to validate property reads and writes.
+     * 4. Extracts @var annotations from expression statements.
+     * 5. Extracts @var annotations from foreach loop value variables.
+     * 6. Intercepts variable assignments to apply inline type validation wrappers with native throw expressions.
+     * 7. Intercepts property and static property assignments to apply validation wrappers.
      */
     public function enterNode(Node $node): ?int
     {
@@ -45,6 +46,12 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
             $this->injectFunctionContract($node);
+
+            return null;
+        }
+
+        if ($node instanceof Node\Stmt\Property) {
+            $this->processPropertyHooks($node);
 
             return null;
         }
@@ -85,15 +92,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $propName = $node->var->name->toString();
                 $objExpr = $node->var->var;
 
-                $checkCall = new Node\Expr\FuncCall(
-                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkProperty'),
-                    [
-                        new Node\Arg($node->expr),
-                        new Node\Arg($objExpr),
-                        new Node\Arg(new Node\Scalar\String_($propName)),
-                        new Node\Arg(new Node\Scalar\MagicConst\File()),
-                    ]
-                );
+                $checkCall = $this->createPropertyCheckCall($node->expr, $objExpr, $propName);
 
                 $this->wrapAssignWithThrow($node, $checkCall);
             } elseif ($node->var instanceof Node\Expr\StaticPropertyFetch && $node->var->name instanceof Node\VarLikeIdentifier) {
@@ -104,51 +103,13 @@ final class ContractVisitor extends NodeVisitorAbstract
                     ? new Node\Expr\ClassConstFetch($classExpr, 'class')
                     : $classExpr;
 
-                $checkCall = new Node\Expr\FuncCall(
-                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkProperty'),
-                    [
-                        new Node\Arg($node->expr),
-                        new Node\Arg($classArg),
-                        new Node\Arg(new Node\Scalar\String_($propName)),
-                        new Node\Arg(new Node\Scalar\MagicConst\File()),
-                    ]
-                );
+                $checkCall = $this->createPropertyCheckCall($node->expr, $classArg, $propName);
 
                 $this->wrapAssignWithThrow($node, $checkCall);
             }
         }
 
         return null;
-    }
-
-    /**
-     * Applies the ternary throw expression wrapper around an assignment.
-     */
-    private function wrapAssignWithThrow(Node\Expr\Assign $node, Node\Expr\FuncCall $checkCall): void
-    {
-        $node->expr = new Node\Expr\Ternary(
-            new Node\Expr\Instanceof_(
-                new Node\Expr\Assign(
-                    new Node\Expr\Variable('__typephpVal'),
-                    $checkCall
-                ),
-                new Node\Name('\TypePHP\Internal\ErrorMessage')
-            ),
-            new Node\Expr\Throw_(
-                new Node\Expr\New_(
-                    new Node\Name('\TypeError'),
-                    [
-                        new Node\Arg(
-                            new Node\Expr\MethodCall(
-                                new Node\Expr\Variable('__typephpVal'),
-                                'getMessage'
-                            )
-                        ),
-                    ]
-                )
-            ),
-            new Node\Expr\Variable('__typephpVal')
-        );
     }
 
     /**
@@ -161,6 +122,152 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         return null;
+    }
+
+    /**
+     * Creates a FunctionCall node for RuntimeTypeChecker::checkProperty().
+     */
+    public function createPropertyCheckCall(Node\Expr $valueExpr, Node\Expr $objectOrClassExpr, string $propertyName): Node\Expr\FuncCall
+    {
+        return new Node\Expr\FuncCall(
+            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkProperty'),
+            [
+                new Node\Arg($valueExpr),
+                new Node\Arg($objectOrClassExpr),
+                new Node\Arg(new Node\Scalar\String_($propertyName)),
+                new Node\Arg(new Node\Scalar\MagicConst\File()),
+            ]
+        );
+    }
+
+    /**
+     * Creates a ternary throw expression wrapping an ErrorMessage result.
+     */
+    public function createTernaryThrowExpr(Node\Expr\FuncCall $checkCall): Node\Expr\Ternary
+    {
+        return new Node\Expr\Ternary(
+            new Node\Expr\Instanceof_(
+                new Node\Expr\Assign(
+                    new Node\Expr\Variable('__typephpVal'),
+                    $checkCall
+                ),
+                new Node\Name('\TypePHP\Internal\ErrorMessage')
+            ),
+            new Node\Expr\Throw_(
+                new Node\Expr\StaticCall(
+                    new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                    'prepareException',
+                    [
+                        new Node\Arg(
+                            new Node\Expr\New_(
+                                new Node\Name('\TypeError'),
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\MethodCall(
+                                            new Node\Expr\Variable('__typephpVal'),
+                                            'getMessage'
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                    ]
+                )
+            ),
+            new Node\Expr\Variable('__typephpVal')
+        );
+    }
+
+    /**
+     * Applies the ternary throw expression wrapper around an assignment.
+     */
+    private function wrapAssignWithThrow(Node\Expr\Assign $node, Node\Expr\FuncCall $checkCall): void
+    {
+        $node->expr = $this->createTernaryThrowExpr($checkCall);
+    }
+
+    /**
+     * Injects property contract validation into PHP 8.4 get and set property hooks.
+     */
+    private function processPropertyHooks(Node\Stmt\Property $node): void
+    {
+        if (empty($node->hooks)) {
+            return;
+        }
+
+        $propertyName = $node->props[0]->name->toString();
+
+        foreach ($node->hooks as $hook) {
+            $hookName = strtolower($hook->name->toString());
+
+            if ($hookName === 'get') {
+                if ($hook->body instanceof Node\Expr) {
+                    $checkCall = $this->createPropertyCheckCall($hook->body, new Node\Expr\Variable('this'), $propertyName);
+                    $hook->body = $this->createTernaryThrowExpr($checkCall);
+                } elseif (is_array($hook->body)) {
+                    $hook->body = $this->wrapHookReturnStatements($hook->body, $propertyName);
+                }
+            } elseif ($hookName === 'set') {
+                $paramName = ! empty($hook->params) && $hook->params[0]->var instanceof Node\Expr\Variable && is_string($hook->params[0]->var->name)
+                    ? $hook->params[0]->var->name
+                    : 'value';
+
+                $checkCall = $this->createPropertyCheckCall(new Node\Expr\Variable($paramName), new Node\Expr\Variable('this'), $propertyName);
+                $paramCheckStmt = new Node\Stmt\Expression(
+                    new Node\Expr\Assign(
+                        new Node\Expr\Variable($paramName),
+                        $this->createTernaryThrowExpr($checkCall)
+                    )
+                );
+
+                if (is_array($hook->body)) {
+                    array_unshift($hook->body, $paramCheckStmt);
+                } elseif ($hook->body instanceof Node\Expr) {
+                    $hook->body = [
+                        $paramCheckStmt,
+                        new Node\Stmt\Expression($hook->body),
+                    ];
+                }
+            }
+        }
+    }
+
+    /**
+     * Wraps return statements inside a get property hook body.
+     *
+     * @param array<Node\Stmt> $stmts
+     *
+     * @return array<Node\Stmt>
+     */
+    private function wrapHookReturnStatements(array $stmts, string $propertyName): array
+    {
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor(new class ($propertyName, $this) extends NodeVisitorAbstract {
+            public function __construct(
+                private string $propertyName,
+                private ContractVisitor $visitor
+            ) {
+            }
+
+            public function enterNode(Node $n): ?Node
+            {
+                if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                    return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+                }
+
+                if ($n instanceof Node\Stmt\Return_ && $n->expr !== null) {
+                    $checkCall = $this->visitor->createPropertyCheckCall($n->expr, new Node\Expr\Variable('this'), $this->propertyName);
+                    $n->expr = $this->visitor->createTernaryThrowExpr($checkCall);
+                }
+
+                return null;
+            }
+        });
+
+        /** @var array<Node\Stmt> $newStmts */
+        $newStmts = $traverser->traverse($stmts);
+
+        return $newStmts;
     }
 
     /**
@@ -294,6 +401,11 @@ final class ContractVisitor extends NodeVisitorAbstract
 
     /**
      * Builds parameter validation and wrapper statements.
+     *
+     * Injects:
+     * - Single-level IF statement to initialize scope and evaluate parameter constraints without line drift.
+     * - Callable parameter wrappers for runtime callback checks.
+     * - Lazy iterable and generator parameter wrappers.
      *
      * @return array<Node\Stmt>
      */

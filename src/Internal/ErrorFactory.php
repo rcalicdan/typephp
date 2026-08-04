@@ -30,12 +30,12 @@ final class ErrorFactory
         $message = $e->getMessage();
         $isParamError = ! str_contains($message, 'Return value')
             && ! str_contains($message, 'Variable $')
+            && ! str_contains($message, 'Property ')
             && ! str_contains($message, 'Return iterator')
             && ! str_contains($message, 'Generator sent value');
 
         if ($isParamError) {
             $trace = $e->getTrace();
-            // $trace[0] represents the caller frame that invoked the function containing the throw
             $callerFrame = $trace[0] ?? [];
 
             if (isset($callerFrame['file'], $callerFrame['line'])) {

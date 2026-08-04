@@ -7,11 +7,14 @@ class Test
     /**
      * @var int[]
      */
-    public array $numbers;
+    public array $numbers {
+        get => ['hello', 1];
+    }
 
     public function run()
     {
-        $this->numbers = [1, 2, 3, 4, 5, 'hello'];
+        $numbers = $this->numbers;
+        var_dump($numbers);
     }
 }
 

@@ -14,6 +14,7 @@ use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\ObjectShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
@@ -311,7 +312,7 @@ final class RuntimeTypeChecker
                 $registry = self::getRegistry();
                 $err = $registry->validate($sendValue, $sendTypeNode, "$function(): Generator sent value (TSend)");
                 if ($err !== null) {
-                    return $err;
+                    throw new \TypeError($err->getMessage());
                 }
             }
         }
@@ -350,14 +351,14 @@ final class RuntimeTypeChecker
         if ($key !== null && $keyTypeNode !== null) {
             $err = $registry->validate($key, $keyTypeNode, "$function(): Return iterator key");
             if ($err !== null) {
-                return $err;
+                throw new \TypeError($err->getMessage());
             }
         }
 
         if ($itemTypeNode !== null) {
             $err = $registry->validate($value, $itemTypeNode, "$function(): Return iterator value");
             if ($err !== null) {
-                return $err;
+                throw new \TypeError($err->getMessage());
             }
         }
 
@@ -429,7 +430,7 @@ final class RuntimeTypeChecker
             return (bool) ($config['callables'] ?? true);
         }
 
-        if ($node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) {
+        if ($node instanceof ObjectShapeNode || $node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) {
             return (bool) ($config['shapes'] ?? false);
         }
 
