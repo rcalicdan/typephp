@@ -42,14 +42,6 @@ final class TemplateManager
     private static array $callStackBindings = [];
 
     /**
-     * Checks whether a function has at least one active call frame on the stack.
-     */
-    private static function hasCallFrame(string $function): bool
-    {
-        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
-    }
-
-    /**
      * Pushes a new empty call frame onto the stack for a function execution.
      */
     public static function pushCallFrame(string $function): void
@@ -163,7 +155,8 @@ final class TemplateManager
      * 1. Resolves actual class name for self/static/$this keywords.
      * 2. Resolves inherited @extends and @implements template declarations.
      * 3. Reflects target class to extract declared @template tags and variance modifiers.
-     * 4. Binds expected generic types to the instance or enforces variance constraints.
+     * 4. Validates existing bindings against expected generic types under variance rules.
+     * 5. Binds or updates expected generic types on the instance.
      */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
@@ -226,14 +219,10 @@ final class TemplateManager
                             : $declaredVariance;
 
                         $templateName = $templateTag->name;
+                        $existingBindings = self::$instanceTemplateBindings[$instance] ?? [];
 
-                        if ($forceBind) {
-                            $bindings = self::$instanceTemplateBindings[$instance] ?? [];
-                            $bindings[$templateName] = $expectedTypeNode;
-                            self::$instanceTemplateBindings[$instance] = $bindings;
-                        } else {
-                            $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName]
-                                ?? new IdentifierTypeNode('mixed');
+                        if (isset($existingBindings[$templateName])) {
+                            $existingTypeNode = $existingBindings[$templateName];
 
                             $valid = self::checkVariance($existingTypeNode, $expectedTypeNode, $variance);
 
@@ -242,6 +231,12 @@ final class TemplateManager
                                     $context . " expects {$className}<{$variance} {$expectedTypeNode}>, but {$className}<{$existingTypeNode}> was given"
                                 );
                             }
+                        }
+
+                        if ($forceBind || ! isset($existingBindings[$templateName])) {
+                            $bindings = self::$instanceTemplateBindings[$instance] ?? [];
+                            $bindings[$templateName] = $expectedTypeNode;
+                            self::$instanceTemplateBindings[$instance] = $bindings;
                         }
                     }
                 }
@@ -523,6 +518,14 @@ final class TemplateManager
         }
 
         return new IdentifierTypeNode('mixed');
+    }
+
+    /**
+     * Checks whether a function has at least one active call frame on the stack.
+     */
+    private static function hasCallFrame(string $function): bool
+    {
+        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
     }
 
     /**
