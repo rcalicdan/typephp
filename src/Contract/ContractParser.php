@@ -16,6 +16,7 @@ use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\Config;
 use TypePHP\Internal\DocblockNormalizer;
 use TypePHP\Resolver\SpecialTypeResolver;
 
@@ -39,7 +40,7 @@ final class ContractParser
     private static array $propertyCache = [];
 
     /**
-     * Parses PHPDoc contracts for a given function or method name.
+     * Parses PHPDoc contracts for a given function or method name by recursively merging inheritance gaps.
      *
      * @return array{types: array<string, TypeNode>, templates: array<string, TemplateTagValueNode>, return: ?TypeNode, aliases: array<string, TypeNode>}
      */
@@ -49,67 +50,178 @@ final class ContractParser
             return self::$cache[$function];
         }
 
-        [$ref, $doc, $classDoc] = self::reflectAndFetchDocs($function);
-        $hasMethodParams = $ref instanceof \ReflectionMethod && $ref->getNumberOfParameters() > 0;
-
-        if ($doc === null && $classDoc === null && ! $hasMethodParams) {
-            return self::$cache[$function] = [
-                'types' => [],
-                'templates' => [],
-                'return' => null,
-                'aliases' => [],
-            ];
-        }
+        $isMethod = str_contains($function, '::');
 
         try {
-            [$phpDocParser, $lexer] = self::getParserComponents();
+            if ($isMethod) {
+                [$className, $methodName] = explode('::', $function, 2);
+                $ref = new \ReflectionMethod($className, $methodName);
+            } else {
+                $ref = new \ReflectionFunction($function);
+            }
+        } catch (\ReflectionException $e) {
+            return self::$cache[$function] = ['types' => [], 'templates' => [], 'return' => null, 'aliases' => []];
+        }
 
-            $templates = [];
-            $aliases = [];
+        $types = [];
+        $templates = [];
+        $returnType = null;
+        $aliases = [];
 
-            if ($classDoc !== null) {
-                $classTokens = new TokenIterator($lexer->tokenize($classDoc));
-                $classPhpDocNode = $phpDocParser->parse($classTokens);
+        [$phpDocParser, $lexer] = self::getParserComponents();
 
-                foreach (self::extractTemplates($classPhpDocNode) as $templateTag) {
-                    $templates[$templateTag->name] = $templateTag;
+        // 1. Resolve Class-Level Docs (Templates & Aliases) merging up the inheritance chain
+        if ($isMethod) {
+            $classHierarchy = self::getClassHierarchy($ref->getDeclaringClass());
+            foreach ($classHierarchy as $hierClass) {
+                if (self::isFileExcluded($hierClass->getFileName())) {
+                    continue;
                 }
 
-                self::extractAliases($classPhpDocNode, $aliases, $ref);
+                $classDoc = $hierClass->getDocComment();
+                if ($classDoc !== false) {
+                    $classDoc = DocblockNormalizer::normalize($classDoc);
+                    $classTokens = new TokenIterator($lexer->tokenize($classDoc));
+                    $classPhpDocNode = $phpDocParser->parse($classTokens);
+
+                    foreach (self::extractTemplates($classPhpDocNode) as $name => $tag) {
+                        if (! isset($templates[$name])) {
+                            $templates[$name] = $tag;
+                        }
+                    }
+                    self::extractAliases($classPhpDocNode, $aliases, $hierClass);
+                }
+            }
+        }
+
+        // 2. Resolve Method/Function Docs merging up the inheritance chain (Resolves Liskov Substitution Gaps)
+        $baseParams = $ref->getParameters();
+        $baseParamNames = [];
+        $baseParamVariadic = [];
+        foreach ($baseParams as $idx => $p) {
+            $baseParamNames[$idx] = $p->getName();
+            $baseParamVariadic[$p->getName()] = $p->isVariadic();
+        }
+
+        if ($isMethod) {
+            $hierarchy = self::getMethodHierarchy($ref);
+
+            foreach ($hierarchy as $hierRef) {
+                $isOriginal = ($hierRef === $ref);
+                
+                // Prevent vendor docblock bleed for inherited methods!
+                if (! $isOriginal && self::isFileExcluded($hierRef->getFileName())) {
+                    continue;
+                }
+
+                $doc = $hierRef->getDocComment();
+                if ($doc !== false) {
+                    $doc = DocblockNormalizer::normalize($doc);
+                    $tokens = new TokenIterator($lexer->tokenize($doc));
+                    $phpDocNode = $phpDocParser->parse($tokens);
+
+                    foreach (self::extractTemplates($phpDocNode) as $name => $tag) {
+                        if (! isset($templates[$name])) {
+                            $templates[$name] = $tag;
+                        }
+                    }
+                    self::extractAliases($phpDocNode, $aliases, $hierRef);
+
+                    // Map inherited parameters by INDEX to survive parameter renaming in child classes
+                    $hierParams = $hierRef->getParameters();
+                    $hierNameToIndex = [];
+                    foreach ($hierParams as $idx => $p) {
+                        $hierNameToIndex[$p->getName()] = $idx;
+                    }
+
+                    foreach ($phpDocNode->getParamTagValues() as $paramTag) {
+                        $paramName = ltrim($paramTag->parameterName, '$');
+                        $paramIndex = $hierNameToIndex[$paramName] ?? null;
+
+                        if ($paramIndex !== null && isset($baseParamNames[$paramIndex])) {
+                            $baseParamName = $baseParamNames[$paramIndex];
+                            
+                            // Fill the gap ONLY if the child hasn't already defined a type for this parameter
+                            if (! isset($types[$baseParamName])) {
+                                $type = $paramTag->type;
+                                $isVariadic = $paramTag->isVariadic || $baseParamVariadic[$baseParamName];
+                                if ($isVariadic) {
+                                    $type = new ArrayTypeNode($type);
+                                }
+                                $types[$baseParamName] = SpecialTypeResolver::resolve($type, $hierRef);
+                            }
+                        }
+                    }
+
+                    // Fill return type gap if child omitted it
+                    if ($returnType === null) {
+                        $returnTags = $phpDocNode->getReturnTagValues();
+                        if (count($returnTags) > 0) {
+                            $returnType = SpecialTypeResolver::resolve($returnTags[0]->type, $hierRef);
+                        }
+                    }
+                }
             }
 
-            $types = [];
-            $returnType = null;
+            // Fallback to Constructor Property Promotion (@var)
+            if ($ref->getName() === '__construct') {
+                $declaringClass = $ref->getDeclaringClass();
+                foreach ($baseParams as $p) {
+                    $paramName = $p->getName();
+                    if (! isset($types[$paramName]) && $declaringClass->hasProperty($paramName)) {
+                        $propertyRef = $declaringClass->getProperty($paramName);
+                        $propDoc = $propertyRef->getDocComment();
+                        
+                        if ($propDoc !== false) {
+                            $propType = self::extractTypeFromPropertyDoc($propDoc, $paramName);
+                            if ($propType !== null) {
+                                $isVariadic = $baseParamVariadic[$paramName] ?? false;
+                                if ($isVariadic) {
+                                    $propType = new ArrayTypeNode($propType);
+                                }
+                                $types[$paramName] = SpecialTypeResolver::resolve($propType, $ref);
+                            }
+                        }
+                    }
+                }
+            }
 
-            if ($doc !== null) {
+        } else {
+            // Normal Function Parsing (No inheritance possible)
+            $doc = $ref->getDocComment();
+            if ($doc !== false) {
+                $doc = DocblockNormalizer::normalize($doc);
                 $tokens = new TokenIterator($lexer->tokenize($doc));
                 $phpDocNode = $phpDocParser->parse($tokens);
 
-                foreach (self::extractTemplates($phpDocNode) as $templateTag) {
-                    $templates[$templateTag->name] = $templateTag;
+                foreach (self::extractTemplates($phpDocNode) as $name => $tag) {
+                    $templates[$name] = $tag;
+                }
+                self::extractAliases($phpDocNode, $aliases, $ref);
+
+                foreach ($phpDocNode->getParamTagValues() as $paramTag) {
+                    $paramName = ltrim($paramTag->parameterName, '$');
+                    $type = $paramTag->type;
+                    $isVariadic = $paramTag->isVariadic || ($baseParamVariadic[$paramName] ?? false);
+                    if ($isVariadic) {
+                        $type = new ArrayTypeNode($type);
+                    }
+                    $types[$paramName] = SpecialTypeResolver::resolve($type, $ref);
                 }
 
-                self::extractAliases($phpDocNode, $aliases, $ref);
-                $types = self::parseParameters($phpDocNode, $ref, $function);
-                $returnType = self::parseReturnType($phpDocNode, $function);
-            } else {
-                $types = self::parseParameters(null, $ref, $function);
+                $returnTags = $phpDocNode->getReturnTagValues();
+                if (count($returnTags) > 0) {
+                    $returnType = SpecialTypeResolver::resolve($returnTags[0]->type, $ref);
+                }
             }
-
-            return self::$cache[$function] = [
-                'types' => $types,
-                'templates' => $templates,
-                'return' => $returnType,
-                'aliases' => $aliases,
-            ];
-        } catch (\Throwable $e) {
-            return self::$cache[$function] = [
-                'types' => [],
-                'templates' => [],
-                'return' => null,
-                'aliases' => [],
-            ];
         }
+
+        return self::$cache[$function] = [
+            'types' => $types,
+            'templates' => $templates,
+            'return' => $returnType,
+            'aliases' => $aliases,
+        ];
     }
 
     /**
@@ -134,7 +246,6 @@ final class ContractParser
             while ($current !== false) {
                 if ($current->hasProperty($propertyName)) {
                     $declaringClass = $current;
-
                     break;
                 }
                 $current = $current->getParentClass();
@@ -180,28 +291,108 @@ final class ContractParser
     }
 
     /**
-     * Resolves Reflection object and doccomments for a function or class method.
+     * Builds an array of ReflectionMethods representing the inheritance hierarchy from child to root.
      *
-     * @return array{\ReflectionFunction|\ReflectionMethod, ?string, ?string}
+     * @return array<int, \ReflectionMethod>
      */
-    private static function reflectAndFetchDocs(string $function): array
+    private static function getMethodHierarchy(\ReflectionMethod $ref): array
     {
-        $classDoc = null;
+        $hierarchy = [$ref];
+        $methodName = $ref->getName();
+        $declaringClass = $ref->getDeclaringClass();
 
-        if (str_contains($function, '::')) {
-            [$className, $methodName] = explode('::', $function, 2);
-            $ref = new \ReflectionMethod($className, $methodName);
-            $fetchedClassDoc = $ref->getDeclaringClass()->getDocComment();
-            $classDoc = $fetchedClassDoc !== false ? DocblockNormalizer::normalize($fetchedClassDoc) : null;
-            $fetchedDoc = self::findEffectiveDocBlock($ref);
-            $doc = $fetchedDoc !== null ? DocblockNormalizer::normalize($fetchedDoc) : null;
-        } else {
-            $ref = new \ReflectionFunction($function);
-            $fetchedDoc = $ref->getDocComment();
-            $doc = $fetchedDoc !== false ? DocblockNormalizer::normalize($fetchedDoc) : null;
+        $parent = $declaringClass->getParentClass();
+        while ($parent !== false) {
+            if ($parent->hasMethod($methodName)) {
+                $hierarchy[] = $parent->getMethod($methodName);
+            }
+            $parent = $parent->getParentClass();
         }
 
-        return [$ref, $doc, $classDoc];
+        foreach ($declaringClass->getInterfaces() as $interface) {
+            if ($interface->hasMethod($methodName)) {
+                $hierarchy[] = $interface->getMethod($methodName);
+            }
+        }
+
+        foreach ($declaringClass->getTraits() as $trait) {
+            if ($trait->hasMethod($methodName)) {
+                $hierarchy[] = $trait->getMethod($methodName);
+            }
+        }
+
+        return $hierarchy;
+    }
+
+    /**
+     * Builds an array of ReflectionClasses representing the inheritance hierarchy from child to root.
+     *
+     * @return array<int, \ReflectionClass>
+     */
+    private static function getClassHierarchy(\ReflectionClass $ref): array
+    {
+        $hierarchy = [$ref];
+        
+        $parent = $ref->getParentClass();
+        while ($parent !== false) {
+            $hierarchy[] = $parent;
+            $parent = $parent->getParentClass();
+        }
+
+        foreach ($ref->getInterfaces() as $interface) {
+            $hierarchy[] = $interface;
+        }
+
+        foreach ($ref->getTraits() as $trait) {
+            $hierarchy[] = $trait;
+        }
+
+        return $hierarchy;
+    }
+
+    /**
+     * Prevents vendor bleed by checking if the inherited class/interface file matches Exclude config.
+     */
+    private static function isFileExcluded(?string $fileName): bool
+    {
+        if ($fileName === null || $fileName === false || $fileName === '') {
+            return false;
+        }
+
+        $normalizedPath = str_replace('\\', '/', $fileName);
+        
+        // Fast hardcoded vendor check to protect against bleed even if config is missing
+        if (str_contains($normalizedPath, '/vendor/')) {
+            return true;
+        }
+
+        $config = Config::get();
+        $excludes = is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+        
+        $cwd = getcwd();
+        $baseDir = $cwd !== false ? rtrim(str_replace('\\', '/', $cwd), '/') : '';
+
+        foreach ($excludes as $pattern) {
+            $glob = str_replace('\\', '/', trim($pattern));
+            $isAbsolute = str_starts_with($glob, '/') || preg_match('#^[a-zA-Z]:/#', $glob);
+
+            $regex = preg_quote($glob, '#');
+            $regex = str_replace(['\*\*', '\*'], ['.*', '[^/]*'], $regex);
+
+            if ($isAbsolute) {
+                $regexPattern = '^' . $regex . '$';
+            } elseif (str_starts_with($glob, '**')) {
+                $regexPattern = '.*' . substr($regex, 4) . '$';
+            } else {
+                $regexPattern = '^' . preg_quote($baseDir . '/', '#') . $regex . '$';
+            }
+
+            if (preg_match('#' . $regexPattern . '#i', $normalizedPath) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -245,66 +436,6 @@ final class ContractParser
     }
 
     /**
-     * Parses @param tags from a PHPDoc node and resolves parameter types.
-     * Falls back to property @var docblocks for matching un-annotated method parameters.
-     *
-     * @return array<string, TypeNode>
-     */
-    private static function parseParameters(
-        ?PhpDocNode $phpDocNode,
-        \ReflectionFunction|\ReflectionMethod $ref,
-        string $function
-    ): array {
-        $types = [];
-        $refParams = [];
-
-        foreach ($ref->getParameters() as $p) {
-            $refParams[$p->getName()] = $p->isVariadic();
-        }
-
-        if ($phpDocNode !== null) {
-            foreach ($phpDocNode->getParamTagValues() as $paramTag) {
-                $paramName = ltrim($paramTag->parameterName, '$');
-                $type = $paramTag->type;
-
-                $isVariadic = $paramTag->isVariadic || ($refParams[$paramName] ?? false);
-                if ($isVariadic) {
-                    $type = new ArrayTypeNode($type);
-                }
-
-                $types[$paramName] = SpecialTypeResolver::resolve($type, $function);
-            }
-        }
-
-        if ($ref instanceof \ReflectionMethod) {
-            $declaringClass = $ref->getDeclaringClass();
-
-            foreach ($ref->getParameters() as $p) {
-                $paramName = $p->getName();
-
-                if (! isset($types[$paramName]) && $declaringClass->hasProperty($paramName)) {
-                    $propertyRef = $declaringClass->getProperty($paramName);
-                    $propDoc = $propertyRef->getDocComment();
-
-                    if ($propDoc !== false) {
-                        $propType = self::extractTypeFromPropertyDoc($propDoc, $paramName);
-                        if ($propType !== null) {
-                            $isVariadic = $refParams[$paramName] ?? false;
-                            if ($isVariadic) {
-                                $propType = new ArrayTypeNode($propType);
-                            }
-
-                            $types[$paramName] = SpecialTypeResolver::resolve($propType, $function);
-                        }
-                    }
-                }
-            }
-        }
-
-        return $types;
-    }
-
-    /**
      * Extracts a TypeNode from a property's @var or @param docblock.
      */
     private static function extractTypeFromPropertyDoc(string $doc, string $propName): ?TypeNode
@@ -331,24 +462,6 @@ final class ContractParser
             }
         } catch (\Throwable $e) {
             // Silently ignore malformed property docblocks
-        }
-
-        return null;
-    }
-
-    /**
-     * Parses @return tags from a PHPDoc node and resolves the return type.
-     */
-    private static function parseReturnType(?PhpDocNode $phpDocNode, string $function): ?TypeNode
-    {
-        if ($phpDocNode === null) {
-            return null;
-        }
-
-        $returnTags = $phpDocNode->getReturnTagValues();
-
-        if (count($returnTags) > 0) {
-            return SpecialTypeResolver::resolve($returnTags[0]->type, $function);
         }
 
         return null;
@@ -415,58 +528,6 @@ final class ContractParser
             }
         } catch (\Throwable $e) {
             // Silently ignore unresolvable types
-        }
-
-        return null;
-    }
-
-    /**
-     * Resolves effective PHPDoc for a method by searching across:
-     * 1. Declaring class method
-     * 2. Parent class hierarchy (Liskov Substitution Principle)
-     * 3. Implemented interfaces
-     * 4. Used traits
-     */
-    private static function findEffectiveDocBlock(\ReflectionMethod $ref): ?string
-    {
-        $doc = $ref->getDocComment();
-        if ($doc !== false) {
-            return $doc;
-        }
-
-        $methodName = $ref->getName();
-        $declaringClass = $ref->getDeclaringClass();
-
-        $parent = $declaringClass->getParentClass();
-        while ($parent !== false) {
-            if ($parent->hasMethod($methodName)) {
-                $parentMethod = $parent->getMethod($methodName);
-                $parentDoc = $parentMethod->getDocComment();
-                if ($parentDoc !== false) {
-                    return $parentDoc;
-                }
-            }
-            $parent = $parent->getParentClass();
-        }
-
-        foreach ($declaringClass->getInterfaces() as $interface) {
-            if ($interface->hasMethod($methodName)) {
-                $interfaceMethod = $interface->getMethod($methodName);
-                $interfaceDoc = $interfaceMethod->getDocComment();
-                if ($interfaceDoc !== false) {
-                    return $interfaceDoc;
-                }
-            }
-        }
-
-        foreach ($declaringClass->getTraits() as $trait) {
-            if ($trait->hasMethod($methodName)) {
-                $traitMethod = $trait->getMethod($methodName);
-                $traitDoc = $traitMethod->getDocComment();
-                if ($traitDoc !== false) {
-                    return $traitDoc;
-                }
-            }
         }
 
         return null;
