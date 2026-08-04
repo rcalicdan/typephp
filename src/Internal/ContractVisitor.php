@@ -294,8 +294,9 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        // Wrap function body statements in try { ... } finally { TemplateManager::popCallFrame() }
-        if (count($node->stmts) > 0) {
+        $allStmts = [...$injectedStmts, ...$node->stmts];
+
+        if (\count($allStmts) > 0) {
             $popCallFrameStmt = new Node\Stmt\Expression(
                 new Node\Expr\StaticCall(
                     new Node\Name('\TypePHP\Resolver\TemplateManager'),
@@ -304,28 +305,13 @@ final class ContractVisitor extends NodeVisitorAbstract
                 )
             );
 
-            $bodyStmts = [];
-            $injectedHeaderStmts = [];
+            $tryFinallyStmt = new Node\Stmt\TryCatch(
+                $allStmts,
+                [],
+                new Node\Stmt\Finally_([$popCallFrameStmt])
+            );
 
-            foreach ($node->stmts as $s) {
-                if ($s instanceof Node\Stmt\If_ && $s->cond instanceof Node\Expr\Assign && $s->cond->var instanceof Node\Expr\Variable && $s->cond->var->name === '__typephpErr') {
-                    $injectedHeaderStmts[] = $s;
-                } elseif ($s instanceof Node\Stmt\Expression && $s->expr instanceof Node\Expr\Assign && $s->expr->expr instanceof Node\Expr\FuncCall && $s->expr->expr->name instanceof Node\Name && str_contains($s->expr->expr->name->toString(), 'wrap')) {
-                    $injectedHeaderStmts[] = $s;
-                } else {
-                    $bodyStmts[] = $s;
-                }
-            }
-
-            if (count($bodyStmts) > 0) {
-                $tryFinallyStmt = new Node\Stmt\TryCatch(
-                    $bodyStmts,
-                    [],
-                    new Node\Stmt\Finally_([$popCallFrameStmt])
-                );
-
-                $node->stmts = array_merge($injectedHeaderStmts, [$tryFinallyStmt]);
-            }
+            $node->stmts = [$tryFinallyStmt];
         }
     }
 
