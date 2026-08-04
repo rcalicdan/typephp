@@ -60,16 +60,20 @@ final class SpecialTypeResolver
     /**
      * Recursively resolves special type identifiers (self, static, parent, FQCNs, ConstFetch class names) in a TypeNode AST using Reflection context.
      */
-    public static function resolve(TypeNode $node, string $function, ?object $thisObj = null): TypeNode
+    public static function resolve(TypeNode $node, \ReflectionClass|\ReflectionFunction|\ReflectionMethod|string $context, ?object $thisObj = null): TypeNode
     {
-        if (str_contains($function, '::')) {
-            [$className, $methodName] = explode('::', $function, 2);
-            $ref = new \ReflectionMethod($className, $methodName);
+        if (is_string($context)) {
+            if (str_contains($context, '::')) {
+                [$className, $methodName] = explode('::', $context, 2);
+                $ref = new \ReflectionMethod($className, $methodName);
+            } else {
+                $ref = new \ReflectionFunction($context);
+            }
         } else {
-            $ref = new \ReflectionFunction($function);
+            $ref = $context;
         }
 
-        $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
+        $declaringClass = $ref instanceof \ReflectionMethod ? $ref->getDeclaringClass()->getName() : ($ref instanceof \ReflectionClass ? $ref->getName() : null);
 
         if ($node instanceof ThisTypeNode) {
             return $node;
@@ -110,9 +114,9 @@ final class SpecialTypeResolver
         }
 
         if ($node instanceof GenericTypeNode) {
-            $genericType = self::resolve($node->type, $function, $thisObj);
+            $genericType = self::resolve($node->type, $context, $thisObj);
             $innerTypes = array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $context, $thisObj),
                 $node->genericTypes
             );
 
@@ -124,9 +128,9 @@ final class SpecialTypeResolver
         }
 
         if ($node instanceof CallableTypeNode) {
-            $resolvedParameters = array_map(function (CallableTypeParameterNode $param) use ($function, $thisObj) {
+            $resolvedParameters = array_map(function (CallableTypeParameterNode $param) use ($context, $thisObj) {
                 return new CallableTypeParameterNode(
-                    self::resolve($param->type, $function, $thisObj),
+                    self::resolve($param->type, $context, $thisObj),
                     $param->isReference,
                     $param->isVariadic,
                     $param->parameterName,
@@ -134,7 +138,7 @@ final class SpecialTypeResolver
                 );
             }, $node->parameters);
 
-            $resolvedReturnType = self::resolve($node->returnType, $function, $thisObj);
+            $resolvedReturnType = self::resolve($node->returnType, $context, $thisObj);
 
             return new CallableTypeNode(
                 $node->identifier,
@@ -145,23 +149,23 @@ final class SpecialTypeResolver
         }
 
         if ($node instanceof NullableTypeNode) {
-            return new NullableTypeNode(self::resolve($node->type, $function, $thisObj));
+            return new NullableTypeNode(self::resolve($node->type, $context, $thisObj));
         }
 
         if ($node instanceof ArrayTypeNode) {
-            return new ArrayTypeNode(self::resolve($node->type, $function, $thisObj));
+            return new ArrayTypeNode(self::resolve($node->type, $context, $thisObj));
         }
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $context, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn ($t) => self::resolve($t, $context, $thisObj),
                 $node->types
             ));
         }

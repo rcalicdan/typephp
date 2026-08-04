@@ -7,6 +7,7 @@ namespace TypePHP\Contract;
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
 use PHPStan\PhpDocParser\Ast\PhpDoc\TemplateTagValueNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
+use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Lexer\Lexer;
 use PHPStan\PhpDocParser\Parser\ConstExprParser;
@@ -19,7 +20,7 @@ use TypePHP\Internal\DocblockNormalizer;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
- * Parses and caches PHPDoc contracts (@param, @return, @template, @phpstan-type) for functions and methods.
+ * Parses and caches PHPDoc contracts (@param, @return, @template, @phpstan-type, @var) for functions, methods, and properties.
  */
 final class ContractParser
 {
@@ -31,14 +32,14 @@ final class ContractParser
     private static array $cache = [];
 
     /**
-     * Parses PHPDoc contracts for a given function or method name.
+     * Cache for resolved class property types.
      *
-     * Performs the following steps:
-     * 1. Checks static cache for previously resolved contracts.
-     * 2. Reflects function or method and fetches declared docblocks.
-     * 3. Parses class-level templates and type aliases if parsing a class method.
-     * 4. Parses function-level templates, type aliases, parameter types, and return types.
-     * 5. Falls back to class property @var docblocks for un-annotated method parameters.
+     * @var array<string, ?TypeNode>
+     */
+    private static array $propertyCache = [];
+
+    /**
+     * Parses PHPDoc contracts for a given function or method name.
      *
      * @return array{types: array<string, TypeNode>, templates: array<string, TemplateTagValueNode>, return: ?TypeNode, aliases: array<string, TypeNode>}
      */
@@ -108,6 +109,73 @@ final class ContractParser
                 'return' => null,
                 'aliases' => [],
             ];
+        }
+    }
+
+    /**
+     * Parses and resolves the @var docblock for a given class property.
+     */
+    public static function parseProperty(string $className, string $propertyName): ?TypeNode
+    {
+        $cacheKey = $className . '::$' . $propertyName;
+        if (array_key_exists($cacheKey, self::$propertyCache)) {
+            return self::$propertyCache[$cacheKey];
+        }
+
+        if (! class_exists($className) && ! trait_exists($className)) {
+            return self::$propertyCache[$cacheKey] = null;
+        }
+
+        try {
+            $refClass = new \ReflectionClass($className);
+
+            $declaringClass = null;
+            $current = $refClass;
+            while ($current !== false) {
+                if ($current->hasProperty($propertyName)) {
+                    $declaringClass = $current;
+
+                    break;
+                }
+                $current = $current->getParentClass();
+            }
+
+            if ($declaringClass === null) {
+                return self::$propertyCache[$cacheKey] = null;
+            }
+
+            $refProp = $declaringClass->getProperty($propertyName);
+            $doc = $refProp->getDocComment();
+
+            if ($doc === false) {
+                return self::$propertyCache[$cacheKey] = null;
+            }
+
+            $doc = DocblockNormalizer::normalize($doc);
+            [$phpDocParser, $lexer] = self::getParserComponents();
+
+            $tokens = new TokenIterator($lexer->tokenize($doc));
+            $phpDocNode = $phpDocParser->parse($tokens);
+
+            $varTags = $phpDocNode->getVarTagValues();
+            if (count($varTags) === 0) {
+                return self::$propertyCache[$cacheKey] = null;
+            }
+
+            $typeNode = $varTags[0]->type;
+
+            $aliases = [];
+            self::extractAliases($phpDocNode, $aliases, $declaringClass);
+
+            if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
+                $typeNode = $aliases[$typeNode->name];
+            }
+
+            $resolvedNode = SpecialTypeResolver::resolve($typeNode, $declaringClass);
+
+            return self::$propertyCache[$cacheKey] = $resolvedNode;
+        } catch (\Throwable $e) {
+            return self::$propertyCache[$cacheKey] = null;
         }
     }
 
@@ -294,7 +362,7 @@ final class ContractParser
     private static function extractAliases(
         PhpDocNode $phpDocNode,
         array &$aliases,
-        \ReflectionFunction|\ReflectionMethod $ref
+        \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref
     ): void {
         foreach ($phpDocNode->getTypeAliasTagValues() as $aliasTag) {
             $aliases[$aliasTag->alias] = $aliasTag->type;

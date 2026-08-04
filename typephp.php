@@ -20,6 +20,7 @@ return [
     | variable assignments with inline @var Type $var docblocks.
     |
     | Supported options:
+    | - 'properties': Validates class property assignments (e.g. $this->id = 1).
     | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
     | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
     | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
@@ -28,6 +29,7 @@ return [
     |
     */
     'inline_vars' => [
+        'properties' => true,
         'generics' => true,
         'callables' => true,
         'scalars' => true,
