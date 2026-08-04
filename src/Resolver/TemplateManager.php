@@ -49,7 +49,7 @@ final class TemplateManager
      */
     public static function popCallFrame(string $function): void
     {
-        if (! empty(self::$callStackBindings[$function])) {
+        if (self::hasCallFrame($function)) {
             array_pop(self::$callStackBindings[$function]);
         }
     }
@@ -77,7 +77,7 @@ final class TemplateManager
             return self::$instanceTemplateBindings[$thisObj];
         }
 
-        if (! empty(self::$callStackBindings[$function])) {
+        if (self::hasCallFrame($function)) {
             $topFrame = end(self::$callStackBindings[$function]);
 
             return $topFrame !== false ? $topFrame : [];
@@ -95,7 +95,7 @@ final class TemplateManager
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
         }
 
-        if (! empty(self::$callStackBindings[$function])) {
+        if (self::hasCallFrame($function)) {
             $topFrame = end(self::$callStackBindings[$function]);
 
             return isset($topFrame[$templateName]);
@@ -113,7 +113,7 @@ final class TemplateManager
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
         }
 
-        if (! empty(self::$callStackBindings[$function])) {
+        if (self::hasCallFrame($function)) {
             $topFrame = end(self::$callStackBindings[$function]);
 
             return $topFrame[$templateName] ?? null;
@@ -135,7 +135,7 @@ final class TemplateManager
             $bindings[$templateName] = $inferredType;
             self::$instanceTemplateBindings[$thisObj] = $bindings;
         } else {
-            if (empty(self::$callStackBindings[$function])) {
+            if (! self::hasCallFrame($function)) {
                 self::$callStackBindings[$function][] = [];
             }
             $lastIndex = count(self::$callStackBindings[$function]) - 1;
@@ -424,6 +424,14 @@ final class TemplateManager
     }
 
     /**
+     * Checks whether a function has at least one active call frame on the stack.
+     */
+    private static function hasCallFrame(string $function): bool
+    {
+        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
+    }
+
+    /**
      * Resolves FQCNs inside an inherited generic TypeNode AST.
      *
      * @param \ReflectionClass<object> $ref
@@ -435,7 +443,7 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
@@ -446,10 +454,10 @@ final class TemplateManager
             return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
         if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;

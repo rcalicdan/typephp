@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace TypePHP\Internal;
 
 /**
+ * Global configuration manager for loading and dynamically overriding settings.
+ *
  * @internal
  */
 final class Config
@@ -46,7 +48,10 @@ final class Config
      */
     public static function set(array $config): void
     {
-        self::$cachedConfig = array_replace_recursive(self::get(), $config);
+        /** @var array<string, mixed> $mergedConfig */
+        $mergedConfig = array_replace_recursive(self::get(), $config);
+
+        self::$cachedConfig = $mergedConfig;
     }
 
     /**

@@ -87,6 +87,7 @@ final class RuntimeTypeChecker
      */
     public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
     {
+        /** @var array<string, bool> $config */
         $config = Config::get()['inline_vars'] ?? [];
         $checkGenerics = $config['generics'] ?? true;
 
@@ -108,7 +109,7 @@ final class RuntimeTypeChecker
                 return $value;
             }
 
-            if ($typeNode instanceof CallableTypeNode || (isset($typeNode->name) && strtolower($typeNode->name) === 'callable')) {
+            if ($typeNode instanceof CallableTypeNode || ($typeNode instanceof IdentifierTypeNode && strtolower($typeNode->name) === 'callable')) {
                 return CallableWrapper::wrapTypeNode($typeNode, $value, "Variable \$$varName: Callback", self::getRegistry());
             }
 
@@ -135,6 +136,8 @@ final class RuntimeTypeChecker
 
     /**
      * Determines if a type node requires validation based on configured inline_vars toggles.
+     *
+     * @param array<string, bool> $config
      */
     private static function shouldValidateType(TypeNode $node, array $config): bool
     {
@@ -200,6 +203,8 @@ final class RuntimeTypeChecker
 
     /**
      * Initializes generic call frames and returns a ScopeCleaner that pops the call frame on destruction.
+     *
+     * @param array<string, mixed> $vars
      */
     public static function setupScope(string $function, array $vars, ?object $thisObj = null): \TypeError|ScopeCleaner|null
     {

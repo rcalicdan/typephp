@@ -40,7 +40,7 @@ final class IterableWrapper
         $prefix = ($paramName === 'return') ? "$function(): Return iterator" : "$function(): Iterator \$$paramName";
         $typeCheckCallback = self::createValidationCallback($registry, $keyTypeNode, $itemTypeNode, $prefix);
 
-        if ($iterable instanceof \Traversable && ! ($iterable instanceof \Generator)) {
+        if (! ($iterable instanceof \Generator)) {
             return new IteratorProxy($iterable, $typeCheckCallback);
         }
 
@@ -109,6 +109,7 @@ final class IterableWrapper
     /**
      * Wraps an iterable generator in an interceptor generator to evaluate type checks on each yield.
      *
+     * @param iterable<mixed, mixed> $iterable
      * @param \Closure(mixed, mixed): void $typeCheckCallback
      */
     private static function wrapGenerator(iterable $iterable, \Closure $typeCheckCallback): \Generator

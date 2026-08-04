@@ -12,25 +12,40 @@ use Traversable;
 
 /**
  * @internal Proxy wrapper around Traversable objects to evaluate type contracts on current items while preserving rewindability, Countable support, and method forwarding.
+ *
+ * @implements OuterIterator<mixed, mixed>
  */
 final class IteratorProxy implements OuterIterator, Countable
 {
     private Iterator $inner;
 
     /**
+     * @param Traversable<mixed, mixed> $iterable
      * @param \Closure(mixed, mixed): void $typeCheckCallback
      */
     public function __construct(
         Traversable $iterable,
         private \Closure $typeCheckCallback
     ) {
-        if ($iterable instanceof Iterator) {
-            $this->inner = $iterable;
-        } elseif ($iterable instanceof IteratorAggregate) {
-            $this->inner = $iterable->getIterator();
-        } else {
-            $this->inner = new \ArrayIterator(iterator_to_array($iterable));
+        $this->inner = self::resolveIterator($iterable);
+    }
+
+    /**
+     * Recursively unwraps IteratorAggregate instances until a concrete Iterator is found.
+     *
+     * @param Traversable<mixed, mixed> $iterable
+     */
+    private static function resolveIterator(Traversable $iterable): Iterator
+    {
+        while ($iterable instanceof IteratorAggregate) {
+            $iterable = $iterable->getIterator();
         }
+
+        if ($iterable instanceof Iterator) {
+            return $iterable;
+        }
+
+        return new \ArrayIterator(iterator_to_array($iterable));
     }
 
     public function rewind(): void
@@ -81,6 +96,7 @@ final class IteratorProxy implements OuterIterator, Countable
      */
     public function __call(string $method, array $args): mixed
     {
+        // @phpstan-ignore method.dynamicName
         return $this->inner->$method(...$args);
     }
 }

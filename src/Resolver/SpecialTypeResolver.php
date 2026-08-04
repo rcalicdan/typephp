@@ -99,7 +99,7 @@ final class SpecialTypeResolver
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolve($node->type, $function, $thisObj);
             $innerTypes = array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->genericTypes
             );
 
@@ -141,14 +141,14 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn ($t) => self::resolve($t, $function, $thisObj),
+                fn($t) => self::resolve($t, $function, $thisObj),
                 $node->types
             ));
         }
@@ -180,7 +180,7 @@ final class SpecialTypeResolver
         if ($node instanceof GenericTypeNode) {
             $genericType = self::resolveForFile($node->type, $file);
             $innerTypes = array_map(
-                fn ($t) => self::resolveForFile($t, $file),
+                fn($t) => self::resolveForFile($t, $file),
                 $node->genericTypes
             );
 
@@ -222,14 +222,14 @@ final class SpecialTypeResolver
 
         if ($node instanceof UnionTypeNode) {
             return new UnionTypeNode(array_map(
-                fn ($t) => self::resolveForFile($t, $file),
+                fn($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
 
         if ($node instanceof IntersectionTypeNode) {
             return new IntersectionTypeNode(array_map(
-                fn ($t) => self::resolveForFile($t, $file),
+                fn($t) => self::resolveForFile($t, $file),
                 $node->types
             ));
         }
@@ -410,11 +410,52 @@ final class SpecialTypeResolver
     private static function isBuiltInTypeKeyword(string $name): bool
     {
         return in_array(strtolower($name), [
-            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
-            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
-            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
-            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
-            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
+            'int',
+            'integer',
+            'string',
+            'float',
+            'double',
+            'bool',
+            'boolean',
+            'array',
+            'list',
+            'object',
+            'callable',
+            'iterable',
+            'resource',
+            'null',
+            'true',
+            'false',
+            'mixed',
+            'scalar',
+            'void',
+            'self',
+            'static',
+            'parent',
+            '$this',
+            'positive-int',
+            'negative-int',
+            'non-positive-int',
+            'non-negative-int',
+            'non-zero-int',
+            'unsigned-int',
+            'class-string',
+            'callable-string',
+            'numeric-string',
+            'non-empty-string',
+            'lowercase-string',
+            'non-empty-lowercase-string',
+            'literal-string',
+            'non-empty-array',
+            'non-empty-list',
+            'number',
+            'numeric',
+            'truthy',
+            'falsy',
+            'falsey',
+            'min',
+            'max',
+            '*',
         ], true);
     }
 
@@ -426,6 +467,7 @@ final class SpecialTypeResolver
         self::$fileNamespaces[$fileName] = '';
         self::$fileUseImports[$fileName] = [];
 
+        /** @var \PhpParser\Parser|null $parser */
         static $parser = null;
         if ($parser === null) {
             $parser = (new ParserFactory())->createForNewestSupportedVersion();
@@ -443,7 +485,7 @@ final class SpecialTypeResolver
             $nodesToScan = $stmts;
             foreach ($stmts as $stmt) {
                 if ($stmt instanceof Stmt\Namespace_) {
-                    $namespace = $stmt->name ? $stmt->name->toString() : '';
+                    $namespace = $stmt->name !== null ? $stmt->name->toString() : '';
                     $nodesToScan = $stmt->stmts;
 
                     break;

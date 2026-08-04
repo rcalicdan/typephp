@@ -98,7 +98,9 @@ final class ContractVisitor extends NodeVisitorAbstract
      */
     private function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
     {
+        /** @var PhpDocParser|null $phpDocParser */
         static $phpDocParser = null;
+        /** @var Lexer|null $lexer */
         static $lexer = null;
 
         if ($phpDocParser === null || $lexer === null) {
@@ -157,12 +159,8 @@ final class ContractVisitor extends NodeVisitorAbstract
             return false;
         }
 
-        $isGen = false;
-        $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
-            public function __construct(private bool &$isGen)
-            {
-            }
+        $visitor = new class () extends NodeVisitorAbstract {
+            public bool $isGen = false;
 
             public function enterNode(Node $n): ?int
             {
@@ -178,11 +176,13 @@ final class ContractVisitor extends NodeVisitorAbstract
 
                 return null;
             }
-        });
+        };
 
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor($visitor);
         $traverser->traverse($node->stmts);
 
-        return $isGen;
+        return $visitor->isGen;
     }
 
     /**
