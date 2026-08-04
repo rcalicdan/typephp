@@ -14,6 +14,9 @@ use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 
+/**
+ * AST Node Visitor that injects contract checks, scope tracking, and parameter/return wrappers into functions and methods.
+ */
 final class ContractVisitor extends NodeVisitorAbstract
 {
     /**
@@ -31,7 +34,7 @@ final class ContractVisitor extends NodeVisitorAbstract
      * 2. Injects runtime contract checks on function and method declarations.
      * 3. Extracts @var annotations from expression statements.
      * 4. Extracts @var annotations from foreach loop value variables.
-     * 5. Intercepts variable assignments to apply inline type validation wrappers.
+     * 5. Intercepts variable assignments to apply inline type validation wrappers with native throw expressions.
      */
     public function enterNode(Node $node): ?int
     {
@@ -64,7 +67,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             $typeString = $this->getVarTypeFromScope($varName);
 
             if ($typeString !== null) {
-                $node->expr = new Node\Expr\FuncCall(
+                $checkCall = new Node\Expr\FuncCall(
                     new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkVariable'),
                     [
                         new Node\Arg($node->expr),
@@ -72,6 +75,30 @@ final class ContractVisitor extends NodeVisitorAbstract
                         new Node\Arg(new Node\Scalar\String_($varName)),
                         new Node\Arg(new Node\Scalar\MagicConst\File()),
                     ]
+                );
+
+                $node->expr = new Node\Expr\Ternary(
+                    new Node\Expr\Instanceof_(
+                        new Node\Expr\Assign(
+                            new Node\Expr\Variable('__typephpVal'),
+                            $checkCall
+                        ),
+                        new Node\Name('\TypePHP\Internal\ErrorMessage')
+                    ),
+                    new Node\Expr\Throw_(
+                        new Node\Expr\New_(
+                            new Node\Name('\TypeError'),
+                            [
+                                new Node\Arg(
+                                    new Node\Expr\MethodCall(
+                                        new Node\Expr\Variable('__typephpVal'),
+                                        'getMessage'
+                                    )
+                                ),
+                            ]
+                        )
+                    ),
+                    new Node\Expr\Variable('__typephpVal')
                 );
             }
         }
@@ -98,21 +125,10 @@ final class ContractVisitor extends NodeVisitorAbstract
      */
     private function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
     {
-        /** @var PhpDocParser|null $phpDocParser */
-        static $phpDocParser = null;
-        /** @var Lexer|null $lexer */
-        static $lexer = null;
-
-        if ($phpDocParser === null || $lexer === null) {
-            $config = new ParserConfig(usedAttributes: []);
-            $lexer = new Lexer($config);
-            $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-        }
-
         try {
             $docText = DocblockNormalizer::normalize($docText);
+            [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
+
             $tokens = new TokenIterator($lexer->tokenize($docText));
             $phpDocNode = $phpDocParser->parse($tokens);
             $varTags = $phpDocNode->getVarTagValues();
@@ -154,7 +170,7 @@ final class ContractVisitor extends NodeVisitorAbstract
     /**
      * Determines if a function or class method body contains yield or yield from expressions.
      */
-   private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
+    private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
     {
         if ($node->stmts === null) {
             return false;
@@ -262,12 +278,24 @@ final class ContractVisitor extends NodeVisitorAbstract
                         ]
                     )
                 ),
-                new Node\Name('\TypeError')
+                new Node\Name('\TypePHP\Internal\ErrorMessage')
             ),
             [
                 'stmts' => [
                     new Node\Stmt\Expression(
-                        new Node\Expr\Throw_(new Node\Expr\Variable('__typephpErr'))
+                        new Node\Expr\Throw_(
+                            new Node\Expr\New_(
+                                new Node\Name('\TypeError'),
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\MethodCall(
+                                            new Node\Expr\Variable('__typephpErr'),
+                                            'getMessage'
+                                        )
+                                    ),
+                                ]
+                            )
+                        )
                     ),
                 ],
             ]
@@ -425,12 +453,61 @@ final class ContractVisitor extends NodeVisitorAbstract
 
                     if ($this->isNativeVoid) {
                         return [
-                            new Node\Stmt\Expression($checkReturnCall),
+                            new Node\Stmt\If_(
+                                new Node\Expr\Instanceof_(
+                                    new Node\Expr\Assign(
+                                        new Node\Expr\Variable('__typephpRet'),
+                                        $checkReturnCall
+                                    ),
+                                    new Node\Name('\TypePHP\Internal\ErrorMessage')
+                                ),
+                                [
+                                    'stmts' => [
+                                        new Node\Stmt\Expression(
+                                            new Node\Expr\Throw_(
+                                                new Node\Expr\New_(
+                                                    new Node\Name('\TypeError'),
+                                                    [
+                                                        new Node\Arg(
+                                                            new Node\Expr\MethodCall(
+                                                                new Node\Expr\Variable('__typephpRet'),
+                                                                'getMessage'
+                                                            )
+                                                        ),
+                                                    ]
+                                                )
+                                            )
+                                        ),
+                                    ],
+                                ]
+                            ),
                             new Node\Stmt\Return_(null),
                         ];
                     }
 
-                    $n->expr = $checkReturnCall;
+                    $n->expr = new Node\Expr\Ternary(
+                        new Node\Expr\Instanceof_(
+                            new Node\Expr\Assign(
+                                new Node\Expr\Variable('__typephpRet'),
+                                $checkReturnCall
+                            ),
+                            new Node\Name('\TypePHP\Internal\ErrorMessage')
+                        ),
+                        new Node\Expr\Throw_(
+                            new Node\Expr\New_(
+                                new Node\Name('\TypeError'),
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\MethodCall(
+                                            new Node\Expr\Variable('__typephpRet'),
+                                            'getMessage'
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                        new Node\Expr\Variable('__typephpRet')
+                    );
                 }
 
                 return null;
@@ -453,13 +530,87 @@ final class ContractVisitor extends NodeVisitorAbstract
             );
 
             if ($isNativeVoid) {
-                $newStmts[] = new Node\Stmt\Expression($checkReturnCall);
+                $newStmts[] = new Node\Stmt\If_(
+                    new Node\Expr\Instanceof_(
+                        new Node\Expr\Assign(
+                            new Node\Expr\Variable('__typephpRet'),
+                            $checkReturnCall
+                        ),
+                        new Node\Name('\TypePHP\Internal\ErrorMessage')
+                    ),
+                    [
+                        'stmts' => [
+                            new Node\Stmt\Expression(
+                                new Node\Expr\Throw_(
+                                    new Node\Expr\New_(
+                                        new Node\Name('\TypeError'),
+                                        [
+                                            new Node\Arg(
+                                                new Node\Expr\MethodCall(
+                                                    new Node\Expr\Variable('__typephpRet'),
+                                                    'getMessage'
+                                                )
+                                            ),
+                                        ]
+                                    )
+                                )
+                            ),
+                        ],
+                    ]
+                );
                 $newStmts[] = new Node\Stmt\Return_(null);
             } else {
-                $newStmts[] = new Node\Stmt\Return_($checkReturnCall);
+                $newStmts[] = new Node\Stmt\Return_(
+                    new Node\Expr\Ternary(
+                        new Node\Expr\Instanceof_(
+                            new Node\Expr\Assign(
+                                new Node\Expr\Variable('__typephpRet'),
+                                $checkReturnCall
+                            ),
+                            new Node\Name('\TypePHP\Internal\ErrorMessage')
+                        ),
+                        new Node\Expr\Throw_(
+                            new Node\Expr\New_(
+                                new Node\Name('\TypeError'),
+                                [
+                                    new Node\Arg(
+                                        new Node\Expr\MethodCall(
+                                            new Node\Expr\Variable('__typephpRet'),
+                                            'getMessage'
+                                        )
+                                    ),
+                                ]
+                            )
+                        ),
+                        new Node\Expr\Variable('__typephpRet')
+                    )
+                );
             }
         }
 
         return $newStmts;
+    }
+
+    /**
+     * Returns shared static instances of PHPStan's PhpDocParser and Lexer.
+     *
+     * @return array{PhpDocParser, Lexer}
+     */
+    private static function getPhpDocParserComponents(): array
+    {
+        /** @var PhpDocParser|null $phpDocParser */
+        static $phpDocParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($phpDocParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+        }
+
+        return [$phpDocParser, $lexer];
     }
 }

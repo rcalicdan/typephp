@@ -9,12 +9,19 @@ use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\RuntimeTypeChecker;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * Validates values against generic AST structures (int ranges, class-string<T>, list<T>, array<K,V>, object generics).
+ */
 final class GenericValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    /**
+     * Validates a value against a GenericTypeNode AST.
+     */
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         /** @var GenericTypeNode $genericNode */
         $genericNode = $node;
@@ -29,7 +36,10 @@ final class GenericValidator implements TypeValidatorInterface
         };
     }
 
-    private function validateIntRange(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
+    /**
+     * Validates integer ranges (e.g. int<1, 100> or int<min, max>).
+     */
+    private function validateIntRange(mixed $value, GenericTypeNode $node, string $context): ?ErrorMessage
     {
         if (! is_int($value)) {
             return ErrorFactory::createError($context . ' must be of type int, ' . TypeFormatter::formatGivenValue($value) . ' given');
@@ -61,7 +71,10 @@ final class GenericValidator implements TypeValidatorInterface
         return null;
     }
 
-    private function validateClassString(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
+    /**
+     * Validates class-string<T> parameters against declared class bounds.
+     */
+    private function validateClassString(mixed $value, GenericTypeNode $node, string $context): ?ErrorMessage
     {
         if (! is_string($value) || ! ClassNameValidator::isValid($value) || (! class_exists($value) && ! interface_exists($value) && ! trait_exists($value) && ! enum_exists($value))) {
             return ErrorFactory::createError($context . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($value) . ' given');
@@ -80,7 +93,10 @@ final class GenericValidator implements TypeValidatorInterface
         return null;
     }
 
-    private function validateList(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    /**
+     * Validates sequential list structures (e.g. list<string> or non-empty-list<int>).
+     */
+    private function validateList(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         $baseType = strtolower($node->type->name);
 
@@ -112,7 +128,10 @@ final class GenericValidator implements TypeValidatorInterface
         return null;
     }
 
-    private function validateArray(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    /**
+     * Validates key-value array structures (e.g. array<string, int>).
+     */
+    private function validateArray(mixed $value, GenericTypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         $baseType = strtolower($node->type->name);
 
@@ -170,7 +189,10 @@ final class GenericValidator implements TypeValidatorInterface
         return null;
     }
 
-    private function validateObjectGeneric(mixed $value, GenericTypeNode $node, string $context): ?\TypeError
+    /**
+     * Validates object generic instances and binds template parameters.
+     */
+    private function validateObjectGeneric(mixed $value, GenericTypeNode $node, string $context): ?ErrorMessage
     {
         if (! is_object($value)) {
             return ErrorFactory::createError($context . ' must be an object of type ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
@@ -180,6 +202,7 @@ final class GenericValidator implements TypeValidatorInterface
             return ErrorFactory::createError($context . ' must be an instance of ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
+        // @phpstan-ignore-next-line
         return RuntimeTypeChecker::bindInstanceFromNode($value, $node, $context);
     }
 }

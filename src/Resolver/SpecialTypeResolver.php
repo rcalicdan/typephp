@@ -20,6 +20,7 @@ use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
@@ -44,7 +45,7 @@ final class SpecialTypeResolver
     /**
      * Validates strict object identity ($value === $thisObj) when the return type node specifies $this.
      */
-    public static function checkThisIdentity(TypeNode $returnTypeNode, mixed $value, ?object $thisObj, string $function): ?\TypeError
+    public static function checkThisIdentity(TypeNode $returnTypeNode, mixed $value, ?object $thisObj, string $function): ?ErrorMessage
     {
         $isThisType = ($returnTypeNode instanceof ThisTypeNode)
             || ($returnTypeNode instanceof IdentifierTypeNode && strtolower($returnTypeNode->name) === '$this');
@@ -463,6 +464,7 @@ final class SpecialTypeResolver
             $imports = [];
             $namespace = '';
 
+            /** @var array<Stmt> $nodesToScan */
             $nodesToScan = $stmts;
             foreach ($stmts as $stmt) {
                 if ($stmt instanceof Stmt\Namespace_) {

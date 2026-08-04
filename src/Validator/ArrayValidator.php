@@ -7,11 +7,12 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 final class ArrayValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         if (! is_array($value)) {
             return ErrorFactory::createError($context . ' must be of type array, ' . TypeFormatter::formatGivenValue($value) . ' given');

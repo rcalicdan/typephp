@@ -7,11 +7,12 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 final class UnionValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         /** @var UnionTypeNode $unionNode */
         $unionNode = $node;

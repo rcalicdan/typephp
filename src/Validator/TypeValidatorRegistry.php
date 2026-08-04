@@ -14,6 +14,7 @@ use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\ObjectShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
+use TypePHP\Internal\ErrorMessage;
 
 /**
  * Registry mapping AST TypeNodes to their corresponding validator strategy implementations.
@@ -43,7 +44,7 @@ final class TypeValidatorRegistry
     /**
      * Validates a value against an AST TypeNode.
      */
-    public function validate(mixed $value, TypeNode $node, string $context): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context): ?ErrorMessage
     {
         $validator = $this->validators[get_class($node)] ?? null;
         if ($validator === null) {

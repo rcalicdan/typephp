@@ -7,11 +7,12 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 final class IdentifierValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         /** @var IdentifierTypeNode $identifierNode */
         $identifierNode = $node;

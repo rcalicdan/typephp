@@ -7,6 +7,7 @@ namespace TypePHP\Validator;
 use PHPStan\PhpDocParser\Ast\Type\ObjectShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
@@ -14,7 +15,7 @@ use TypePHP\Internal\TypeFormatter;
  */
 final class ObjectShapeValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         if (! is_object($value)) {
             return ErrorFactory::createError($context . ' must be of type object, ' . TypeFormatter::formatGivenValue($value) . ' given');

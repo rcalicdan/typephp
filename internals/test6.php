@@ -2,11 +2,31 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
+class Numbers
+{
+    /**
+     * @param int[] $numbers
+     */
+    public function __construct(public array $numbers)
+    {
+    }
+}
 
-/**
- * @var int[] $scores
- */
-$scores = [1, 2, 3];       // should pass
+class Strings
+{
+    /**
+     * @param string[] $strings
+     */
+    public array $strings;
 
-$scores = [1, 2, 'three']; // 💥 SHOULD FAIL AND WILL NOW FAIL!
+    /**
+     * @param string[] $strings
+    */
+    public function __construct(array $strings)
+    {
+        $this->strings = $strings;
+    }
+}
+
+// new Numbers([1, 2, 3, 4, '5']);
+new Strings(['a', 'b', 'c', 1]);

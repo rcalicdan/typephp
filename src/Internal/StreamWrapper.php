@@ -11,7 +11,9 @@ use PhpParser\PrettyPrinter\Standard;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
- * @internal Custom stream wrapper intercepting 'file://' inclusions to perform on-the-fly AST transformations.
+ * Custom stream wrapper intercepting 'file://' inclusions to perform on-the-fly AST transformations.
+ *
+ * @internal
  */
 final class StreamWrapper implements StreamWrapperInterface
 {
@@ -100,9 +102,10 @@ final class StreamWrapper implements StreamWrapperInterface
      *
      * Performs the following steps:
      * 1. Checks file existence and resolves path.
-     * 2. Determines if the file matches application include/exclude patterns.
-     * 3. Pass-through to native fopen if the file is excluded or non-app PHP.
-     * 4. Intercepts app files and transforms source using RAM memory stream or disk cache.
+     * 2. Checks if call is a read-only request from test runners or debuggers.
+     * 3. Determines if the file matches application include/exclude patterns.
+     * 4. Pass-through to native fopen if the file is read-only, excluded, or non-app PHP.
+     * 5. Intercepts execution inclusions and transforms source using RAM memory stream or disk cache.
      */
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
@@ -111,7 +114,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $resolvedPath = $exists ? realpath($path) : '';
         self::register();
 
-        $isAppFile = $exists && self::isApplicationFile($path, $resolvedPath);
+        $isAppFile = $exists && ! self::isReadOnlyCall() && self::isApplicationFile($path, $resolvedPath);
 
         if (! $isAppFile || $resolvedPath === false) {
             self::unregister();
@@ -344,6 +347,9 @@ final class StreamWrapper implements StreamWrapperInterface
         return $result;
     }
 
+    /**
+     * Converts a glob pattern into an absolute regex pattern for path matching.
+     */
     private static function compileGlobToRegex(string $glob): string
     {
         $glob = str_replace('\\', '/', trim($glob));
@@ -364,6 +370,8 @@ final class StreamWrapper implements StreamWrapperInterface
     }
 
     /**
+     * Executes a callback while temporarily suppressing PHP error and warning handlers.
+     *
      * @template T
      *
      * @param callable(): T $callback
@@ -381,6 +389,26 @@ final class StreamWrapper implements StreamWrapperInterface
         }
     }
 
+    /**
+     * Determines if the current stream_open call is for reading file contents (e.g. by Collision, Pest, IDEs)
+     * rather than PHP engine's require/include execution.
+     */
+    private static function isReadOnlyCall(): bool
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
+        foreach ($trace as $frame) {
+            $func = strtolower($frame['function']);
+            if (\in_array($func, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all', 'file_exists'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determines whether a target PHP file path should be intercepted and transformed based on include/exclude patterns.
+     */
     private static function isApplicationFile(string $path, string|false $resolvedPath): bool
     {
         if (! str_ends_with($path, '.php') || $resolvedPath === false) {
@@ -410,6 +438,9 @@ final class StreamWrapper implements StreamWrapperInterface
         return false;
     }
 
+    /**
+     * Transforms and loads source code directly into RAM (php://memory).
+     */
     private function openMemoryStream(string $resolvedPath): bool
     {
         $source = file_get_contents($resolvedPath);
@@ -429,6 +460,9 @@ final class StreamWrapper implements StreamWrapperInterface
         return $this->handle !== null;
     }
 
+    /**
+     * Transforms and caches source code on disk before opening a file handle.
+     */
     private function openCachedStream(string $resolvedPath, string $mode): bool
     {
         if (! is_dir(self::$cacheDir)) {
@@ -456,6 +490,8 @@ final class StreamWrapper implements StreamWrapperInterface
     }
 
     /**
+     * Scans top-level AST statements for namespace and use import declarations to seed SpecialTypeResolver.
+     *
      * @param array<\PhpParser\Node\Stmt> $stmts
      */
     private static function extractAndSeedFileMetadata(array $stmts, string $filePath): void
@@ -548,7 +584,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
         $result = preg_replace_callback(
-            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypeError\)\s*\{[^}]*\}\r?\n?\s*/s',
+            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypePHP\\\\Internal\\\\ErrorMessage\)\s*\{[^}]*\}\r?\n?\s*/s',
             function (array $match): string {
                 return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
             },

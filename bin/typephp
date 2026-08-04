@@ -13,35 +13,6 @@ foreach ($autoloadFiles as $file) {
     }
 }
 
-// Clean Exception Handler for CLI: filters out TypePHP internal frames
-set_exception_handler(function (\Throwable $e) {
-    $cleanTrace = array_filter($e->getTrace(), function ($frame) {
-        return !str_starts_with($frame['class'] ?? '', 'TypePHP\\');
-    });
-
-    fwrite(STDERR, sprintf(
-        "Fatal error: Uncaught %s: %s in %s:%d\nStack trace:\n",
-        get_class($e),
-        $e->getMessage(),
-        $e->getFile(),
-        $e->getLine()
-    ));
-
-    $i = 0;
-    foreach ($cleanTrace as $frame) {
-        $file = $frame['file'] ?? '[internal function]';
-        $line = isset($frame['line']) ? "({$frame['line']})" : '';
-        $class = $frame['class'] ?? '';
-        $type = $frame['type'] ?? '';
-        $func = $frame['function'] ?? '';
-        
-        fwrite(STDERR, sprintf("#%d %s%s: %s%s%s()\n", $i++, $file, $line, $class, $type, $func));
-    }
-    
-    fwrite(STDERR, sprintf("  thrown in %s on line %d\n\n", $e->getFile(), $e->getLine()));
-    exit(255);
-});
-
 $args = array_slice($argv, 1);
 
 if (in_array('--clear-cache', $args, true)) {
@@ -52,14 +23,15 @@ if (in_array('--clear-cache', $args, true)) {
 
 $target = null;
 foreach ($args as $arg) {
-    if (!str_starts_with($arg, '--') && file_exists($arg)) {
+    if (! str_starts_with($arg, '--') && file_exists($arg)) {
         $target = $arg;
         break;
     }
 }
 
-if (!$target) {
-    die("Usage: vendor/bin/typephp <script.php> [--clear-cache] [--no-cache]\n");
+if (! $target) {
+    fwrite(STDERR, "Usage: vendor/bin/typephp <script.php> [--clear-cache]\n");
+    exit(1);
 }
 
 \TypePHP\TypePHP::boot();

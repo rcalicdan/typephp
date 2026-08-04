@@ -6,10 +6,11 @@ namespace TypePHP\Validator;
 
 use PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use TypePHP\Internal\ErrorMessage;
 
 final class IntersectionValidator implements TypeValidatorInterface
 {
-    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
+    public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         /** @var IntersectionTypeNode $intersectionNode */
         $intersectionNode = $node;
