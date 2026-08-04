@@ -10,19 +10,28 @@ use PhpParser\ParserFactory;
 use PhpParser\PrettyPrinter\Standard;
 use TypePHP\Resolver\SpecialTypeResolver;
 
+/**
+ * @internal Custom stream wrapper intercepting 'file://' inclusions to perform on-the-fly AST transformations.
+ */
 final class StreamWrapper implements StreamWrapperInterface
 {
     /**
+     * Context resource provided by PHP stream subsystem.
+     *
      * @var resource|null
      */
     public $context;
 
     /**
+     * Active file handle resource.
+     *
      * @var resource|null
      */
     private $handle = null;
 
     /**
+     * Active directory handle resource.
+     *
      * @var resource|null
      */
     private $dirHandle = null;
@@ -46,25 +55,29 @@ final class StreamWrapper implements StreamWrapperInterface
     private static string $cacheDir = '';
 
     /**
+     * Registers the custom StreamWrapper for the 'file://' protocol, merging optional config with Config::get().
+     *
      * @param array<string, mixed> $config
      */
     public static function register(array $config = []): void
     {
+        $resolvedConfig = array_replace_recursive(Config::get(), $config);
+
         if (! self::$isInitialized || count($config) > 0) {
             $cwd = getcwd();
             $base = $cwd !== false ? $cwd : '';
             self::$baseDir = rtrim(str_replace('\\', '/', $base), '/');
 
             /** @var array<int, string> $includes */
-            $includes = is_array($config['include'] ?? null) ? $config['include'] : ['**'];
+            $includes = is_array($resolvedConfig['include'] ?? null) ? $resolvedConfig['include'] : ['**'];
 
             /** @var array<int, string> $excludes */
-            $excludes = is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+            $excludes = is_array($resolvedConfig['exclude'] ?? null) ? $resolvedConfig['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
             self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
             self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
 
-            self::$cacheEnabled = (bool) ($config['cache'] ?? true);
+            self::$cacheEnabled = (bool) ($resolvedConfig['cache'] ?? true);
             self::$cacheDir = CacheManager::getCacheDir();
 
             self::$isInitialized = true;
@@ -74,51 +87,23 @@ final class StreamWrapper implements StreamWrapperInterface
         stream_wrapper_register('file', self::class);
     }
 
+    /**
+     * Restores PHP's native 'file://' stream wrapper protocol handler.
+     */
     public static function unregister(): void
     {
         stream_wrapper_restore('file');
     }
 
-    private static function compileGlobToRegex(string $glob): string
-    {
-        $glob = str_replace('\\', '/', trim($glob));
-        $isAbsolute = str_starts_with($glob, '/') || (bool) preg_match('#^[a-zA-Z]:/#', $glob);
-
-        $regex = preg_quote($glob, '#');
-        $regex = str_replace(['\*\*', '\*'], ['.*', '[^/]*'], $regex);
-
-        if ($isAbsolute) {
-            $pattern = '^' . $regex . '$';
-        } elseif (str_starts_with($glob, '**')) {
-            $pattern = '.*' . substr($regex, 4) . '$';
-        } else {
-            $pattern = '^' . preg_quote(self::$baseDir . '/', '#') . $regex . '$';
-        }
-
-        return '#' . $pattern . '#i';
-    }
-
     /**
-     * Executes a callback while temporarily silencing all errors/warnings.
-     * This bypasses strict error handlers (like Pest/Whoops) ignoring the @ operator.
+     * Opens a file stream, intercepting application files for AST transformation.
      *
-     * @template T
-     *
-     * @param callable(): T $callback
-     *
-     * @return T
+     * Performs the following steps:
+     * 1. Checks file existence and resolves path.
+     * 2. Determines if the file matches application include/exclude patterns.
+     * 3. Pass-through to native fopen if the file is excluded or non-app PHP.
+     * 4. Intercepts app files and transforms source using RAM memory stream or disk cache.
      */
-    private static function silent(callable $callback): mixed
-    {
-        set_error_handler(fn () => true);
-
-        try {
-            return $callback();
-        } finally {
-            restore_error_handler();
-        }
-    }
-
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         self::unregister();
@@ -126,34 +111,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $resolvedPath = $exists ? realpath($path) : '';
         self::register();
 
-        $isAppFile = false;
-
-        if ($exists && str_ends_with($path, '.php') && $resolvedPath !== false) {
-            $normalizedPath = str_replace('\\', '/', $resolvedPath);
-            $parentDir = realpath(__DIR__ . '/..');
-            $libSrcDir = $parentDir !== false ? str_replace('\\', '/', $parentDir) : '';
-
-            if ($libSrcDir !== '' && ! str_starts_with($normalizedPath, $libSrcDir)) {
-                $isExcluded = false;
-                foreach (self::$excludePatterns as $pattern) {
-                    if (preg_match($pattern, $normalizedPath) === 1) {
-                        $isExcluded = true;
-
-                        break;
-                    }
-                }
-
-                if (! $isExcluded) {
-                    foreach (self::$includePatterns as $pattern) {
-                        if (preg_match($pattern, $normalizedPath) === 1) {
-                            $isAppFile = true;
-
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        $isAppFile = $exists && self::isApplicationFile($path, $resolvedPath);
 
         if (! $isAppFile || $resolvedPath === false) {
             self::unregister();
@@ -170,133 +128,13 @@ final class StreamWrapper implements StreamWrapperInterface
 
         self::unregister();
 
-        if (! self::$cacheEnabled) {
-            $source = file_get_contents($resolvedPath);
-            if ($source === false) {
-                self::register();
+        $success = self::$cacheEnabled
+            ? $this->openCachedStream($resolvedPath, $mode)
+            : $this->openMemoryStream($resolvedPath);
 
-                return false;
-            }
-
-            $transformed = self::transformSource($source, $resolvedPath);
-
-            $memHandle = fopen('php://memory', 'r+');
-            if ($memHandle !== false) {
-                fwrite($memHandle, $transformed);
-                rewind($memHandle);
-                $this->handle = $memHandle;
-            }
-
-            self::register();
-
-            return $this->handle !== null;
-        }
-
-        if (! is_dir(self::$cacheDir)) {
-            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
-        }
-
-        $mtime = filemtime($resolvedPath);
-        $mtimeStr = $mtime !== false ? (string) $mtime : '0';
-
-        $cacheKey = hash('xxh128', 'v36_' . $resolvedPath . $mtimeStr);
-        $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
-
-        if (! file_exists($cachedFile)) {
-            $source = file_get_contents($resolvedPath);
-            if ($source !== false) {
-                $transformed = self::transformSource($source, $resolvedPath);
-                file_put_contents($cachedFile, $transformed);
-            }
-        }
-
-        $cacheHandle = fopen($cachedFile, $mode);
-        $this->handle = $cacheHandle !== false ? $cacheHandle : null;
         self::register();
 
-        return $this->handle !== null;
-    }
-
-    private static function transformSource(string $source, string $filePath = ''): string
-    {
-        $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-        $oldStmts = $parser->parse($source);
-        if ($oldStmts === null) {
-            return $source;
-        }
-
-        // Extract namespace & use imports in the same pass and seed SpecialTypeResolver
-        if ($filePath !== '') {
-            $namespace = '';
-            $imports = [];
-
-            $nodesToScan = $oldStmts;
-            foreach ($oldStmts as $stmt) {
-                if ($stmt instanceof \PhpParser\Node\Stmt\Namespace_) {
-                    $namespace = $stmt->name ? $stmt->name->toString() : '';
-                    $nodesToScan = $stmt->stmts;
-
-                    break;
-                }
-            }
-
-            foreach ($nodesToScan as $stmt) {
-                if ($stmt instanceof \PhpParser\Node\Stmt\Use_) {
-                    if ($stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
-                        continue;
-                    }
-                    foreach ($stmt->uses as $use) {
-                        $fqcn = $use->name->toString();
-                        $alias = $use->getAlias()->toString();
-                        $imports[$alias] = $fqcn;
-                    }
-                } elseif ($stmt instanceof \PhpParser\Node\Stmt\GroupUse) {
-                    $prefix = $stmt->prefix->toString();
-                    foreach ($stmt->uses as $use) {
-                        if ($use->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL && $use->type !== \PhpParser\Node\Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
-                            continue;
-                        }
-                        $fqcn = $prefix . '\\' . $use->name->toString();
-                        $alias = $use->getAlias()->toString();
-                        $imports[$alias] = $fqcn;
-                    }
-                }
-            }
-
-            SpecialTypeResolver::seedFileMetadata($filePath, $namespace, $imports);
-        }
-
-        $oldTokens = $parser->getTokens();
-
-        $traverser1 = new NodeTraverser();
-        $traverser1->addVisitor(new CloningVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
-        $nodesToTraverse = $oldStmts;
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser1->traverse($nodesToTraverse);
-
-        $traverser2 = new NodeTraverser();
-        $traverser2->addVisitor(new ContractVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser2->traverse($newStmts);
-
-        $printer = new Standard();
-        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
-
-        // Squashes the flattened single-level `if (...) instanceof \TypeError` statement onto a single line to preserve line numbers perfectly.
-        $result = preg_replace_callback(
-            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypeError\)\s*\{[^}]*\}\r?\n?\s*/s',
-            function (array $match): string {
-                return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
-            },
-            $transformed
-        );
-
-        return $result ?? $transformed;
+        return $success;
     }
 
     public function stream_read(int $count): string
@@ -504,5 +342,219 @@ final class StreamWrapper implements StreamWrapperInterface
         self::register();
 
         return $result;
+    }
+
+    private static function compileGlobToRegex(string $glob): string
+    {
+        $glob = str_replace('\\', '/', trim($glob));
+        $isAbsolute = str_starts_with($glob, '/') || (bool) preg_match('#^[a-zA-Z]:/#', $glob);
+
+        $regex = preg_quote($glob, '#');
+        $regex = str_replace(['\*\*', '\*'], ['.*', '[^/]*'], $regex);
+
+        if ($isAbsolute) {
+            $pattern = '^' . $regex . '$';
+        } elseif (str_starts_with($glob, '**')) {
+            $pattern = '.*' . substr($regex, 4) . '$';
+        } else {
+            $pattern = '^' . preg_quote(self::$baseDir . '/', '#') . $regex . '$';
+        }
+
+        return '#' . $pattern . '#i';
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    private static function silent(callable $callback): mixed
+    {
+        set_error_handler(fn () => true);
+
+        try {
+            return $callback();
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    private static function isApplicationFile(string $path, string|false $resolvedPath): bool
+    {
+        if (! str_ends_with($path, '.php') || $resolvedPath === false) {
+            return false;
+        }
+
+        $normalizedPath = str_replace('\\', '/', $resolvedPath);
+        $parentDir = realpath(__DIR__ . '/..');
+        $libSrcDir = $parentDir !== false ? str_replace('\\', '/', $parentDir) : '';
+
+        if ($libSrcDir !== '' && str_starts_with($normalizedPath, $libSrcDir)) {
+            return false;
+        }
+
+        foreach (self::$excludePatterns as $pattern) {
+            if (preg_match($pattern, $normalizedPath) === 1) {
+                return false;
+            }
+        }
+
+        foreach (self::$includePatterns as $pattern) {
+            if (preg_match($pattern, $normalizedPath) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function openMemoryStream(string $resolvedPath): bool
+    {
+        $source = file_get_contents($resolvedPath);
+        if ($source === false) {
+            return false;
+        }
+
+        $transformed = self::transformSource($source, $resolvedPath);
+
+        $memHandle = fopen('php://memory', 'r+');
+        if ($memHandle !== false) {
+            fwrite($memHandle, $transformed);
+            rewind($memHandle);
+            $this->handle = $memHandle;
+        }
+
+        return $this->handle !== null;
+    }
+
+    private function openCachedStream(string $resolvedPath, string $mode): bool
+    {
+        if (! is_dir(self::$cacheDir)) {
+            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
+        }
+
+        $mtime = filemtime($resolvedPath);
+        $mtimeStr = $mtime !== false ? (string) $mtime : '0';
+
+        $cacheKey = hash('xxh128', 'v36_' . $resolvedPath . $mtimeStr);
+        $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
+
+        if (! file_exists($cachedFile)) {
+            $source = file_get_contents($resolvedPath);
+            if ($source !== false) {
+                $transformed = self::transformSource($source, $resolvedPath);
+                file_put_contents($cachedFile, $transformed);
+            }
+        }
+
+        $cacheHandle = fopen($cachedFile, $mode);
+        $this->handle = $cacheHandle !== false ? $cacheHandle : null;
+
+        return $this->handle !== null;
+    }
+
+    /**
+     * @param array<\PhpParser\Node\Stmt> $stmts
+     */
+    private static function extractAndSeedFileMetadata(array $stmts, string $filePath): void
+    {
+        if ($filePath === '') {
+            return;
+        }
+
+        $namespace = '';
+        $imports = [];
+
+        $nodesToScan = $stmts;
+        foreach ($stmts as $stmt) {
+            if ($stmt instanceof \PhpParser\Node\Stmt\Namespace_) {
+                $namespace = $stmt->name ? $stmt->name->toString() : '';
+                $nodesToScan = $stmt->stmts;
+
+                break;
+            }
+        }
+
+        foreach ($nodesToScan as $stmt) {
+            if ($stmt instanceof \PhpParser\Node\Stmt\Use_) {
+                if ($stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
+                    continue;
+                }
+
+                foreach ($stmt->uses as $use) {
+                    $fqcn = $use->name->toString();
+                    $alias = $use->getAlias()->toString();
+                    $imports[$alias] = $fqcn;
+                }
+            } elseif ($stmt instanceof \PhpParser\Node\Stmt\GroupUse) {
+                $prefix = $stmt->prefix->toString();
+
+                foreach ($stmt->uses as $use) {
+                    if ($use->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL && $use->type !== \PhpParser\Node\Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== \PhpParser\Node\Stmt\Use_::TYPE_NORMAL) {
+                        continue;
+                    }
+
+                    $fqcn = $prefix . '\\' . $use->name->toString();
+                    $alias = $use->getAlias()->toString();
+                    $imports[$alias] = $fqcn;
+                }
+            }
+        }
+
+        SpecialTypeResolver::seedFileMetadata($filePath, $namespace, $imports);
+    }
+
+    /**
+     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
+     *
+     * Performs the following steps:
+     * 1. Parses raw PHP source into AST statement nodes.
+     * 2. Scans namespace and use import statements to seed file metadata.
+     * 3. Traverses AST with CloningVisitor and ContractVisitor.
+     * 4. Prints format-preserved source code.
+     * 5. Squashes single-level scope setup statements to guarantee zero line-number drift.
+     */
+    private static function transformSource(string $source, string $filePath = ''): string
+    {
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+
+        $oldStmts = $parser->parse($source);
+        if ($oldStmts === null) {
+            return $source;
+        }
+
+        self::extractAndSeedFileMetadata($oldStmts, $filePath);
+
+        $oldTokens = $parser->getTokens();
+
+        $traverser1 = new NodeTraverser();
+        $traverser1->addVisitor(new CloningVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
+        $nodesToTraverse = $oldStmts;
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser1->traverse($nodesToTraverse);
+
+        $traverser2 = new NodeTraverser();
+        $traverser2->addVisitor(new ContractVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser2->traverse($newStmts);
+
+        $printer = new Standard();
+        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
+
+        $result = preg_replace_callback(
+            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypeError\)\s*\{[^}]*\}\r?\n?\s*/s',
+            function (array $match): string {
+                return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
+            },
+            $transformed
+        );
+
+        return $result ?? $transformed;
     }
 }

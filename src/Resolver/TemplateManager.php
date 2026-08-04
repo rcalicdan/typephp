@@ -16,25 +16,37 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
-use TypePHP\Resolver\SpecialTypeResolver;
 
+/**
+ * @internal Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
+ */
 final class TemplateManager
 {
     /**
+     * WeakMap storing generic template bindings per object instance.
+     *
      * @var \WeakMap<object, array<string, TypeNode>>|null
      */
     private static ?\WeakMap $instanceTemplateBindings = null;
 
     /**
+     * Call stack frames storing template bindings per function or method call.
+     *
      * @var array<string, list<array<string, TypeNode>>>
      */
     private static array $callStackBindings = [];
 
+    /**
+     * Pushes a new empty call frame onto the stack for a function execution.
+     */
     public static function pushCallFrame(string $function): void
     {
         self::$callStackBindings[$function][] = [];
     }
 
+    /**
+     * Pops the top call frame from the stack upon function completion or exception.
+     */
     public static function popCallFrame(string $function): void
     {
         if (! empty(self::$callStackBindings[$function])) {
@@ -43,6 +55,8 @@ final class TemplateManager
     }
 
     /**
+     * Clears and initializes a fresh call frame for a function call.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      */
     public static function clearCallBindings(string $function, array $templates): void
@@ -51,6 +65,8 @@ final class TemplateManager
     }
 
     /**
+     * Retrieves currently bound template types for a function call or object instance.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      *
      * @return array<string, TypeNode>
@@ -70,6 +86,9 @@ final class TemplateManager
         return [];
     }
 
+    /**
+     * Checks if a template name is bound in the current instance or call stack frame.
+     */
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool
     {
         if ($thisObj !== null) {
@@ -85,6 +104,9 @@ final class TemplateManager
         return false;
     }
 
+    /**
+     * Retrieves the bound TypeNode for a template name from instance or call stack context.
+     */
     public static function getBoundType(string $function, ?object $thisObj, string $templateName): ?TypeNode
     {
         if ($thisObj !== null) {
@@ -100,6 +122,9 @@ final class TemplateManager
         return null;
     }
 
+    /**
+     * Binds an inferred TypeNode to a template parameter for an instance or call stack frame.
+     */
     public static function bindTemplate(string $function, ?object $thisObj, string $templateName, TypeNode $inferredType): void
     {
         if ($thisObj !== null) {
@@ -118,6 +143,15 @@ final class TemplateManager
         }
     }
 
+    /**
+     * Binds generic template types to an object instance or validates variance against an existing binding.
+     *
+     * Performs the following steps:
+     * 1. Resolves actual class name for self/static/$this keywords.
+     * 2. Resolves inherited @extends and @implements template declarations.
+     * 3. Reflects target class to extract declared @template tags and variance modifiers.
+     * 4. Binds expected generic types to the instance or enforces variance constraints.
+     */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
         $className = $typeNode->type->name;
@@ -140,18 +174,7 @@ final class TemplateManager
             $classDoc = $ref->getDocComment();
 
             if ($classDoc !== false) {
-                /** @var PhpDocParser|null $phpDocParser */
-                static $phpDocParser = null;
-                /** @var Lexer|null $lexer */
-                static $lexer = null;
-
-                if ($phpDocParser === null || $lexer === null) {
-                    $config = new ParserConfig(usedAttributes: []);
-                    $lexer = new Lexer($config);
-                    $constExprParser = new ConstExprParser($config);
-                    $typeParser = new TypeParser($config, $constExprParser);
-                    $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-                }
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
 
                 $classTokens = new TokenIterator($lexer->tokenize($classDoc));
                 $classPhpDocNode = $phpDocParser->parse($classTokens);
@@ -211,12 +234,15 @@ final class TemplateManager
                 }
             }
         } catch (\Throwable $e) {
-            // Ignore
+            // Silently ignore reflection or parsing errors
         }
 
         return null;
     }
 
+    /**
+     * Resolves and binds parent class (@extends) and interface (@implements) template mappings.
+     */
     public static function resolveInheritedTemplates(object $instance, string $targetClassName): void
     {
         $actualClassName = get_class($instance);
@@ -226,18 +252,7 @@ final class TemplateManager
             $classDoc = $ref->getDocComment();
 
             if ($classDoc !== false) {
-                /** @var PhpDocParser|null $phpDocParser */
-                static $phpDocParser = null;
-                /** @var Lexer|null $lexer */
-                static $lexer = null;
-
-                if ($phpDocParser === null || $lexer === null) {
-                    $config = new ParserConfig(usedAttributes: []);
-                    $lexer = new Lexer($config);
-                    $constExprParser = new ConstExprParser($config);
-                    $typeParser = new TypeParser($config, $constExprParser);
-                    $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-                }
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
 
                 $classTokens = new TokenIterator($lexer->tokenize($classDoc));
                 $classPhpDocNode = $phpDocParser->parse($classTokens);
@@ -288,40 +303,13 @@ final class TemplateManager
                 }
             }
         } catch (\Throwable $e) {
-            // Ignore
+            // Silently ignore reflection or parsing errors
         }
     }
 
     /**
-     * @param \ReflectionClass<object> $ref
+     * Checks if an existing type node satisfies an expected type node under a given variance modifier.
      */
-    private static function resolveTypeNodeAst(TypeNode $n, \ReflectionClass $ref): TypeNode
-    {
-        if ($n instanceof IdentifierTypeNode) {
-            return new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->name, $ref));
-        }
-        if ($n instanceof GenericTypeNode) {
-            $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
-
-            return new GenericTypeNode($base, $generics, $n->variances);
-        }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
-        }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
-        }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
-        }
-        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
-            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
-        }
-
-        return $n;
-    }
-
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
     {
         $existingStr = (string) $existing;
@@ -371,21 +359,14 @@ final class TemplateManager
         return false;
     }
 
+    /**
+     * Parses a type string and binds generic templates to an object instance.
+     */
     public static function bindInstance(object $instance, string $typeString, string $file = ''): object
     {
-        /** @var TypeParser|null $typeParser */
-        static $typeParser = null;
-        /** @var Lexer|null $lexer */
-        static $lexer = null;
-
-        if ($typeParser === null || $lexer === null) {
-            $config = new ParserConfig(usedAttributes: []);
-            $lexer = new Lexer($config);
-            $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-        }
-
         try {
+            [$typeParser, $lexer] = self::getTypeParserComponents();
+
             $tokens = new TokenIterator($lexer->tokenize($typeString));
             $typeNode = $typeParser->parse($tokens);
 
@@ -397,12 +378,15 @@ final class TemplateManager
                 self::bindInstanceFromNode($instance, $typeNode, '', true);
             }
         } catch (\Throwable $e) {
-            // Ignore malformed docblock strings
+            // Silently ignore malformed docblock strings
         }
 
         return $instance;
     }
 
+    /**
+     * Infers a TypeNode AST representation from a raw PHP value.
+     */
     public static function inferTypeFromValue(mixed $value): TypeNode
     {
         if (is_int($value)) {
@@ -437,5 +421,78 @@ final class TemplateManager
         }
 
         return new IdentifierTypeNode('mixed');
+    }
+
+    /**
+     * Resolves FQCNs inside an inherited generic TypeNode AST.
+     *
+     * @param \ReflectionClass<object> $ref
+     */
+    private static function resolveTypeNodeAst(TypeNode $n, \ReflectionClass $ref): TypeNode
+    {
+        if ($n instanceof IdentifierTypeNode) {
+            return new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->name, $ref));
+        }
+        if ($n instanceof GenericTypeNode) {
+            $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
+            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+
+            return new GenericTypeNode($base, $generics, $n->variances);
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+
+        return $n;
+    }
+
+    /**
+     * @return array{PhpDocParser, Lexer}
+     */
+    private static function getPhpDocParserComponents(): array
+    {
+        /** @var PhpDocParser|null $phpDocParser */
+        static $phpDocParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($phpDocParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+        }
+
+        return [$phpDocParser, $lexer];
+    }
+
+    /**
+     * @return array{TypeParser, Lexer}
+     */
+    private static function getTypeParserComponents(): array
+    {
+        /** @var TypeParser|null $typeParser */
+        static $typeParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($typeParser === null || $lexer === null) {
+            $configParser = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($configParser);
+            $constExprParser = new ConstExprParser($configParser);
+            $typeParser = new TypeParser($configParser, $constExprParser);
+        }
+
+        return [$typeParser, $lexer];
     }
 }

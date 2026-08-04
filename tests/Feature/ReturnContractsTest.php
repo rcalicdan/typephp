@@ -101,6 +101,7 @@ describe('Template-based Conditional Return Types', function () {
         expect($result)->toBeTrue();
 
         expect(fn () => testConditionalTemplateReturn(123, 'not_a_bool'))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });

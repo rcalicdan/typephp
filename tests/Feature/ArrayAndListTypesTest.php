@@ -293,6 +293,7 @@ describe('Complex Shapes with Generic Lists & Unions', function () {
         ];
 
         expect(fn () => testComplexNestedShapeParam($payload))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });

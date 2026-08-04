@@ -17,15 +17,22 @@ return [
     | Inline Variable Validation (@var $x = ...)
     |--------------------------------------------------------------------------
     | Fine-grained control over which type categories are enforced on local
-    | variable assignments with inline  @var Type $var  docblocks.
+    | variable assignments with inline @var Type $var docblocks.
+    |
+    | Supported options:
+    | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
+    | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
+    | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
+    | - 'shapes'    : Enforces array shapes and lists (e.g. array{id: int}).
+    | - 'objects'   : Enforces class instance checks (e.g. @var User $user).
     |
     */
     'inline_vars' => [
-        'generics'  => true,  // Prebinds Generic instances (e.g. Collection<Dog>)
-        'callables' => true,  // Wraps inline callables (e.g. callable(int): string)
-        'scalars'   => true, // Enforces scalar constraints (e.g. positive-int)
-        'shapes'    => true, // Enforces array shapes (e.g. array{id: int})
-        'objects'   => true, // Enforces class instances (e.g. /** @var User $user */)
+        'generics' => true,
+        'callables' => true,
+        'scalars' => true,
+        'shapes' => true,
+        'objects' => true,
     ],
 
     /*

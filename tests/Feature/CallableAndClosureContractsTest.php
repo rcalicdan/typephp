@@ -332,6 +332,7 @@ describe('Inline @var Callable Variable Contracts', function () {
         ;
 
         expect(fn () => $repeat3('invalid'))
-            ->toThrow(TypeError::class, 'return value');
+            ->toThrow(TypeError::class, 'return value')
+        ;
     });
 });

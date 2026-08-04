@@ -98,6 +98,7 @@ describe('Inline @var Annotation Instance Pre-binding', function () {
         expect($producers->count())->toBe(1);
 
         expect(fn () => $producers->add(new Producer(new Car())))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });

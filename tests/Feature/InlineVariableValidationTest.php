@@ -8,14 +8,14 @@ use TypePHP\Tests\Fixtures\Domain\Dog;
 
 beforeEach(function () {
     Config::reset();
-    
+
     Config::set([
         'inline_vars' => [
-            'generics'  => true,
+            'generics' => true,
             'callables' => true,
-            'scalars'   => true,
-            'shapes'    => true,
-            'objects'   => true,
+            'scalars' => true,
+            'shapes' => true,
+            'objects' => true,
         ],
     ]);
 });
@@ -31,7 +31,8 @@ describe('Inline @var Scalar Validations', function () {
         expect($age)->toBe(10);
 
         expect(fn () => $age = -5)
-            ->toThrow(TypeError::class, 'Variable $age must be of type positive-int');
+            ->toThrow(TypeError::class, 'Variable $age must be of type positive-int')
+        ;
     });
 
     test('ignores scalar validation when disabled in config', function () {
@@ -39,7 +40,7 @@ describe('Inline @var Scalar Validations', function () {
 
         /** @var positive-int $age */
         $age = 10;
-    
+
         $age = -5;
 
         expect($age)->toBe(-5);
@@ -53,7 +54,8 @@ describe('Inline @var Object Validations', function () {
         expect($animal)->toBeInstanceOf(Dog::class);
 
         expect(fn () => $animal = new Car())
-            ->toThrow(TypeError::class, 'Variable $animal must be of type TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'Variable $animal must be of type TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('ignores object validation when disabled in config', function () {
@@ -73,8 +75,9 @@ describe('Inline @var Array Shape Validations', function () {
         $user = ['id' => 1, 'name' => 'Alice'];
         expect($user['name'])->toBe('Alice');
 
-        expect(fn () => $user = ['id' => 2]) 
-            ->toThrow(TypeError::class, "Variable \$user is missing required key 'name'");
+        expect(fn () => $user = ['id' => 2])
+            ->toThrow(TypeError::class, "Variable \$user is missing required key 'name'")
+        ;
     });
 
     test('ignores shape validation when disabled in config', function () {
@@ -82,8 +85,8 @@ describe('Inline @var Array Shape Validations', function () {
 
         /** @var array{id: int, name: string} $user */
         $user = ['id' => 1, 'name' => 'Alice'];
-        
-        $user = ['id' => 2]; 
+
+        $user = ['id' => 2];
 
         expect($user)->toBe(['id' => 2]);
     });
@@ -99,7 +102,8 @@ describe('Inline @var Nullable and Union Types', function () {
         expect($username)->toBeNull();
 
         expect(fn () => $username = 123)
-            ->toThrow(TypeError::class, 'Variable $username must be of type (string | null)');
+            ->toThrow(TypeError::class, 'Variable $username must be of type (string | null)')
+        ;
     });
 
     test('allows values matching either side of a union', function () {
@@ -111,7 +115,8 @@ describe('Inline @var Nullable and Union Types', function () {
         expect($identifier)->toBe('user_42');
 
         expect(fn () => $identifier = false)
-            ->toThrow(TypeError::class, 'Variable $identifier must be of type (int | string)');
+            ->toThrow(TypeError::class, 'Variable $identifier must be of type (int | string)')
+        ;
     });
 });
 
@@ -132,11 +137,11 @@ describe('Inline @var Mixed Type', function () {
 describe('Inline @var Initial Assignment vs Reassignment', function () {
     test('validates uninitialized variables upon first assignment', function () {
         /** @var non-empty-string $token */
-        $token;
 
         expect(fn () => $token = '')
-            ->toThrow(TypeError::class, 'Variable $token must be of type non-empty-string');
-            
+            ->toThrow(TypeError::class, 'Variable $token must be of type non-empty-string')
+        ;
+
         $token = 'valid_token';
         expect($token)->toBe('valid_token');
     });

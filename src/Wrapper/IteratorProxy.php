@@ -10,6 +10,9 @@ use IteratorAggregate;
 use OuterIterator;
 use Traversable;
 
+/**
+ * @internal Proxy wrapper around Traversable objects to evaluate type contracts on current items while preserving rewindability, Countable support, and method forwarding.
+ */
 final class IteratorProxy implements OuterIterator, Countable
 {
     private Iterator $inner;

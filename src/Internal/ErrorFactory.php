@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace TypePHP\Internal;
 
+/**
+ * @internal
+ */
 final class ErrorFactory
 {
     public static function createError(string $message): \TypeError
@@ -15,6 +18,7 @@ final class ErrorFactory
             $class = $frame['class'] ?? '';
             if (! str_starts_with($class, 'TypePHP\\')) {
                 $callerFrameIndex = $i;
+
                 break;
             }
         }
@@ -26,7 +30,7 @@ final class ErrorFactory
         if ($isReturnError || $isVariableError || $isIteratorError) {
             // Blame the frame that called INTO TypePHP (the assignment or return statement)
             $blameFrame = $trace[max(0, $callerFrameIndex - 1)] ?? [];
-            
+
             if ($isReturnError) {
                 if (str_contains($message, 'null given')) {
                     $message = str_replace('null given', 'none returned', $message);

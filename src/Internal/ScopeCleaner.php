@@ -6,6 +6,9 @@ namespace TypePHP\Internal;
 
 use TypePHP\Resolver\TemplateManager;
 
+/**
+ * @internal
+ */
 final class ScopeCleaner
 {
     public function __construct(private string $function)

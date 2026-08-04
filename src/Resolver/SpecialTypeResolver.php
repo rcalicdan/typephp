@@ -20,18 +20,28 @@ use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * @internal Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
+ */
 final class SpecialTypeResolver
 {
     /**
+     * In-memory cache of file import maps keyed by filename.
+     *
      * @var array<string, array<string, string>>
      */
     private static array $fileUseImports = [];
 
     /**
+     * In-memory cache of file namespaces keyed by filename.
+     *
      * @var array<string, string>
      */
     private static array $fileNamespaces = [];
 
+    /**
+     * Validates strict object identity ($value === $thisObj) when the return type node specifies $this.
+     */
     public static function checkThisIdentity(TypeNode $returnTypeNode, mixed $value, ?object $thisObj, string $function): ?\TypeError
     {
         $isThisType = ($returnTypeNode instanceof ThisTypeNode)
@@ -44,6 +54,9 @@ final class SpecialTypeResolver
         return null;
     }
 
+    /**
+     * Recursively resolves special type identifiers (self, static, parent, FQCNs) in a TypeNode AST using Reflection context.
+     */
     public static function resolve(TypeNode $node, string $function, ?object $thisObj = null): TypeNode
     {
         if (str_contains($function, '::')) {
@@ -54,9 +67,7 @@ final class SpecialTypeResolver
         }
 
         $declaringClass = str_contains($function, '::') ? explode('::', $function, 2)[0] : null;
-        $runtimeClass = $thisObj !== null ? get_class($thisObj) : $declaringClass;
 
-        // Preserve ThisTypeNode for strict identity checks ($value === $thisObj)
         if ($node instanceof ThisTypeNode) {
             return $node;
         }
@@ -64,7 +75,6 @@ final class SpecialTypeResolver
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
 
-            // Preserve $this and static dynamically
             if ($lower === '$this' || $lower === 'static') {
                 return $node;
             }
@@ -72,6 +82,7 @@ final class SpecialTypeResolver
             if ($lower === 'self' && $declaringClass !== null) {
                 return new IdentifierTypeNode($declaringClass);
             }
+
             if ($lower === 'parent' && $declaringClass !== null) {
                 $parentClass = get_parent_class($declaringClass);
                 if ($parentClass !== false) {
@@ -146,8 +157,7 @@ final class SpecialTypeResolver
     }
 
     /**
-     * Resolves nodes specifically using a file context instead of reflection.
-     * Useful for pre-binding @var annotations where reflection is unavailable.
+     * Recursively resolves type identifiers in a TypeNode AST using file context (use imports and namespace).
      */
     public static function resolveForFile(TypeNode $node, string $file): TypeNode
     {
@@ -241,6 +251,8 @@ final class SpecialTypeResolver
     }
 
     /**
+     * Returns use imports for the declaring file of a Reflection object.
+     *
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      *
      * @return array<string, string>
@@ -304,85 +316,21 @@ final class SpecialTypeResolver
     }
 
     /**
-     * Parses the AST of the file once to extract both namespace and use statements.
-     */
-    private static function parseFileMetadata(string $fileName, string $source): void
-    {
-        // Default to empty to prevent repeated parse attempts on failure
-        self::$fileNamespaces[$fileName] = '';
-        self::$fileUseImports[$fileName] = [];
-
-        static $parser = null;
-        if ($parser === null) {
-            $parser = (new ParserFactory())->createForNewestSupportedVersion();
-        }
-
-        try {
-            $stmts = $parser->parse($source);
-            if ($stmts === null) {
-                return;
-            }
-
-            $imports = [];
-            $namespace = '';
-
-            // PSR-4 codebases typically have top-level statements or a single namespace block
-            $nodesToScan = $stmts;
-            foreach ($stmts as $stmt) {
-                if ($stmt instanceof Stmt\Namespace_) {
-                    $namespace = $stmt->name ? $stmt->name->toString() : '';
-                    $nodesToScan = $stmt->stmts;
-
-                    break;
-                }
-            }
-
-            foreach ($nodesToScan as $stmt) {
-                // Regular imports: use App\Models\User;
-                if ($stmt instanceof Stmt\Use_) {
-                    if ($stmt->type !== Stmt\Use_::TYPE_NORMAL) {
-                        continue; // Skip function/const imports
-                    }
-                    foreach ($stmt->uses as $use) {
-                        $fqcn = $use->name->toString();
-                        $alias = $use->getAlias()->toString();
-                        $imports[$alias] = $fqcn;
-                    }
-                }
-                // Grouped imports: use App\Models\{User, Post};
-                elseif ($stmt instanceof Stmt\GroupUse) {
-                    $prefix = $stmt->prefix->toString();
-                    foreach ($stmt->uses as $use) {
-                        if ($use->type !== Stmt\Use_::TYPE_NORMAL && $use->type !== Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== Stmt\Use_::TYPE_NORMAL) {
-                            continue;
-                        }
-                        $fqcn = $prefix . '\\' . $use->name->toString();
-                        $alias = $use->getAlias()->toString();
-                        $imports[$alias] = $fqcn;
-                    }
-                }
-            }
-
-            self::$fileNamespaces[$fileName] = $namespace;
-            self::$fileUseImports[$fileName] = $imports;
-        } catch (\Throwable $e) {
-            // Silently fall back to empty metadata if parsing fails
-        }
-    }
-
-    /**
+     * Resolves a short class name to its fully qualified class name (FQCN) using Reflection context.
+     *
+     * Performs the following steps:
+     * 1. Returns built-in primitive and pseudo-type keywords directly.
+     * 2. Handles fully-qualified names with leading backslashes.
+     * 3. Validates class syntax.
+     * 4. Checks use imports in the declaring file.
+     * 5. Checks the declaring namespace.
+     * 6. Checks global scope.
+     *
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      */
     public static function resolveFqcn(string $name, \ReflectionClass|\ReflectionFunction|\ReflectionMethod $ref): string
     {
-        $lower = strtolower($name);
-        if (\in_array($lower, [
-            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
-            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
-            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
-            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
-            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
-        ], true)) {
+        if (self::isBuiltInTypeKeyword($name)) {
             return $name;
         }
 
@@ -390,18 +338,15 @@ final class SpecialTypeResolver
             return ltrim($name, '\\');
         }
 
-        // Ensure the name is a valid class identifier before hitting autoloader
         if (! ClassNameValidator::isValid($name)) {
             return $name;
         }
 
-        // Check `use` imports in file
         $imports = self::getUseImports($ref);
         if (isset($imports[$name])) {
             return $imports[$name];
         }
 
-        // Check same namespace
         $namespace = match (true) {
             $ref instanceof \ReflectionClass => $ref->getNamespaceName(),
             $ref instanceof \ReflectionMethod => $ref->getDeclaringClass()->getNamespaceName(),
@@ -423,18 +368,11 @@ final class SpecialTypeResolver
     }
 
     /**
-     * Resolves an FQCN purely based on the file context (namespace and use imports).
+     * Resolves a short class name to its FQCN purely based on file context (namespace and use imports).
      */
     public static function resolveFqcnForFile(string $name, string $file): string
     {
-        $lower = strtolower($name);
-        if (\in_array($lower, [
-            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
-            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
-            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
-            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
-            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
-        ], true)) {
+        if (self::isBuiltInTypeKeyword($name)) {
             return $name;
         }
 
@@ -446,13 +384,11 @@ final class SpecialTypeResolver
             return $name;
         }
 
-        // Check `use` imports in file
         $imports = self::getUseImportsFromFile($file);
         if (isset($imports[$name])) {
             return $imports[$name];
         }
 
-        // Check same namespace
         $namespace = self::getNamespaceFromFile($file);
         if ($namespace !== '') {
             $namespacedClass = $namespace . '\\' . $name;
@@ -466,5 +402,84 @@ final class SpecialTypeResolver
         }
 
         return $name;
+    }
+
+    /**
+     * Checks if a type name is a built-in PHP or PHPDoc type keyword.
+     */
+    private static function isBuiltInTypeKeyword(string $name): bool
+    {
+        return in_array(strtolower($name), [
+            'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
+            'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
+            'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
+            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
+            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
+        ], true);
+    }
+
+    /**
+     * Parses the AST of a PHP file once to extract both namespace and use import statements.
+     */
+    private static function parseFileMetadata(string $fileName, string $source): void
+    {
+        self::$fileNamespaces[$fileName] = '';
+        self::$fileUseImports[$fileName] = [];
+
+        static $parser = null;
+        if ($parser === null) {
+            $parser = (new ParserFactory())->createForNewestSupportedVersion();
+        }
+
+        try {
+            $stmts = $parser->parse($source);
+            if ($stmts === null) {
+                return;
+            }
+
+            $imports = [];
+            $namespace = '';
+
+            $nodesToScan = $stmts;
+            foreach ($stmts as $stmt) {
+                if ($stmt instanceof Stmt\Namespace_) {
+                    $namespace = $stmt->name ? $stmt->name->toString() : '';
+                    $nodesToScan = $stmt->stmts;
+
+                    break;
+                }
+            }
+
+            foreach ($nodesToScan as $stmt) {
+                if ($stmt instanceof Stmt\Use_) {
+                    if ($stmt->type !== Stmt\Use_::TYPE_NORMAL) {
+                        continue;
+                    }
+
+                    foreach ($stmt->uses as $use) {
+                        $fqcn = $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                } elseif ($stmt instanceof Stmt\GroupUse) {
+                    $prefix = $stmt->prefix->toString();
+
+                    foreach ($stmt->uses as $use) {
+                        if ($use->type !== Stmt\Use_::TYPE_NORMAL && $use->type !== Stmt\Use_::TYPE_UNKNOWN && $stmt->type !== Stmt\Use_::TYPE_NORMAL) {
+                            continue;
+                        }
+
+                        $fqcn = $prefix . '\\' . $use->name->toString();
+                        $alias = $use->getAlias()->toString();
+                        $imports[$alias] = $fqcn;
+                    }
+                }
+            }
+
+            self::$fileNamespaces[$fileName] = $namespace;
+            self::$fileUseImports[$fileName] = $imports;
+        } catch (\Throwable $e) {
+            // Silently fall back to empty metadata if parsing fails
+        }
     }
 }

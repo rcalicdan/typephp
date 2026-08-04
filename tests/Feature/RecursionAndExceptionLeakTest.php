@@ -52,9 +52,11 @@ describe('Recursion and Exception Call Stack Leak Prevention', function () {
 
     test('cleans up call stack frame when exception is thrown midway', function () {
         expect(fn () => testFailingGenericFunction(new Dog()))
-            ->toThrow(RuntimeException::class, 'Midway exception');
+            ->toThrow(RuntimeException::class, 'Midway exception')
+        ;
 
         expect(fn () => testFailingGenericFunction(new Cat()))
-            ->toThrow(RuntimeException::class, 'Midway exception');
+            ->toThrow(RuntimeException::class, 'Midway exception')
+        ;
     });
 });

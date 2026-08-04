@@ -136,6 +136,7 @@ describe('Literal Value Enums (\'active\'|\'pending\', 200|404|500)', function (
 
     test('throws TypeError when integer literal is not in union options', function () {
         expect(fn () => testLiteralUnionsParam('active', 301))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });

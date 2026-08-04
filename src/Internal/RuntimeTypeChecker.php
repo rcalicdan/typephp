@@ -29,33 +29,36 @@ use TypePHP\Validator\TypeValidatorRegistry;
 use TypePHP\Wrapper\CallableWrapper;
 use TypePHP\Wrapper\IterableWrapper;
 
+/**
+ * @internal Core runtime type checking engine for parameter validation, return type enforcement, and variable tracking.
+ */
 final class RuntimeTypeChecker
 {
     private static ?TypeValidatorRegistry $registry = null;
 
+    /**
+     * Returns a singleton instance of the TypeValidatorRegistry.
+     */
     private static function getRegistry(): TypeValidatorRegistry
     {
         return self::$registry ??= new TypeValidatorRegistry();
     }
 
+    /**
+     * Delegates generic template binding for class instances.
+     */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
         return TemplateManager::bindInstanceFromNode($instance, $typeNode, $context, $forceBind);
     }
 
     /**
-     * Evaluates inline variable validation dynamically based on configuration.
+     * Returns shared static instances of PHPStan's TypeParser and Lexer.
+     *
+     * @return array{TypeParser, Lexer}
      */
-    public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
+    private static function getTypeParserComponents(): array
     {
-        $config = Config::get()['inline_vars'] ?? [];
-        $checkGenerics = $config['generics'] ?? true;
-
-        // Fast return if absolutely everything is disabled
-        if (!($config['generics'] ?? true) && !($config['callables'] ?? true) && !($config['scalars'] ?? false) && !($config['shapes'] ?? false) && !($config['objects'] ?? false)) {
-            return $value;
-        }
-
         /** @var TypeParser|null $typeParser */
         static $typeParser = null;
         /** @var Lexer|null $lexer */
@@ -68,7 +71,32 @@ final class RuntimeTypeChecker
             $typeParser = new TypeParser($configParser, $constExprParser);
         }
 
+        return [$typeParser, $lexer];
+    }
+
+    /**
+     * Evaluates inline variable validation dynamically based on configuration.
+     *
+     * Performs the following steps:
+     * 1. Checks configuration toggles for inline variables.
+     * 2. Tokenizes and parses the variable type string.
+     * 3. Resolves FQCNs for file context.
+     * 4. Evaluates whether the type category requires validation.
+     * 5. Wraps callables or binds generic instances if applicable.
+     * 6. Validates the assigned value against the parsed type node.
+     */
+    public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
+    {
+        $config = Config::get()['inline_vars'] ?? [];
+        $checkGenerics = $config['generics'] ?? true;
+
+        if (! ($config['generics'] ?? true) && ! ($config['callables'] ?? true) && ! ($config['scalars'] ?? false) && ! ($config['shapes'] ?? false) && ! ($config['objects'] ?? false)) {
+            return $value;
+        }
+
         try {
+            [$typeParser, $lexer] = self::getTypeParserComponents();
+
             $tokens = new TokenIterator($lexer->tokenize($typeString));
             $typeNode = $typeParser->parse($tokens);
 
@@ -76,60 +104,80 @@ final class RuntimeTypeChecker
                 $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
             }
 
-            if (!self::shouldValidateType($typeNode, $config)) {
-                return $value; // Skip validation entirely if disabled by config or type is 'mixed'
+            if (! self::shouldValidateType($typeNode, $config)) {
+                return $value;
             }
 
-            // Special Handling for Callables
             if ($typeNode instanceof CallableTypeNode || (isset($typeNode->name) && strtolower($typeNode->name) === 'callable')) {
                 return CallableWrapper::wrapTypeNode($typeNode, $value, "Variable \$$varName: Callback", self::getRegistry());
             }
 
-            // Special Handling for Generics Instance Binding
             if ($typeNode instanceof GenericTypeNode && $checkGenerics && is_object($value)) {
                 $err = self::bindInstanceFromNode($value, $typeNode, "Variable \$$varName", true);
-                if ($err !== null) throw $err;
+                if ($err !== null) {
+                    throw $err;
+                }
             }
 
-            // Standard Validation for everything else (Scalars, Shapes, Objects, etc.)
             $registry = self::getRegistry();
             $err = $registry->validate($value, $typeNode, "Variable \$$varName");
             if ($err !== null) {
                 throw $err;
             }
-
         } catch (\Throwable $e) {
-            if ($e instanceof \TypeError) throw $e;
+            if ($e instanceof \TypeError) {
+                throw $e;
+            }
         }
 
         return $value;
     }
 
+    /**
+     * Determines if a type node requires validation based on configured inline_vars toggles.
+     */
     private static function shouldValidateType(TypeNode $node, array $config): bool
     {
-        if ($node instanceof CallableTypeNode) return $config['callables'] ?? true;
-        if ($node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) return $config['shapes'] ?? false;
-        
+        if ($node instanceof CallableTypeNode) {
+            return $config['callables'] ?? true;
+        }
+
+        if ($node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) {
+            return $config['shapes'] ?? false;
+        }
+
         if ($node instanceof IdentifierTypeNode) {
             $lower = strtolower($node->name);
-            
-            // Fast-path: Never waste CPU cycles validating `mixed`
-            if ($lower === 'mixed') return false; 
-            
-            if ($lower === 'callable') return $config['callables'] ?? true;
-            if (in_array($lower, ['array', 'list', 'iterable'])) return $config['shapes'] ?? false;
-            
-            if (in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'])) {
+
+            if ($lower === 'mixed') {
+                return false;
+            }
+
+            if ($lower === 'callable') {
+                return $config['callables'] ?? true;
+            }
+
+            if (in_array($lower, ['array', 'list', 'iterable'], true)) {
+                return $config['shapes'] ?? false;
+            }
+
+            if (in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'], true)) {
                 return $config['scalars'] ?? false;
             }
-            
+
             return $config['objects'] ?? false;
         }
 
         if ($node instanceof GenericTypeNode) {
             $lower = strtolower($node->type->name);
-            if (in_array($lower, ['array', 'list', 'iterable'])) return $config['shapes'] ?? false;
-            if ($config['generics'] ?? true) return true; 
+            if (in_array($lower, ['array', 'list', 'iterable'], true)) {
+                return $config['shapes'] ?? false;
+            }
+
+            if ($config['generics'] ?? true) {
+                return true;
+            }
+
             return $config['objects'] ?? false;
         }
 
@@ -139,8 +187,11 @@ final class RuntimeTypeChecker
 
         if ($node instanceof UnionTypeNode || $node instanceof IntersectionTypeNode) {
             foreach ($node->types as $t) {
-                if (self::shouldValidateType($t, $config)) return true;
+                if (self::shouldValidateType($t, $config)) {
+                    return true;
+                }
             }
+
             return false;
         }
 
@@ -148,17 +199,17 @@ final class RuntimeTypeChecker
     }
 
     /**
-     * Initializes generic call frames and returns a ScopeCleaner that pops the frame on destruction
+     * Initializes generic call frames and returns a ScopeCleaner that pops the call frame on destruction.
      */
     public static function setupScope(string $function, array $vars, ?object $thisObj = null): \TypeError|ScopeCleaner|null
     {
         $err = self::checkParams($function, $vars, $thisObj);
-        
+
         if ($err !== null) {
-            // CheckParams pushed the frame before evaluating, so we must pop it immediately on failure
             if ($thisObj === null) {
                 TemplateManager::popCallFrame($function);
             }
+
             return $err;
         }
 
@@ -166,6 +217,15 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Validates all incoming parameters against the function or method's declared contract.
+     *
+     * Performs the following steps:
+     * 1. Fetches PHPDoc contract metadata for the function/method.
+     * 2. Initializes call stack template bindings or resolves inherited class templates.
+     * 3. Resolves aliases and special type names.
+     * 4. Binds and validates class-string<T> and @template parameters.
+     * 5. Validates non-generic values against type nodes.
+     *
      * @param array<string, mixed> $vars
      */
     public static function checkParams(string $function, array $vars, ?object $thisObj = null): ?\TypeError
@@ -202,7 +262,6 @@ final class RuntimeTypeChecker
                 $typeNode = $aliases[$typeNode->name];
             }
 
-            // Resolve class-string<T>
             if ($typeNode instanceof GenericTypeNode && self::isClassStringTemplate($typeNode, $templates)) {
                 $err = self::resolveClassStringTemplate($typeNode, $val, $paramName, $function, $thisObj, $templates);
                 if ($err !== null) {
@@ -212,7 +271,6 @@ final class RuntimeTypeChecker
                 continue;
             }
 
-            // Resolve @template T & variadic templates (@param T ...$items)
             if (self::getTemplateName($typeNode, $templates) !== null) {
                 $err = self::resolveTemplateParam($typeNode, $val, $paramName, $function, $thisObj, $templates, $registry);
                 if ($err !== null) {
@@ -222,7 +280,6 @@ final class RuntimeTypeChecker
                 continue;
             }
 
-            // Standard Type Validation
             $err = $registry->validate($val, $typeNode, $function . '(): Argument $' . $paramName);
             if ($err !== null) {
                 return $err;
@@ -233,6 +290,16 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Validates a function or method's return value against its declared contract.
+     *
+     * Performs the following steps:
+     * 1. Fetches PHPDoc contract metadata for the function/method.
+     * 2. Enforces strict $this identity checks if required by the return node.
+     * 3. Resolves special type names, aliases, and bound template placeholders.
+     * 4. Evaluates parameter-based or template-based conditional return types.
+     * 5. Validates the return value against the effective return type node.
+     * 6. Wraps returned Traversable iterators for lazy value checking.
+     *
      * @param array<string, mixed> $vars
      */
     public static function checkReturn(string $function, mixed $value, ?object $thisObj = null, array $vars = []): mixed
@@ -246,22 +313,18 @@ final class RuntimeTypeChecker
 
         $registry = self::getRegistry();
 
-        // Strict $this identity check
         $err = SpecialTypeResolver::checkThisIdentity($returnTypeNode, $value, $thisObj, $function);
         if ($err !== null) {
             throw $err;
         }
 
-        // Resolve special type names (self, static, parent, $this)
         $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $function, $thisObj);
 
-        // Resolve aliases (@phpstan-type)
         $aliases = $contract['aliases'] ?? [];
         if ($returnTypeNode instanceof IdentifierTypeNode && isset($aliases[$returnTypeNode->name])) {
             $returnTypeNode = $aliases[$returnTypeNode->name];
         }
 
-        // Substitute template placeholders (T[] -> int[], or unbound T -> Animal/mixed)
         $boundTemplates = TemplateManager::getBoundTemplates($function, $thisObj, $contract['templates']);
         $declaredTemplates = $contract['templates'];
 
@@ -270,7 +333,32 @@ final class RuntimeTypeChecker
             $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $function, $thisObj);
         }
 
-        // Parameter-based Conditional Return Types
+        $returnTypeNode = self::resolveConditionalReturnType($returnTypeNode, $vars, $boundTemplates, $registry);
+
+        $err = $registry->validate($value, $returnTypeNode, $function . '(): Return value');
+        if ($err !== null) {
+            throw $err;
+        }
+
+        if ($value instanceof \Traversable) {
+            return self::wrapIterable($function, 'return', $value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Resolves parameter-based or template-based conditional return types if present.
+     *
+     * @param array<string, mixed> $vars
+     * @param array<string, TypeNode> $boundTemplates
+     */
+    private static function resolveConditionalReturnType(
+        TypeNode $returnTypeNode,
+        array $vars,
+        array $boundTemplates,
+        TypeValidatorRegistry $registry
+    ): TypeNode {
         if ($returnTypeNode instanceof ConditionalTypeForParameterNode) {
             $paramName = ltrim($returnTypeNode->parameterName, '$');
             $paramValue = $vars[$paramName] ?? null;
@@ -282,17 +370,9 @@ final class RuntimeTypeChecker
                 $isTargetMatch = ! $isTargetMatch;
             }
 
-            $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
-
-            $err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value');
-            if ($err !== null) {
-                throw $err;
-            }
-
-            return $value;
+            return $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
         }
 
-        // Template-based Conditional Return Types
         if ($returnTypeNode instanceof ConditionalTypeNode) {
             /** @var TypeNode|IdentifierTypeNode $subjectTypeNode */
             $subjectTypeNode = $returnTypeNode->subjectType;
@@ -303,7 +383,6 @@ final class RuntimeTypeChecker
             }
 
             $subStr = (string) $subjectTypeNode;
-
             /** @var TypeNode $targetTypeNode */
             $targetTypeNode = $returnTypeNode->targetType;
             $targetStr = (string) $targetTypeNode;
@@ -320,29 +399,15 @@ final class RuntimeTypeChecker
                 $isTargetMatch = ! $isTargetMatch;
             }
 
-            $effectiveReturnTypeNode = $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
-
-            $err = $registry->validate($value, $effectiveReturnTypeNode, $function . '(): Return value');
-            if ($err !== null) {
-                throw $err;
-            }
-
-            return $value;
+            return $isTargetMatch ? $returnTypeNode->if : $returnTypeNode->else;
         }
 
-        // Standard Return Validation
-        $err = $registry->validate($value, $returnTypeNode, $function . '(): Return value');
-        if ($err !== null) {
-            throw $err;
-        }
-
-        if ($value instanceof \Traversable) {
-            return self::wrapIterable($function, 'return', $value);
-        }
-
-        return $value;
+        return $returnTypeNode;
     }
 
+    /**
+     * Validates a value sent into a generator via $gen->send() against TSend.
+     */
     public static function checkSend(string $function, mixed $sendValue): mixed
     {
         if ($sendValue === null) {
@@ -353,7 +418,6 @@ final class RuntimeTypeChecker
         $returnTypeNode = $contract['return'] ?? null;
 
         if ($returnTypeNode instanceof GenericTypeNode) {
-            // Generator<TKey, TValue, TSend, TReturn> -> index 2 is TSend
             $sendTypeNode = $returnTypeNode->genericTypes[2] ?? null;
 
             if ($sendTypeNode !== null) {
@@ -368,6 +432,9 @@ final class RuntimeTypeChecker
         return $sendValue;
     }
 
+    /**
+     * Validates yielded keys and values from a generator function against TKey and TValue.
+     */
     public static function checkYield(string $function, mixed $key, mixed $value): mixed
     {
         $contract = ContractParser::parse($function);
@@ -410,22 +477,33 @@ final class RuntimeTypeChecker
         return $value;
     }
 
+    /**
+     * Wraps a callable parameter to intercept calls and validate inputs/returns dynamically.
+     */
     public static function wrapCallable(string $function, string $paramName, mixed $callable): mixed
     {
         return CallableWrapper::wrap($function, $paramName, $callable, self::getRegistry());
     }
 
+    /**
+     * Wraps an iterable or generator parameter to lazily validate items during iteration.
+     */
     public static function wrapIterable(string $function, string $paramName, mixed $iterable): mixed
     {
         return IterableWrapper::wrap($function, $paramName, $iterable, self::getRegistry());
     }
 
+    /**
+     * Infers a TypeNode AST representation from a raw PHP value.
+     */
     public static function inferTypeFromValue(mixed $value): TypeNode
     {
         return TemplateManager::inferTypeFromValue($value);
     }
 
     /**
+     * Determines if a generic node represents a class-string<T> template.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      */
     private static function isClassStringTemplate(GenericTypeNode $typeNode, array $templates): bool
@@ -437,6 +515,8 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Binds and validates a class-string<T> argument against declared template bounds.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      */
     private static function resolveClassStringTemplate(GenericTypeNode $typeNode, mixed $val, string $paramName, string $function, ?object $thisObj, array $templates): ?\TypeError
@@ -475,6 +555,8 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Extracts template name from an AST node if present in the function's declared templates.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      */
     private static function getTemplateName(TypeNode $typeNode, array $templates): ?string
@@ -491,6 +573,8 @@ final class RuntimeTypeChecker
     }
 
     /**
+     * Binds a generic template parameter or validates an incoming argument against a previously bound template.
+     *
      * @param array<string, TemplateTagValueNode> $templates
      */
     private static function resolveTemplateParam(TypeNode $typeNode, mixed $val, string $paramName, string $function, ?object $thisObj, array $templates, TypeValidatorRegistry $registry): ?\TypeError
@@ -508,7 +592,6 @@ final class RuntimeTypeChecker
             $inferredType = TemplateManager::inferTypeFromValue($sampleVal);
 
             if ($templateNode->bound !== null) {
-                // Resolve FQCN for the bound before checking
                 $resolvedBound = SpecialTypeResolver::resolve($templateNode->bound, $function, $thisObj);
                 $err = $registry->validate($sampleVal, $resolvedBound, $function . '(): Argument $' . $paramName . ' (template ' . $templateName . ')');
                 if ($err !== null) {
@@ -529,7 +612,7 @@ final class RuntimeTypeChecker
         } else {
             $expectedTypeNode = TemplateManager::getBoundType($function, $thisObj, $templateName);
             if ($expectedTypeNode === null) {
-                return null; // Should ideally never happen if isBound() is true
+                return null;
             }
 
             if ($isVariadic && is_array($val)) {

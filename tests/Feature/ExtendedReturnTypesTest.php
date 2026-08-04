@@ -161,6 +161,7 @@ describe('Literal Union Enum Return Types', function () {
 
     test('throws TypeError when returned status is not in allowed union', function () {
         expect(fn () => testReturnLiteralUnion('archived'))
-            ->toThrow(TypeError::class, 'Return value');
+            ->toThrow(TypeError::class, 'Return value')
+        ;
     });
 });

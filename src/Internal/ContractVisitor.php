@@ -16,22 +16,35 @@ use PHPStan\PhpDocParser\ParserConfig;
 
 final class ContractVisitor extends NodeVisitorAbstract
 {
-    private array $scopeStack = [[]]; // Start with global scope
+    /**
+     * Stack storing variable types per lexical scope (global, functions, closures, methods).
+     *
+     * @var array<int, array<string, string>>
+     */
+    private array $scopeStack = [[]];
 
+    /**
+     * Traverses and transforms AST nodes during entry.
+     *
+     * Performs the following steps:
+     * 1. Tracks lexical scope frames for variables across functions, closures, and methods.
+     * 2. Injects runtime contract checks on function and method declarations.
+     * 3. Extracts @var annotations from expression statements.
+     * 4. Extracts @var annotations from foreach loop value variables.
+     * 5. Intercepts variable assignments to apply inline type validation wrappers.
+     */
     public function enterNode(Node $node): ?int
     {
-        // 1. Scope Tracking
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
             $this->scopeStack[] = [];
         }
 
-        // 2. Function / Method contract injection
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod) {
             $this->injectFunctionContract($node);
+
             return null;
         }
 
-        // 3. Extract @var annotations from expression statements (e.g. `/** @var int $x */ $x = 1;` or `/** @var int $x */ $x;`)
         if ($node instanceof Node\Stmt\Expression) {
             $doc = $node->getDocComment();
             if ($doc !== null && str_contains($doc->getText(), '@var')) {
@@ -39,7 +52,6 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        // 4. Extract @var annotations from foreach loops (e.g. `/** @var string $item */ foreach ($items as $item)`)
         if ($node instanceof Node\Stmt\Foreach_) {
             $doc = $node->getDocComment();
             if ($doc !== null && str_contains($doc->getText(), '@var')) {
@@ -47,7 +59,6 @@ final class ContractVisitor extends NodeVisitorAbstract
             }
         }
 
-        // 5. Intercept Assignments for Inline Variable Validation
         if ($node instanceof Node\Expr\Assign && $node->var instanceof Node\Expr\Variable && is_string($node->var->name)) {
             $varName = $node->var->name;
             $typeString = $this->getVarTypeFromScope($varName);
@@ -68,6 +79,9 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
+    /**
+     * Pops the current lexical scope stack frame when leaving a function, method, or closure.
+     */
     public function leaveNode(Node $node): ?int
     {
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
@@ -77,6 +91,11 @@ final class ContractVisitor extends NodeVisitorAbstract
         return null;
     }
 
+    /**
+     * Parses @var docblock tags and records variable types into the current scope frame.
+     *
+     * Infers variable names from expressions or variable declarations if unnamed in the tag.
+     */
     private function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
     {
         static $phpDocParser = null;
@@ -99,7 +118,6 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $typeString = (string) $varTags[0]->type;
                 $varName = ltrim($varTags[0]->variableName, '$');
 
-                // If no varName in docblock, try to infer from expression: /** @var int */ $x = 1;
                 if ($varName === '' && $expr instanceof Node\Expr\Assign && $expr->var instanceof Node\Expr\Variable && is_string($expr->var->name)) {
                     $varName = $expr->var->name;
                 } elseif ($varName === '' && $expr instanceof Node\Expr\Variable && is_string($expr->name)) {
@@ -116,6 +134,9 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
     }
 
+    /**
+     * Resolves the recorded type of a variable by searching from the innermost scope frame outwards.
+     */
     private function getVarTypeFromScope(string $varName): ?string
     {
         for ($i = count($this->scopeStack) - 1; $i >= 0; $i--) {
@@ -123,9 +144,13 @@ final class ContractVisitor extends NodeVisitorAbstract
                 return $this->scopeStack[$i][$varName];
             }
         }
+
         return null;
     }
 
+    /**
+     * Determines if a function or class method body contains yield or yield from expressions.
+     */
     private function isGenerator(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): bool
     {
         if ($node->stmts === null) {
@@ -134,8 +159,10 @@ final class ContractVisitor extends NodeVisitorAbstract
 
         $isGen = false;
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class($isGen) extends NodeVisitorAbstract {
-            public function __construct(private bool &$isGen) {}
+        $traverser->addVisitor(new class ($isGen) extends NodeVisitorAbstract {
+            public function __construct(private bool &$isGen)
+            {
+            }
 
             public function enterNode(Node $n): ?int
             {
@@ -158,6 +185,9 @@ final class ContractVisitor extends NodeVisitorAbstract
         return $isGen;
     }
 
+    /**
+     * Prepends parameter contract checks and wraps return statements for function and method declarations.
+     */
     private function injectFunctionContract(Node\Stmt\Function_|Node\Stmt\ClassMethod $node): void
     {
         if ($node->stmts === null) {
@@ -180,7 +210,6 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         $isNativeVoid = $node->returnType instanceof Node\Identifier && strtolower($node->returnType->name) === 'void';
-
         $hasThis = $isClassMethod && ! $node->isStatic();
         $thisArg = $hasThis
             ? new Node\Expr\Variable('this')
@@ -189,207 +218,247 @@ final class ContractVisitor extends NodeVisitorAbstract
         $injectedStmts = [];
 
         if ($hasParam) {
-            // Flattened single-level IF statement for zero line drift
-            $injectedStmts[] = new Node\Stmt\If_(
-                new Node\Expr\Instanceof_(
-                    new Node\Expr\Assign(
-                        new Node\Expr\Variable('__typephpErr'),
-                        new Node\Expr\FuncCall(
-                            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::setupScope'),
-                            [
-                                new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                                new Node\Arg($thisArg),
-                            ]
-                        )
-                    ),
-                    new Node\Name('\TypeError')
+            $injectedStmts = $this->buildParamInjections($node, $docText, $thisArg, $isClassMethod);
+        }
+
+        if ($hasReturn) {
+            $node->stmts = $this->isGenerator($node)
+                ? $this->wrapGeneratorReturns($node->stmts)
+                : $this->wrapNonGeneratorReturns($node->stmts, $thisArg, $isNativeVoid);
+        }
+
+        $node->stmts = array_merge($injectedStmts, $node->stmts);
+    }
+
+    /**
+     * Builds parameter validation and wrapper statements.
+     *
+     * Injects:
+     * - Single-level IF statement to initialize scope and evaluate parameter constraints without line drift.
+     * - Callable parameter wrappers for runtime callback checks.
+     * - Lazy iterable and generator parameter wrappers.
+     *
+     * @return array<Node\Stmt>
+     */
+    private function buildParamInjections(
+        Node\Stmt\Function_|Node\Stmt\ClassMethod $node,
+        string $docText,
+        Node\Expr $thisArg,
+        bool $isClassMethod
+    ): array {
+        $injectedStmts = [];
+
+        $injectedStmts[] = new Node\Stmt\If_(
+            new Node\Expr\Instanceof_(
+                new Node\Expr\Assign(
+                    new Node\Expr\Variable('__typephpErr'),
+                    new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::setupScope'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                            new Node\Arg($thisArg),
+                        ]
+                    )
                 ),
-                [
-                    'stmts' => [
-                        new Node\Stmt\Expression(
-                            new Node\Expr\Throw_(new Node\Expr\Variable('__typephpErr'))
-                        ),
-                    ],
-                ]
-            );
+                new Node\Name('\TypeError')
+            ),
+            [
+                'stmts' => [
+                    new Node\Stmt\Expression(
+                        new Node\Expr\Throw_(new Node\Expr\Variable('__typephpErr'))
+                    ),
+                ],
+            ]
+        );
 
-            // Callable wrapping
-            if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
-                foreach ($node->params as $param) {
-                    if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
-                        $paramName = $param->var->name;
-                        $injectedStmts[] = new Node\Stmt\Expression(
-                            new Node\Expr\Assign(
-                                new Node\Expr\Variable($paramName),
-                                new Node\Expr\FuncCall(
-                                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapCallable'),
-                                    [
-                                        new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                        new Node\Arg(new Node\Scalar\String_($paramName)),
-                                        new Node\Arg(new Node\Expr\Variable($paramName)),
-                                    ]
-                                )
+        if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
+            foreach ($node->params as $param) {
+                if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                    $paramName = $param->var->name;
+                    $injectedStmts[] = new Node\Stmt\Expression(
+                        new Node\Expr\Assign(
+                            new Node\Expr\Variable($paramName),
+                            new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapCallable'),
+                                [
+                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                                    new Node\Arg(new Node\Scalar\String_($paramName)),
+                                    new Node\Arg(new Node\Expr\Variable($paramName)),
+                                ]
                             )
-                        );
-                    }
-                }
-            }
-
-            // Lazy Iterable/Generator wrapping
-            if ($isClassMethod || str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
-                foreach ($node->params as $param) {
-                    if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
-                        $paramName = $param->var->name;
-                        $injectedStmts[] = new Node\Stmt\Expression(
-                            new Node\Expr\Assign(
-                                new Node\Expr\Variable($paramName),
-                                new Node\Expr\FuncCall(
-                                    new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
-                                    [
-                                        new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                        new Node\Arg(new Node\Scalar\String_($paramName)),
-                                        new Node\Arg(new Node\Expr\Variable($paramName)),
-                                    ]
-                                )
-                            )
-                        );
-                    }
+                        )
+                    );
                 }
             }
         }
 
-        if ($hasReturn) {
-            $isGeneratorFunc = $this->isGenerator($node);
-
-            if ($isGeneratorFunc) {
-                // For generator functions, wrap yield/yield from expressions lazily
-                $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class() extends NodeVisitorAbstract {
-                    public function enterNode(Node $n): int|Node|null
-                    {
-                        if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
-                            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
-                        }
-
-                        if ($n instanceof Node\Expr\Yield_) {
-                            if ($n->getAttribute('typephp_wrapped') === true) {
-                                return null;
-                            }
-
-                            $n->setAttribute('typephp_wrapped', true);
-
-                            $n->value = new Node\Expr\FuncCall(
-                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkYield'),
-                                [
-                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                    new Node\Arg($n->key ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
-                                    new Node\Arg($n->value ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
-                                ]
-                            );
-
-                            return new Node\Expr\FuncCall(
-                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkSend'),
-                                [
-                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                    new Node\Arg($n),
-                                ]
-                            );
-                        }
-
-                        if ($n instanceof Node\Expr\YieldFrom) {
-                            if ($n->getAttribute('typephp_wrapped') === true) {
-                                return null;
-                            }
-
-                            $n->setAttribute('typephp_wrapped', true);
-
-                            $n->expr = new Node\Expr\FuncCall(
+        if ($isClassMethod || str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
+            foreach ($node->params as $param) {
+                if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                    $paramName = $param->var->name;
+                    $injectedStmts[] = new Node\Stmt\Expression(
+                        new Node\Expr\Assign(
+                            new Node\Expr\Variable($paramName),
+                            new Node\Expr\FuncCall(
                                 new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
                                 [
                                     new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                    new Node\Arg(new Node\Scalar\String_('return')),
-                                    new Node\Arg($n->expr),
+                                    new Node\Arg(new Node\Scalar\String_($paramName)),
+                                    new Node\Arg(new Node\Expr\Variable($paramName)),
                                 ]
-                            );
-                        }
+                            )
+                        )
+                    );
+                }
+            }
+        }
 
+        return $injectedStmts;
+    }
+
+    /**
+     * Wraps yield/yield from expressions lazily for generator functions.
+     *
+     * @param array<Node\Stmt> $stmts
+     *
+     * @return array<Node\Stmt>
+     */
+    private function wrapGeneratorReturns(array $stmts): array
+    {
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor(new class () extends NodeVisitorAbstract {
+            public function enterNode(Node $n): int|Node|null
+            {
+                if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                    return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+                }
+
+                if ($n instanceof Node\Expr\Yield_) {
+                    if ($n->getAttribute('typephp_wrapped') === true) {
                         return null;
                     }
-                });
 
-                /** @var array<Node\Stmt> $newStmts */
-                $newStmts = $traverser->traverse($node->stmts);
-                $node->stmts = $newStmts;
-            } else {
-                // Non-generator functions: wrap return statements
-                $traverser = new NodeTraverser();
-                $traverser->addVisitor(new class($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
-                    public function __construct(
-                        private Node\Expr $thisArg,
-                        private bool $isNativeVoid
-                    ) {}
+                    $n->setAttribute('typephp_wrapped', true);
 
-                    public function enterNode(Node $n): int|array|null
-                    {
-                        if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
-                            return NodeTraverser::DONT_TRAVERSE_CHILDREN;
-                        }
+                    $n->value = new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkYield'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg($n->key ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
+                            new Node\Arg($n->value ?? new Node\Expr\ConstFetch(new Node\Name('null'))),
+                        ]
+                    );
 
-                        if ($n instanceof Node\Stmt\Return_) {
-                            $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
+                    return new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkSend'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg($n),
+                        ]
+                    );
+                }
 
-                            $checkReturnCall = new Node\Expr\FuncCall(
-                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
-                                [
-                                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                                    new Node\Arg($exprToWrap),
-                                    new Node\Arg($this->thisArg),
-                                    new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
-                                ]
-                            );
-
-                            if ($this->isNativeVoid) {
-                                return [
-                                    new Node\Stmt\Expression($checkReturnCall),
-                                    new Node\Stmt\Return_(null),
-                                ];
-                            }
-
-                            $n->expr = $checkReturnCall;
-                        }
-
+                if ($n instanceof Node\Expr\YieldFrom) {
+                    if ($n->getAttribute('typephp_wrapped') === true) {
                         return null;
                     }
-                });
 
-                /** @var array<Node\Stmt> $newStmts */
-                $newStmts = $traverser->traverse($node->stmts);
-                $node->stmts = $newStmts;
+                    $n->setAttribute('typephp_wrapped', true);
 
-                $lastStmt = end($node->stmts);
-                if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
+                    $n->expr = new Node\Expr\FuncCall(
+                        new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::wrapIterable'),
+                        [
+                            new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                            new Node\Arg(new Node\Scalar\String_('return')),
+                            new Node\Arg($n->expr),
+                        ]
+                    );
+                }
+
+                return null;
+            }
+        });
+
+        /** @var array<Node\Stmt> $newStmts */
+        $newStmts = $traverser->traverse($stmts);
+
+        return $newStmts;
+    }
+
+    /**
+     * Wraps return statements and injects trailing return checks for non-generator functions.
+     *
+     * @param array<Node\Stmt> $stmts
+     *
+     * @return array<Node\Stmt>
+     */
+    private function wrapNonGeneratorReturns(array $stmts, Node\Expr $thisArg, bool $isNativeVoid): array
+    {
+        $traverser = new NodeTraverser();
+        $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+            public function __construct(
+                private Node\Expr $thisArg,
+                private bool $isNativeVoid
+            ) {
+            }
+
+            public function enterNode(Node $n): int|array|null
+            {
+                if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
+                    return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+                }
+
+                if ($n instanceof Node\Stmt\Return_) {
+                    $exprToWrap = $n->expr ?? new Node\Expr\ConstFetch(new Node\Name('null'));
+
                     $checkReturnCall = new Node\Expr\FuncCall(
                         new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
                         [
                             new Node\Arg(new Node\Scalar\MagicConst\Method()),
-                            new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
-                            new Node\Arg($thisArg),
+                            new Node\Arg($exprToWrap),
+                            new Node\Arg($this->thisArg),
                             new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
                         ]
                     );
 
-                    if ($isNativeVoid) {
-                        $node->stmts[] = new Node\Stmt\Expression($checkReturnCall);
-                        $node->stmts[] = new Node\Stmt\Return_(null);
-                    } else {
-                        $node->stmts[] = new Node\Stmt\Return_($checkReturnCall);
+                    if ($this->isNativeVoid) {
+                        return [
+                            new Node\Stmt\Expression($checkReturnCall),
+                            new Node\Stmt\Return_(null),
+                        ];
                     }
+
+                    $n->expr = $checkReturnCall;
                 }
+
+                return null;
+            }
+        });
+
+        /** @var array<Node\Stmt> $newStmts */
+        $newStmts = $traverser->traverse($stmts);
+
+        $lastStmt = end($newStmts);
+        if (! $lastStmt instanceof Node\Stmt\Return_ && ! ($lastStmt instanceof Node\Stmt\Expression && $lastStmt->expr instanceof Node\Expr\Throw_)) {
+            $checkReturnCall = new Node\Expr\FuncCall(
+                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::checkReturn'),
+                [
+                    new Node\Arg(new Node\Scalar\MagicConst\Method()),
+                    new Node\Arg(new Node\Expr\ConstFetch(new Node\Name('null'))),
+                    new Node\Arg($thisArg),
+                    new Node\Arg(new Node\Expr\FuncCall(new Node\Name('get_defined_vars'))),
+                ]
+            );
+
+            if ($isNativeVoid) {
+                $newStmts[] = new Node\Stmt\Expression($checkReturnCall);
+                $newStmts[] = new Node\Stmt\Return_(null);
+            } else {
+                $newStmts[] = new Node\Stmt\Return_($checkReturnCall);
             }
         }
 
-        // Prepend our injected headers natively without wrapping the user's code inside a block
-        $node->stmts = array_merge($injectedStmts, $node->stmts);
+        return $newStmts;
     }
 }
