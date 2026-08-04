@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
+/**
+ * @internal
+ */
 final class CacheManager
 {
     /**
@@ -12,8 +15,9 @@ final class CacheManager
     public static function getCacheDir(): string
     {
         $config = Config::get();
+        $dir = $config['cache_dir'] ?? null;
 
-        return $config['cache_dir'] ?? (sys_get_temp_dir() . '/typephp-cache');
+        return \is_string($dir) ? $dir : (sys_get_temp_dir() . '/typephp-cache');
     }
 
     /**
@@ -28,7 +32,7 @@ final class CacheManager
         }
 
         $files = glob($cacheDir . '/*.php');
-        if (! $files) {
+        if ($files === false || count($files) === 0) {
             return 0;
         }
 

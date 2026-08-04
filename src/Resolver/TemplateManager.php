@@ -14,77 +14,144 @@ use PHPStan\PhpDocParser\Parser\PhpDocParser;
 use PHPStan\PhpDocParser\Parser\TokenIterator;
 use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
-use TypePHP\ErrorFactory;
+use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\ErrorFactory;
 
+/**
+ * @internal Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
+ */
 final class TemplateManager
 {
     /**
+     * WeakMap storing generic template bindings per object instance.
+     *
      * @var \WeakMap<object, array<string, TypeNode>>|null
      */
     private static ?\WeakMap $instanceTemplateBindings = null;
 
     /**
-     * @var array<string, TypeNode>
+     * Call stack frames storing template bindings per function or method call.
+     *
+     * @var array<string, list<array<string, TypeNode>>>
      */
-    private static array $callTemplateBindings = [];
+    private static array $callStackBindings = [];
 
-    public static function clearCallBindings(string $function, array $templates): void
+    /**
+     * Pushes a new empty call frame onto the stack for a function execution.
+     */
+    public static function pushCallFrame(string $function): void
     {
-        foreach ($templates as $templateName => $_) {
-            unset(self::$callTemplateBindings["{$function}:{$templateName}"]);
+        self::$callStackBindings[$function][] = [];
+    }
+
+    /**
+     * Pops the top call frame from the stack upon function completion or exception.
+     */
+    public static function popCallFrame(string $function): void
+    {
+        if (self::hasCallFrame($function)) {
+            array_pop(self::$callStackBindings[$function]);
         }
     }
 
+    /**
+     * Clears and initializes a fresh call frame for a function call.
+     *
+     * @param array<string, TemplateTagValueNode> $templates
+     */
+    public static function clearCallBindings(string $function, array $templates): void
+    {
+        self::pushCallFrame($function);
+    }
+
+    /**
+     * Retrieves currently bound template types for a function call or object instance.
+     *
+     * @param array<string, TemplateTagValueNode> $templates
+     *
+     * @return array<string, TypeNode>
+     */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
     {
-        $bound = [];
         if ($thisObj !== null && isset(self::$instanceTemplateBindings[$thisObj])) {
             return self::$instanceTemplateBindings[$thisObj];
         }
 
-        foreach ($templates as $templateName => $_) {
-            $callKey = "{$function}:{$templateName}";
-            if (isset(self::$callTemplateBindings[$callKey])) {
-                $bound[$templateName] = self::$callTemplateBindings[$callKey];
-            }
+        if (self::hasCallFrame($function)) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return $topFrame !== false ? $topFrame : [];
         }
 
-        return $bound;
+        return [];
     }
 
+    /**
+     * Checks if a template name is bound in the current instance or call stack frame.
+     */
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool
     {
         if ($thisObj !== null) {
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
         }
 
-        return isset(self::$callTemplateBindings["{$function}:{$templateName}"]);
+        if (self::hasCallFrame($function)) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return isset($topFrame[$templateName]);
+        }
+
+        return false;
     }
 
+    /**
+     * Retrieves the bound TypeNode for a template name from instance or call stack context.
+     */
     public static function getBoundType(string $function, ?object $thisObj, string $templateName): ?TypeNode
     {
         if ($thisObj !== null) {
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
         }
 
-        return self::$callTemplateBindings["{$function}:{$templateName}"] ?? null;
+        if (self::hasCallFrame($function)) {
+            $topFrame = end(self::$callStackBindings[$function]);
+
+            return $topFrame[$templateName] ?? null;
+        }
+
+        return null;
     }
 
+    /**
+     * Binds an inferred TypeNode to a template parameter for an instance or call stack frame.
+     */
     public static function bindTemplate(string $function, ?object $thisObj, string $templateName, TypeNode $inferredType): void
     {
         if ($thisObj !== null) {
             if (self::$instanceTemplateBindings === null) {
                 self::$instanceTemplateBindings = new \WeakMap();
             }
-            if (! isset(self::$instanceTemplateBindings[$thisObj])) {
-                self::$instanceTemplateBindings[$thisObj] = [];
-            }
-            self::$instanceTemplateBindings[$thisObj][$templateName] = $inferredType;
+            $bindings = self::$instanceTemplateBindings[$thisObj] ?? [];
+            $bindings[$templateName] = $inferredType;
+            self::$instanceTemplateBindings[$thisObj] = $bindings;
         } else {
-            self::$callTemplateBindings["{$function}:{$templateName}"] = $inferredType;
+            if (! self::hasCallFrame($function)) {
+                self::$callStackBindings[$function][] = [];
+            }
+            $lastIndex = count(self::$callStackBindings[$function]) - 1;
+            self::$callStackBindings[$function][$lastIndex][$templateName] = $inferredType;
         }
     }
 
+    /**
+     * Binds generic template types to an object instance or validates variance against an existing binding.
+     *
+     * Performs the following steps:
+     * 1. Resolves actual class name for self/static/$this keywords.
+     * 2. Resolves inherited @extends and @implements template declarations.
+     * 3. Reflects target class to extract declared @template tags and variance modifiers.
+     * 4. Binds expected generic types to the instance or enforces variance constraints.
+     */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
     {
         $className = $typeNode->type->name;
@@ -96,21 +163,18 @@ final class TemplateManager
             return null;
         }
 
+        if (! ClassNameValidator::isValid($className) || (! class_exists($className) && ! interface_exists($className) && ! trait_exists($className))) {
+            return null;
+        }
+
+        self::resolveInheritedTemplates($instance, $className);
+
         try {
             $ref = new \ReflectionClass($className);
             $classDoc = $ref->getDocComment();
 
-            if ($classDoc) {
-                static $phpDocParser = null;
-                static $lexer = null;
-
-                if ($phpDocParser === null) {
-                    $config = new ParserConfig(usedAttributes: []);
-                    $lexer = new Lexer($config);
-                    $constExprParser = new ConstExprParser($config);
-                    $typeParser = new TypeParser($config, $constExprParser);
-                    $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-                }
+            if ($classDoc !== false) {
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
 
                 $classTokens = new TokenIterator($lexer->tokenize($classDoc));
                 $classPhpDocNode = $phpDocParser->parse($classTokens);
@@ -151,19 +215,14 @@ final class TemplateManager
                         $templateName = $templateTag->name;
 
                         if ($forceBind) {
-                            if (! isset(self::$instanceTemplateBindings[$instance])) {
-                                self::$instanceTemplateBindings[$instance] = [];
-                            }
-                            self::$instanceTemplateBindings[$instance][$templateName] = $expectedTypeNode;
+                            $bindings = self::$instanceTemplateBindings[$instance] ?? [];
+                            $bindings[$templateName] = $expectedTypeNode;
+                            self::$instanceTemplateBindings[$instance] = $bindings;
                         } else {
                             $existingTypeNode = self::$instanceTemplateBindings[$instance][$templateName]
                                 ?? new IdentifierTypeNode('mixed');
 
-                            $valid = self::checkVariance(
-                                $existingTypeNode,
-                                $expectedTypeNode,
-                                $variance
-                            );
+                            $valid = self::checkVariance($existingTypeNode, $expectedTypeNode, $variance);
 
                             if (! $valid) {
                                 return ErrorFactory::createError(
@@ -175,12 +234,82 @@ final class TemplateManager
                 }
             }
         } catch (\Throwable $e) {
-            // Ignore
+            // Silently ignore reflection or parsing errors
         }
 
         return null;
     }
 
+    /**
+     * Resolves and binds parent class (@extends) and interface (@implements) template mappings.
+     */
+    public static function resolveInheritedTemplates(object $instance, string $targetClassName): void
+    {
+        $actualClassName = get_class($instance);
+
+        try {
+            $ref = new \ReflectionClass($actualClassName);
+            $classDoc = $ref->getDocComment();
+
+            if ($classDoc !== false) {
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
+
+                $classTokens = new TokenIterator($lexer->tokenize($classDoc));
+                $classPhpDocNode = $phpDocParser->parse($classTokens);
+
+                $inheritedTags = array_merge(
+                    $classPhpDocNode->getExtendsTagValues(),
+                    $classPhpDocNode->getImplementsTagValues()
+                );
+
+                foreach ($inheritedTags as $inheritedTag) {
+                    $genericTypeNode = $inheritedTag->type;
+                    if ($genericTypeNode instanceof GenericTypeNode) {
+                        $parentName = SpecialTypeResolver::resolveFqcn($genericTypeNode->type->name, $ref);
+
+                        if (ClassNameValidator::isValid($parentName) && ($parentName === $targetClassName || is_a($parentName, $targetClassName, true))) {
+                            if (! class_exists($parentName) && ! interface_exists($parentName)) {
+                                continue;
+                            }
+
+                            $parentRef = new \ReflectionClass($parentName);
+                            $parentDoc = $parentRef->getDocComment();
+
+                            if ($parentDoc !== false) {
+                                $parentTokens = new TokenIterator($lexer->tokenize($parentDoc));
+                                $parentPhpDocNode = $phpDocParser->parse($parentTokens);
+
+                                $parentTemplateNames = [];
+                                foreach ($parentPhpDocNode->getTags() as $tag) {
+                                    if ($tag->value instanceof TemplateTagValueNode) {
+                                        $parentTemplateNames[] = $tag->value->name;
+                                    }
+                                }
+
+                                $bindings = self::$instanceTemplateBindings[$instance] ?? [];
+                                foreach ($parentTemplateNames as $idx => $templateName) {
+                                    if (isset($genericTypeNode->genericTypes[$idx])) {
+                                        $bindings[$templateName] = self::resolveTypeNodeAst($genericTypeNode->genericTypes[$idx], $ref);
+                                    }
+                                }
+
+                                if (self::$instanceTemplateBindings === null) {
+                                    self::$instanceTemplateBindings = new \WeakMap();
+                                }
+                                self::$instanceTemplateBindings[$instance] = $bindings;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore reflection or parsing errors
+        }
+    }
+
+    /**
+     * Checks if an existing type node satisfies an expected type node under a given variance modifier.
+     */
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
     {
         $existingStr = (string) $existing;
@@ -194,8 +323,25 @@ final class TemplateManager
             return true;
         }
 
+        if ($existing instanceof GenericTypeNode && $expected instanceof GenericTypeNode) {
+            if (! is_a($existing->type->name, $expected->type->name, true)) {
+                return false;
+            }
+
+            foreach ($expected->genericTypes as $idx => $expectedInner) {
+                $existingInner = $existing->genericTypes[$idx] ?? new IdentifierTypeNode('mixed');
+                $innerVariance = $expected->variances[$idx] ?? GenericTypeNode::VARIANCE_INVARIANT;
+
+                if (! self::checkVariance($existingInner, $expectedInner, $innerVariance)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         $isSubclass = function (string $sub, string $super): bool {
-            if ((class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
+            if (ClassNameValidator::isValid($sub) && ClassNameValidator::isValid($super) && (class_exists($sub) || interface_exists($sub)) && (class_exists($super) || interface_exists($super))) {
                 return is_a($sub, $super, true);
             }
 
@@ -213,33 +359,34 @@ final class TemplateManager
         return false;
     }
 
-    public static function bindInstance(object $instance, string $typeString): object
+    /**
+     * Parses a type string and binds generic templates to an object instance.
+     */
+    public static function bindInstance(object $instance, string $typeString, string $file = ''): object
     {
-        static $phpDocParser = null;
-        static $lexer = null;
-
-        if ($phpDocParser === null) {
-            $config = new ParserConfig(usedAttributes: []);
-            $lexer = new Lexer($config);
-            $constExprParser = new ConstExprParser($config);
-            $typeParser = new TypeParser($config, $constExprParser);
-            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
-        }
-
         try {
+            [$typeParser, $lexer] = self::getTypeParserComponents();
+
             $tokens = new TokenIterator($lexer->tokenize($typeString));
             $typeNode = $typeParser->parse($tokens);
 
+            if ($file !== '') {
+                $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
+            }
+
             if ($typeNode instanceof GenericTypeNode) {
-                self::bindInstanceFromNode($instance, $typeNode, forceBind: true);
+                self::bindInstanceFromNode($instance, $typeNode, '', true);
             }
         } catch (\Throwable $e) {
-            // Ignore malformed docblock strings
+            // Silently ignore malformed docblock strings
         }
 
         return $instance;
     }
 
+    /**
+     * Infers a TypeNode AST representation from a raw PHP value.
+     */
     public static function inferTypeFromValue(mixed $value): TypeNode
     {
         if (is_int($value)) {
@@ -257,10 +404,10 @@ final class TemplateManager
         if (is_array($value)) {
             return new IdentifierTypeNode(array_is_list($value) ? 'list' : 'array');
         }
+
         if (is_object($value)) {
             $className = get_class($value);
-
-            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && ! empty(self::$instanceTemplateBindings[$value])) {
+            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && count(self::$instanceTemplateBindings[$value]) > 0) {
                 $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
 
                 return new GenericTypeNode(new IdentifierTypeNode($className), $genericTypes);
@@ -268,10 +415,92 @@ final class TemplateManager
 
             return new IdentifierTypeNode($className);
         }
+
         if ($value === null) {
             return new IdentifierTypeNode('null');
         }
 
         return new IdentifierTypeNode('mixed');
+    }
+
+    /**
+     * Checks whether a function has at least one active call frame on the stack.
+     */
+    private static function hasCallFrame(string $function): bool
+    {
+        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
+    }
+
+    /**
+     * Resolves FQCNs inside an inherited generic TypeNode AST.
+     *
+     * @param \ReflectionClass<object> $ref
+     */
+    private static function resolveTypeNodeAst(TypeNode $n, \ReflectionClass $ref): TypeNode
+    {
+        if ($n instanceof IdentifierTypeNode) {
+            return new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->name, $ref));
+        }
+        if ($n instanceof GenericTypeNode) {
+            $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
+            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+
+            return new GenericTypeNode($base, $generics, $n->variances);
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+        if ($n instanceof \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode) {
+            return new \PHPStan\PhpDocParser\Ast\Type\IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+        }
+
+        return $n;
+    }
+
+    /**
+     * @return array{PhpDocParser, Lexer}
+     */
+    private static function getPhpDocParserComponents(): array
+    {
+        /** @var PhpDocParser|null $phpDocParser */
+        static $phpDocParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($phpDocParser === null || $lexer === null) {
+            $config = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($config);
+            $constExprParser = new ConstExprParser($config);
+            $typeParser = new TypeParser($config, $constExprParser);
+            $phpDocParser = new PhpDocParser($config, $typeParser, $constExprParser);
+        }
+
+        return [$phpDocParser, $lexer];
+    }
+
+    /**
+     * @return array{TypeParser, Lexer}
+     */
+    private static function getTypeParserComponents(): array
+    {
+        /** @var TypeParser|null $typeParser */
+        static $typeParser = null;
+        /** @var Lexer|null $lexer */
+        static $lexer = null;
+
+        if ($typeParser === null || $lexer === null) {
+            $configParser = new ParserConfig(usedAttributes: []);
+            $lexer = new Lexer($configParser);
+            $constExprParser = new ConstExprParser($configParser);
+            $typeParser = new TypeParser($configParser, $constExprParser);
+        }
+
+        return [$typeParser, $lexer];
     }
 }

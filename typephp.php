@@ -14,6 +14,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Inline Variable Validation (@var $x = ...)
+    |--------------------------------------------------------------------------
+    | Fine-grained control over which type categories are enforced on local
+    | variable assignments with inline @var Type $var docblocks.
+    |
+    | Supported options:
+    | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
+    | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
+    | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
+    | - 'shapes'    : Enforces array shapes and lists (e.g. array{id: int}).
+    | - 'objects'   : Enforces class instance checks (e.g. @var User $user).
+    |
+    */
+    'inline_vars' => [
+        'generics' => true,
+        'callables' => true,
+        'scalars' => true,
+        'shapes' => true,
+        'objects' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Included Paths
     |--------------------------------------------------------------------------
     | Globs matching files that should be intercepted and type-checked.
@@ -22,6 +45,7 @@ return [
         'src/**',
         'app/**',
         'internals/**',
+        'tests/**',
     ],
 
     /*

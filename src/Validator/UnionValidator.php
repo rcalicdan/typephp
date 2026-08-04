@@ -6,20 +6,22 @@ namespace TypePHP\Validator;
 
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
-use TypePHP\ErrorFactory;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 
 final class UnionValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
-        /** @var UnionTypeNode $node */
-        foreach ($node->types as $type) {
+        /** @var UnionTypeNode $unionNode */
+        $unionNode = $node;
+
+        foreach ($unionNode->types as $type) {
             if ($registry->validate($value, $type, $context) === null) {
                 return null;
             }
         }
 
-        return ErrorFactory::createError($context . ' must be of type ' . $node . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+        return ErrorFactory::createError($context . ' must be of type ' . $unionNode . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
     }
 }

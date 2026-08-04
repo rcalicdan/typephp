@@ -6,15 +6,16 @@ namespace TypePHP\Validator;
 
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
-use TypePHP\ErrorFactory;
-use TypePHP\TypeFormatter;
+use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\TypeFormatter;
 
 final class IdentifierValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?\TypeError
     {
-        /** @var IdentifierTypeNode $node */
-        $lower = strtolower($node->name);
+        /** @var IdentifierTypeNode $identifierNode */
+        $identifierNode = $node;
+        $lower = strtolower($identifierNode->name);
 
         $ok = match ($lower) {
             'int', 'integer' => \is_int($value),
@@ -22,8 +23,8 @@ final class IdentifierValidator implements TypeValidatorInterface
             'float', 'double' => \is_float($value) || \is_int($value),
             'bool', 'boolean' => \is_bool($value),
             'array' => \is_array($value),
-            'list' => \is_array($value) && (empty($value) || array_is_list($value)),
-            'object' => \is_object($value),
+            'list' => \is_array($value) && (count($value) === 0 || array_is_list($value)),
+            'object', 'self', 'static', 'parent', '$this' => \is_object($value),
             'callable' => is_callable($value),
             'iterable' => is_iterable($value),
             'resource' => \is_resource($value),
@@ -39,24 +40,26 @@ final class IdentifierValidator implements TypeValidatorInterface
             'non-negative-int' => is_int($value) && $value >= 0,
             'non-zero-int' => is_int($value) && $value !== 0,
             'unsigned-int' => is_int($value) && $value >= 0,
-            'class-string' => \is_string($value) && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
+            'class-string' => \is_string($value)
+                && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $value) === 1
+                && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
             'callable-string' => \is_string($value) && is_callable($value),
             'numeric-string' => \is_string($value) && is_numeric($value),
             'non-empty-string' => \is_string($value) && $value !== '',
             'lowercase-string' => is_string($value) && strtolower($value) === $value,
             'non-empty-lowercase-string' => is_string($value) && $value !== '' && strtolower($value) === $value,
             'literal-string' => is_string($value),
-            'non-empty-array' => is_array($value) && ! empty($value),
-            'non-empty-list' => is_array($value) && ! empty($value) && array_is_list($value),
+            'non-empty-array' => is_array($value) && count($value) > 0,
+            'non-empty-list' => is_array($value) && count($value) > 0 && array_is_list($value),
             'number', 'numeric' => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)),
-            'truthy' => (bool)$value === true,
-            'falsy', 'falsey' => (bool)$value === false,
+            'truthy' => (bool) $value === true,
+            'falsy', 'falsey' => (bool) $value === false,
 
-            default => \is_object($value) && is_a($value, $node->name),
+            default => \is_object($value) && is_a($value, $identifierNode->name),
         };
 
         if (! $ok) {
-            return ErrorFactory::createError($context . ' must be of type ' . $node->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+            return ErrorFactory::createError($context . ' must be of type ' . $identifierNode->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
         return null;

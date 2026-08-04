@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
+/**
+ * @internal
+ */
 final class TypeFormatter
 {
     public static function formatGivenValue(mixed $value): string
@@ -30,8 +33,8 @@ final class TypeFormatter
             return "string '$value'";
         }
 
-        if (is_array($value)) {
-            if (empty($value)) {
+        if (\is_array($value)) {
+            if (\count($value) === 0) {
                 return 'empty array ([])';
             }
             if (array_is_list($value)) {

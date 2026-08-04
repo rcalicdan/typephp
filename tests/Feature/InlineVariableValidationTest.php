@@ -1,0 +1,148 @@
+<?php
+
+declare(strict_types=1);
+
+use TypePHP\Internal\Config;
+use TypePHP\Tests\Fixtures\Domain\Car;
+use TypePHP\Tests\Fixtures\Domain\Dog;
+
+beforeEach(function () {
+    Config::reset();
+
+    Config::set([
+        'inline_vars' => [
+            'generics' => true,
+            'callables' => true,
+            'scalars' => true,
+            'shapes' => true,
+            'objects' => true,
+        ],
+    ]);
+});
+
+afterEach(function () {
+    Config::reset();
+});
+
+describe('Inline @var Scalar Validations', function () {
+    test('enforces positive-int constraint', function () {
+        /** @var positive-int $age */
+        $age = 10;
+        expect($age)->toBe(10);
+
+        expect(fn () => $age = -5)
+            ->toThrow(TypeError::class, 'Variable $age must be of type positive-int')
+        ;
+    });
+
+    test('ignores scalar validation when disabled in config', function () {
+        Config::set(['inline_vars' => ['scalars' => false]]);
+
+        /** @var positive-int $age */
+        $age = 10;
+
+        $age = -5;
+
+        expect($age)->toBe(-5);
+    });
+});
+
+describe('Inline @var Object Validations', function () {
+    test('enforces specific class instances', function () {
+        /** @var Dog $animal */
+        $animal = new Dog();
+        expect($animal)->toBeInstanceOf(Dog::class);
+
+        expect(fn () => $animal = new Car())
+            ->toThrow(TypeError::class, 'Variable $animal must be of type TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
+    });
+
+    test('ignores object validation when disabled in config', function () {
+        Config::set(['inline_vars' => ['objects' => false]]);
+
+        /** @var Dog $animal */
+        $animal = new Dog();
+        $animal = new Car();
+
+        expect($animal)->toBeInstanceOf(Car::class);
+    });
+});
+
+describe('Inline @var Array Shape Validations', function () {
+    test('enforces exact array shapes', function () {
+        /** @var array{id: int, name: string} $user */
+        $user = ['id' => 1, 'name' => 'Alice'];
+        expect($user['name'])->toBe('Alice');
+
+        expect(fn () => $user = ['id' => 2])
+            ->toThrow(TypeError::class, "Variable \$user is missing required key 'name'")
+        ;
+    });
+
+    test('ignores shape validation when disabled in config', function () {
+        Config::set(['inline_vars' => ['shapes' => false]]);
+
+        /** @var array{id: int, name: string} $user */
+        $user = ['id' => 1, 'name' => 'Alice'];
+
+        $user = ['id' => 2];
+
+        expect($user)->toBe(['id' => 2]);
+    });
+});
+
+describe('Inline @var Nullable and Union Types', function () {
+    test('allows null for nullable types', function () {
+        /** @var string|null $username */
+        $username = 'Alice';
+        expect($username)->toBe('Alice');
+
+        $username = null;
+        expect($username)->toBeNull();
+
+        expect(fn () => $username = 123)
+            ->toThrow(TypeError::class, 'Variable $username must be of type (string | null)')
+        ;
+    });
+
+    test('allows values matching either side of a union', function () {
+        /** @var int|string $identifier */
+        $identifier = 42;
+        expect($identifier)->toBe(42);
+
+        $identifier = 'user_42';
+        expect($identifier)->toBe('user_42');
+
+        expect(fn () => $identifier = false)
+            ->toThrow(TypeError::class, 'Variable $identifier must be of type (int | string)')
+        ;
+    });
+});
+
+describe('Inline @var Mixed Type', function () {
+    test('never validates mixed types (zero cost)', function () {
+        /** @var mixed $anything */
+        $anything = 10;
+        expect($anything)->toBe(10);
+
+        $anything = 'string';
+        expect($anything)->toBe('string');
+
+        $anything = new Dog();
+        expect($anything)->toBeInstanceOf(Dog::class);
+    });
+});
+
+describe('Inline @var Initial Assignment vs Reassignment', function () {
+    test('validates uninitialized variables upon first assignment', function () {
+        /** @var non-empty-string $token */
+
+        expect(fn () => $token = '')
+            ->toThrow(TypeError::class, 'Variable $token must be of type non-empty-string')
+        ;
+
+        $token = 'valid_token';
+        expect($token)->toBe('valid_token');
+    });
+});

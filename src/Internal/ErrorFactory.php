@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace TypePHP;
+namespace TypePHP\Internal;
 
+/**
+ * @internal
+ */
 final class ErrorFactory
 {
     public static function createError(string $message): \TypeError
@@ -21,17 +24,22 @@ final class ErrorFactory
         }
 
         $isReturnError = str_contains($message, 'Return value');
+        $isVariableError = str_contains($message, 'Variable $');
+        $isIteratorError = str_contains($message, 'Return iterator') || str_contains($message, 'Generator sent value');
 
-        if ($isReturnError) {
-            $blameFrame = $trace[$callerFrameIndex - 1] ?? [];
+        if ($isReturnError || $isVariableError || $isIteratorError) {
+            // Blame the frame that called INTO TypePHP (the assignment or return statement)
+            $blameFrame = $trace[max(0, $callerFrameIndex - 1)] ?? [];
 
-            if (str_contains($message, 'null given')) {
-                $message = str_replace('null given', 'none returned', $message);
-            } else {
-                $message = str_replace(' given', ' returned', $message);
+            if ($isReturnError) {
+                if (str_contains($message, 'null given')) {
+                    $message = str_replace('null given', 'none returned', $message);
+                } else {
+                    $message = str_replace(' given', ' returned', $message);
+                }
             }
         } else {
-            // Blame the call site (where the function was called)
+            // Blame the frame outside of TypePHP (the caller of the function)
             $blameFrame = $trace[$callerFrameIndex] ?? [];
         }
 

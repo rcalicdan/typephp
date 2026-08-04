@@ -9,8 +9,11 @@
         "nikic/php-parser": "^5.0"
     },
     "require-dev": {
-        "pestphp/pest": "^4.0",
-        "laravel/pint": "^1.0"
+        "laravel/pint": "^1.10",
+        "pestphp/pest": "^3.0",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpstan/extension-installer": "^1.4"
     },
     "autoload": {
         "psr-4": {
@@ -20,7 +23,11 @@
     "autoload-dev": {
         "psr-4": {
             "TypePHP\\Tests\\": "tests/"
-        }
+        },
+        "files": [
+            "tests/bootstrap.php",
+            "tests/Fixtures/Functions/MathUtils.php"
+        ]
     },
     "scripts": {
         "format": ["./vendor/bin/pint"]
@@ -29,7 +36,8 @@
     "prefer-stable": true,
     "config": {
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
         }
     }
 }

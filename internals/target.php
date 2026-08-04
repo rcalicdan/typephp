@@ -2,9 +2,16 @@
 
 declare(strict_types=1);
 
-function test(): string
+class User
 {
-    return 1;
 }
 
-test();
+/**
+ * @return non-empty-list<User>
+ */
+function test1(): array
+{
+    return []; // Empty array!
+}
+
+test1();
