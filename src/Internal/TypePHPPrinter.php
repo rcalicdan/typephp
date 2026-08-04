@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace TypePHP\Internal;
 
-use PhpParser\Node\Stmt;
+use PhpParser\Node;
 use PhpParser\PrettyPrinter\Standard;
+use PhpParser\PrettyPrinterAbstract;
 
 /**
  * Custom AST Printer that squashes injected TypePHP validation blocks into a single line
@@ -14,44 +15,20 @@ use PhpParser\PrettyPrinter\Standard;
 final class TypePHPPrinter extends Standard
 {
     /**
-     * Overrides statement array printing to avoid adding newlines after inline TypePHP statements.
-     *
-     * @param array<Stmt> $nodes
+     * Overrides base node printing to intercept injected statements, squash their 
+     * formatting, and tag them with a unique marker for post-processing.
      */
-    protected function pStmts(array $nodes, bool $trailingNewline = true): string
-    {
-        $result = '';
-        foreach ($nodes as $node) {
-            $comments = $node->getAttribute('comments', []);
-            if ($comments) {
-                $result .= $this->pComments($comments);
-            }
+    protected function p(
+        Node $node,
+        int $precedence = PrettyPrinterAbstract::MAX_PRECEDENCE,
+        int $lhsPrecedence = PrettyPrinterAbstract::MAX_PRECEDENCE,
+        bool $parentFormatPreserved = false
+    ): string {
+        $output = parent::p($node, $precedence, $lhsPrecedence, $parentFormatPreserved);
 
-            $pNode = $this->p($node);
-
-            if ($node->getAttribute('typephp_no_newline') === true || str_contains($pNode, 'RuntimeTypeChecker::setupScope')) {
-                $result .= $pNode . ' ';
-            } else {
-                $result .= $pNode . $this->nl;
-            }
-        }
-
-        if (! $trailingNewline && str_ends_with($result, $this->nl)) {
-            $result = substr($result, 0, -strlen($this->nl));
-        }
-
-        return $result;
-    }
-
-    /**
-     * Overrides the printing of If_ statements to squash setupScope blocks onto a single line.
-     */
-    protected function pStmt_If(Stmt\If_ $node): string
-    {
-        $output = parent::pStmt_If($node);
-
-        if ($node->getAttribute('typephp_no_newline') === true || str_contains($output, 'RuntimeTypeChecker::setupScope')) {
-            return preg_replace('/\s+/', ' ', trim($output)) ?? $output;
+        if ($node instanceof Node\Stmt && $node->getAttribute('typephp_injected') === true) {
+            $output = preg_replace('/\s+/', ' ', trim($output)) ?? $output;
+            return '/*__TYPEPHP_INJECTED__*/' . $output;
         }
 
         return $output;

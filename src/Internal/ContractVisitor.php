@@ -28,15 +28,6 @@ final class ContractVisitor extends NodeVisitorAbstract
 
     /**
      * Traverses and transforms AST nodes during entry.
-     *
-     * Performs the following steps:
-     * 1. Tracks lexical scope frames for variables across functions, closures, and methods.
-     * 2. Injects runtime contract checks on function and method declarations.
-     * 3. Intercepts PHP 8.4 Property Hooks (get and set) to validate property reads and writes.
-     * 4. Extracts @var annotations from expression statements.
-     * 5. Extracts @var annotations from foreach loop value variables.
-     * 6. Intercepts variable assignments to apply inline type validation wrappers with native throw expressions.
-     * 7. Intercepts property and static property assignments to apply validation wrappers.
      */
     public function enterNode(Node $node): ?int
     {
@@ -219,6 +210,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                         $this->createTernaryThrowExpr($checkCall)
                     )
                 );
+                $paramCheckStmt->setAttribute('typephp_injected', true);
 
                 if (is_array($hook->body)) {
                     array_unshift($hook->body, $paramCheckStmt);
@@ -400,11 +392,6 @@ final class ContractVisitor extends NodeVisitorAbstract
     /**
      * Builds parameter validation and wrapper statements.
      *
-     * Injects:
-     * - Single-level IF statement with typephp_no_newline attribute to prevent line drift.
-     * - Callable parameter wrappers for runtime callback checks.
-     * - Lazy iterable and generator parameter wrappers.
-     *
      * @return array<Node\Stmt>
      */
     private function buildParamInjections(
@@ -459,14 +446,14 @@ final class ContractVisitor extends NodeVisitorAbstract
             ]
         );
 
-        $ifStmt->setAttribute('typephp_no_newline', true);
+        $ifStmt->setAttribute('typephp_injected', true);
         $injectedStmts[] = $ifStmt;
 
         if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
             foreach ($node->params as $param) {
                 if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
                     $paramName = $param->var->name;
-                    $injectedStmts[] = new Node\Stmt\Expression(
+                    $expr = new Node\Stmt\Expression(
                         new Node\Expr\Assign(
                             new Node\Expr\Variable($paramName),
                             new Node\Expr\FuncCall(
@@ -479,6 +466,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                             )
                         )
                     );
+                    $expr->setAttribute('typephp_injected', true);
+                    $injectedStmts[] = $expr;
                 }
             }
         }
@@ -487,7 +476,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             foreach ($node->params as $param) {
                 if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
                     $paramName = $param->var->name;
-                    $injectedStmts[] = new Node\Stmt\Expression(
+                    $expr = new Node\Stmt\Expression(
                         new Node\Expr\Assign(
                             new Node\Expr\Variable($paramName),
                             new Node\Expr\FuncCall(
@@ -500,6 +489,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                             )
                         )
                     );
+                    $expr->setAttribute('typephp_injected', true);
+                    $injectedStmts[] = $expr;
                 }
             }
         }
@@ -665,44 +656,50 @@ final class ContractVisitor extends NodeVisitorAbstract
                     );
 
                     if ($this->isNativeVoid) {
-                        return [
-                            new Node\Stmt\If_(
-                                new Node\Expr\Instanceof_(
-                                    new Node\Expr\Assign(
-                                        new Node\Expr\Variable('__typephpRet'),
-                                        $checkReturnCall
-                                    ),
-                                    new Node\Name('\TypePHP\Internal\ErrorMessage')
+                        $ifStmt = new Node\Stmt\If_(
+                            new Node\Expr\Instanceof_(
+                                new Node\Expr\Assign(
+                                    new Node\Expr\Variable('__typephpRet'),
+                                    $checkReturnCall
                                 ),
-                                [
-                                    'stmts' => [
-                                        new Node\Stmt\Expression(
-                                            new Node\Expr\Throw_(
-                                                new Node\Expr\StaticCall(
-                                                    new Node\Name('\TypePHP\Internal\ErrorFactory'),
-                                                    'prepareException',
-                                                    [
-                                                        new Node\Arg(
-                                                            new Node\Expr\New_(
-                                                                new Node\Name('\TypeError'),
-                                                                [
-                                                                    new Node\Arg(
-                                                                        new Node\Expr\MethodCall(
-                                                                            new Node\Expr\Variable('__typephpRet'),
-                                                                            'getMessage'
-                                                                        )
-                                                                    ),
-                                                                ]
-                                                            )
-                                                        )
-                                                    ]
-                                                )
-                                            )
-                                        ),
-                                    ],
-                                ]
+                                new Node\Name('\TypePHP\Internal\ErrorMessage')
                             ),
-                            new Node\Stmt\Return_(null),
+                            [
+                                'stmts' => [
+                                    new Node\Stmt\Expression(
+                                        new Node\Expr\Throw_(
+                                            new Node\Expr\StaticCall(
+                                                new Node\Name('\TypePHP\Internal\ErrorFactory'),
+                                                'prepareException',
+                                                [
+                                                    new Node\Arg(
+                                                        new Node\Expr\New_(
+                                                            new Node\Name('\TypeError'),
+                                                            [
+                                                                new Node\Arg(
+                                                                    new Node\Expr\MethodCall(
+                                                                        new Node\Expr\Variable('__typephpRet'),
+                                                                        'getMessage'
+                                                                    )
+                                                                ),
+                                                            ]
+                                                        )
+                                                    )
+                                                ]
+                                            )
+                                        )
+                                    ),
+                                ],
+                            ]
+                        );
+                        $ifStmt->setAttribute('typephp_injected', true);
+
+                        $retStmt = new Node\Stmt\Return_(null);
+                        $retStmt->setAttribute('typephp_injected', true);
+
+                        return [
+                            $ifStmt,
+                            $retStmt,
                         ];
                     }
 
@@ -759,7 +756,7 @@ final class ContractVisitor extends NodeVisitorAbstract
             );
 
             if ($isNativeVoid) {
-                $newStmts[] = new Node\Stmt\If_(
+                $ifStmt = new Node\Stmt\If_(
                     new Node\Expr\Instanceof_(
                         new Node\Expr\Assign(
                             new Node\Expr\Variable('__typephpRet'),
@@ -795,9 +792,14 @@ final class ContractVisitor extends NodeVisitorAbstract
                         ],
                     ]
                 );
-                $newStmts[] = new Node\Stmt\Return_(null);
+                $ifStmt->setAttribute('typephp_injected', true);
+                $newStmts[] = $ifStmt;
+
+                $retStmt = new Node\Stmt\Return_(null);
+                $retStmt->setAttribute('typephp_injected', true);
+                $newStmts[] = $retStmt;
             } else {
-                $newStmts[] = new Node\Stmt\Return_(
+                $retStmt = new Node\Stmt\Return_(
                     new Node\Expr\Ternary(
                         new Node\Expr\Instanceof_(
                             new Node\Expr\Assign(
@@ -830,6 +832,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                         new Node\Expr\Variable('__typephpRet')
                     )
                 );
+                $retStmt->setAttribute('typephp_injected', true);
+                $newStmts[] = $retStmt;
             }
         }
 

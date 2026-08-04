@@ -98,12 +98,6 @@ final class StreamWrapper implements StreamWrapperInterface
 
     /**
      * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
-     *
-     * Performs the following steps:
-     * 1. Parses raw PHP source into AST statement nodes.
-     * 2. Scans namespace and use import statements to seed file metadata.
-     * 3. Traverses AST with CloningVisitor and ContractVisitor.
-     * 4. Prints format-preserved source code using custom TypePHPPrinter.
      */
     public static function transformSource(string $source, string $filePath = ''): string
     {
@@ -136,18 +130,15 @@ final class StreamWrapper implements StreamWrapperInterface
         $printer = new TypePHPPrinter();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
+        // Critical: Remove the newline and indentation preceding any injected statement to preserve line counts.
+        $transformed = preg_replace('/[ \t]*\r?\n[ \t]*\/\*__TYPEPHP_INJECTED__\*\//', ' /*__TYPEPHP_INJECTED__*/', $transformed) ?? $transformed;
+        $transformed = str_replace('/*__TYPEPHP_INJECTED__*/', '', $transformed);
+
         return $transformed;
     }
 
     /**
      * Opens a file stream, intercepting application files for AST transformation.
-     *
-     * Performs the following steps:
-     * 1. Checks file existence and resolves path.
-     * 2. Checks if call is a read-only request from test runners or debuggers.
-     * 3. Determines if the file matches application include/exclude patterns.
-     * 4. Pass-through to native fopen if the file is read-only, excluded, or non-app PHP.
-     * 5. Intercepts execution inclusions and transforms source using RAM memory stream or disk cache.
      */
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
