@@ -25,6 +25,7 @@ use TypePHP\Internal\DocblockNormalizer;
 use TypePHP\Internal\ErrorMessage;
 use TypePHP\Resolver\SpecialTypeResolver;
 use TypePHP\Resolver\TemplateManager;
+use TypePHP\Resolver\TemplateSubstitutor;
 use TypePHP\Validator\TypeValidatorRegistry;
 use TypePHP\Wrapper\CallableWrapper;
 
@@ -98,7 +99,7 @@ final class InlineChecker
     /**
      * Evaluates class property validation dynamically based on configuration.
      */
-    public static function checkProperty(mixed $value, mixed $objectOrClass, string $propName, string $file, TypeValidatorRegistry $registry): mixed
+   public static function checkProperty(mixed $value, mixed $objectOrClass, string $propName, string $file, TypeValidatorRegistry $registry): mixed
     {
         if (! is_object($objectOrClass) && ! is_string($objectOrClass)) {
             return $value;
@@ -121,6 +122,26 @@ final class InlineChecker
 
         if (! self::shouldValidateType($typeNode, $config)) {
             return $value;
+        }
+
+        // Substitute class-level property generics for object instances
+        if (is_object($objectOrClass)) {
+            $constructorTarget = $className . '::__construct';
+            $contract = ContractParser::parse($constructorTarget);
+            
+            $boundTemplates = TemplateManager::getBoundTemplates('none', $objectOrClass, $contract['templates']);
+            $declaredTemplates = $contract['templates'];
+
+            if (\count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
+                $typeNode = TemplateSubstitutor::substitute($typeNode, $boundTemplates, $declaredTemplates);
+                
+                try {
+                    $refClass = new \ReflectionClass($className);
+                    $typeNode = SpecialTypeResolver::resolve($typeNode, $refClass);
+                } catch (\ReflectionException $e) {
+                    // Silently continue if reflection fails
+                }
+            }
         }
 
         try {
