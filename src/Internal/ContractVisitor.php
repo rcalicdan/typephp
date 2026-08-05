@@ -26,7 +26,7 @@ final class ContractVisitor extends NodeVisitorAbstract
     /**
      * Traverses and transforms AST nodes during entry.
      */
-    public function enterNode(Node $node): ?int
+    public function enterNode(Node $node): int|array|null
     {
         if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
             $this->scopeManager->pushScope();
@@ -48,6 +48,36 @@ final class ContractVisitor extends NodeVisitorAbstract
             $doc = $node->getDocComment();
             if ($doc !== null && str_contains($doc->getText(), '@var')) {
                 $this->scopeManager->extractVarDocblock($doc->getText(), $node->expr);
+            }
+
+            // Handle list($a, $b) = $data and [$a, $b] = $data destructuring assignments
+            if ($node->expr instanceof Node\Expr\Assign) {
+                $assign = $node->expr;
+                if ($assign->var instanceof Node\Expr\List_ || ($assign->var instanceof Node\Expr\Array_ && $assign->var->getAttribute('kind') === Node\Expr\Array_::KIND_SHORT)) {
+                    $destructuredVars = $this->extractDestructuringVariables($assign->var);
+                    $checkStmts = [];
+
+                    foreach ($destructuredVars as $dVar) {
+                        $varName = $dVar['varName'];
+                        $typeString = $this->scopeManager->getVarTypeFromScope($varName);
+
+                        if ($typeString !== null) {
+                            $checkCall = NodeBuilder::createVariableCheckCall($dVar['expr'], $typeString, $varName);
+                            $checkStmt = new Node\Stmt\Expression(
+                                new Node\Expr\Assign(
+                                    $dVar['expr'],
+                                    NodeBuilder::createTernaryThrowExpr($checkCall)
+                                )
+                            );
+                            $checkStmt->setAttribute('typephp_injected', true);
+                            $checkStmts[] = $checkStmt;
+                        }
+                    }
+
+                    if (! empty($checkStmts)) {
+                        return array_merge([$node], $checkStmts);
+                    }
+                }
             }
         }
 
@@ -99,5 +129,31 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         return null;
+    }
+
+    /**
+     * Recursively extracts target variables assigned inside a list() or [] destructuring node.
+     *
+     * @return array<int, array{varName: string, expr: Node\Expr\Variable}>
+     */
+    private function extractDestructuringVariables(Node\Expr\List_|Node\Expr\Array_ $listNode): array
+    {
+        $vars = [];
+        foreach ($listNode->items as $item) {
+            if ($item === null) {
+                continue;
+            }
+
+            if ($item->value instanceof Node\Expr\Variable && is_string($item->value->name)) {
+                $vars[] = [
+                    'varName' => $item->value->name,
+                    'expr' => $item->value,
+                ];
+            } elseif ($item->value instanceof Node\Expr\List_ || $item->value instanceof Node\Expr\Array_) {
+                $vars = array_merge($vars, $this->extractDestructuringVariables($item->value));
+            }
+        }
+
+        return $vars;
     }
 }

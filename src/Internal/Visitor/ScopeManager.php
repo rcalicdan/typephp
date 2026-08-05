@@ -29,6 +29,9 @@ final class ScopeManager
         array_pop($this->scopeStack);
     }
 
+    /**
+     * Extracts all @var tags from a docblock comment and registers them in the current scope frame.
+     */
     public function extractVarDocblock(string $docText, ?Node\Expr $expr = null): void
     {
         try {
@@ -39,9 +42,9 @@ final class ScopeManager
             $phpDocNode = $phpDocParser->parse($tokens);
             $varTags = $phpDocNode->getVarTagValues();
 
-            if (\count($varTags) > 0) {
-                $typeString = (string) $varTags[0]->type;
-                $varName = ltrim($varTags[0]->variableName, '$');
+            foreach ($varTags as $varTag) {
+                $typeString = (string) $varTag->type;
+                $varName = ltrim($varTag->variableName, '$');
 
                 if ($varName === '' && $expr instanceof Node\Expr\Assign && $expr->var instanceof Node\Expr\Variable && is_string($expr->var->name)) {
                     $varName = $expr->var->name;

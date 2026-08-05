@@ -11,6 +11,14 @@ use TypePHP\Tests\Fixtures\Types\ArrayAccessOnly;
 use TypePHP\Tests\Fixtures\Types\CountableArrayAccess;
 use TypePHP\Tests\Fixtures\Types\CountableOnly;
 
+/**
+ * @return array{0: int, 1: string}
+ */
+function fetchBroadTuple(int $id, string $name): array
+{
+    return [$id, $name];
+}
+
 beforeEach(function () {
     Config::reset();
 
@@ -27,6 +35,21 @@ beforeEach(function () {
 
 afterEach(function () {
     Config::reset();
+});
+
+describe('mixed type validation with @var and param', function () {
+    test('enforces stricter inline @var annotation over broader function return contract', function () {
+        // Valid call: [10, 'Alice'] satisfies both @return and @var
+        /** @var array{0: positive-int, 1: non-empty-string} $userData */
+        $userData = fetchBroadTuple(10, 'Alice');
+        expect($userData[0])->toBe(10);
+
+        // Invalid call: [-5, 'Alice'] satisfies @return (int), BUT violates @var (positive-int)
+        expect(function () {
+            /** @var array{0: positive-int, 1: non-empty-string} $userData */
+            $userData = fetchBroadTuple(-5, 'Alice');
+        })->toThrow(TypeError::class, 'Variable $userData');
+    });
 });
 
 describe('Inline @var Scalar Validations', function () {

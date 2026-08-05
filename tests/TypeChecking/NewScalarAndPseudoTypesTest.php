@@ -59,12 +59,14 @@ describe('New Scalar and Pseudo-Type Contracts', function () {
 
         test('throws TypeError when interface-string is a standard class', function () {
             expect(fn () => testClassStringSubtypesContract(stdClass::class, StatusEnum::class))
-                ->toThrow(TypeError::class, 'interface-string');
+                ->toThrow(TypeError::class, 'interface-string')
+            ;
         });
 
         test('throws TypeError when enum-string is a standard class', function () {
             expect(fn () => testClassStringSubtypesContract(DateTimeInterface::class, stdClass::class))
-                ->toThrow(TypeError::class, 'enum-string');
+                ->toThrow(TypeError::class, 'enum-string')
+            ;
         });
     });
 
@@ -75,12 +77,14 @@ describe('New Scalar and Pseudo-Type Contracts', function () {
 
         test('throws TypeError when positive-float is <= 0', function () {
             expect(fn () => testFloatRefiningContract(-1.0, -5.5, 99.9))
-                ->toThrow(TypeError::class, 'positive-float');
+                ->toThrow(TypeError::class, 'positive-float')
+            ;
         });
 
         test('throws TypeError when non-zero-float is 0.0', function () {
             expect(fn () => testFloatRefiningContract(12.34, -5.5, 0.0))
-                ->toThrow(TypeError::class, 'non-zero-float');
+                ->toThrow(TypeError::class, 'non-zero-float')
+            ;
         });
     });
 
@@ -92,17 +96,20 @@ describe('New Scalar and Pseudo-Type Contracts', function () {
 
         test('throws TypeError when string evaluates to false in boolean context', function () {
             expect(fn () => testTruthyStringContract('0'))
-                ->toThrow(TypeError::class, 'truthy-string');
+                ->toThrow(TypeError::class, 'truthy-string')
+            ;
 
             expect(fn () => testTruthyStringContract(''))
-                ->toThrow(TypeError::class, 'truthy-string');
+                ->toThrow(TypeError::class, 'truthy-string')
+            ;
         });
     });
 
     describe('Never Return Type (@return never)', function () {
         test('accepts execution that throws an exception instead of returning', function () {
             expect(fn () => testNeverReturnContract(true))
-                ->toThrow(RuntimeException::class, 'Function exited via exception');
+                ->toThrow(RuntimeException::class, 'Function exited via exception')
+            ;
         });
 
         test('throws TypeError when @return never function returns a value instead of exiting', function () {

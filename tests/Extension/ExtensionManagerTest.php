@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace TypePHP\Tests\Extension;
 
 use TypePHP\Contract\FileFilter;
-use TypePHP\Extension\ExtensionInterface;
 use TypePHP\Extension\ExtensionManager;
 use TypePHP\Internal\Config;
 use TypePHP\Tests\Fixtures\Extensions\SampleRegisteredExtension;
