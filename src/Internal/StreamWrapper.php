@@ -112,9 +112,9 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     public static function transformSource(string $source, string $filePath = ''): string
     {
-        // Per-File Suppression Tag
-        if (str_contains($source, '@typephp-ignore-file') || str_contains($source, '@typephp-disable-file')) {
-            return $source; // Pass raw source through completely untouched!
+        // Respect per-file suppression tag unless respect_ignore_tags is false
+        if ((Config::get()['respect_ignore_tags'] ?? true) && (str_contains($source, '@typephp-ignore-file') || str_contains($source, '@typephp-disable-file'))) {
+            return $source;
         }
 
         $parser = (new ParserFactory())->createForNewestSupportedVersion();

@@ -19,14 +19,23 @@ final class ScopeManager
      */
     private array $scopeStack = [[]];
 
+    /**
+     * Pushes a new scope frame, inheriting variables from the parent scope.
+     */
     public function pushScope(): void
     {
-        $this->scopeStack[] = [];
+        $currentScope = end($this->scopeStack);
+        $this->scopeStack[] = $currentScope !== false ? $currentScope : [];
     }
 
+    /**
+     * Pops the top scope frame, restoring variables back to the parent scope.
+     */
     public function popScope(): void
     {
-        array_pop($this->scopeStack);
+        if (count($this->scopeStack) > 1) {
+            array_pop($this->scopeStack);
+        }
     }
 
     /**

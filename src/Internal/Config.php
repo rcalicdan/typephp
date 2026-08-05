@@ -30,9 +30,10 @@ final class Config
             return self::$cachedConfig;
         }
 
-      $defaultConfig = [
-            'enabled' => true, 
+        $defaultConfig = [
+            'enabled' => true,
             'cache' => true,
+            'respect_ignore_tags' => true, 
             'inline_vars' => [
                 'properties' => true,
                 'generics' => true,

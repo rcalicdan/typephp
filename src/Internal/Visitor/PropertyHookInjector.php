@@ -7,6 +7,7 @@ namespace TypePHP\Internal\Visitor;
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
+use TypePHP\Internal\Config;
 
 /**
  * Injects property contract checks into PHP 8.4 get and set property hooks.
@@ -20,8 +21,8 @@ final class PropertyHookInjector
         }
 
         $doc = $node->getDocComment();
-        if ($doc !== null && (str_contains($doc->getText(), '@typephp-ignore') || str_contains($doc->getText(), '@typephp-disable'))) {
-            return; // Skip property hook validation!
+        if ((Config::get()['respect_ignore_tags'] ?? true) && $doc !== null && (str_contains($doc->getText(), '@typephp-ignore') || str_contains($doc->getText(), '@typephp-disable'))) {
+            return;
         }
 
         $propertyName = $node->props[0]->name->toString();

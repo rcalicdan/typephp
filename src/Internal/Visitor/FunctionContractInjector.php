@@ -7,6 +7,7 @@ namespace TypePHP\Internal\Visitor;
 use PhpParser\Node;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
+use TypePHP\Internal\Config;
 
 /**
  * Injects parameter checks, return checks, and generator interceptors into functions and methods.
@@ -28,9 +29,9 @@ final class FunctionContractInjector
 
         $docText = $doc !== null ? $doc->getText() : '';
 
-        // Per-Function/Method Suppression Tag
-        if (str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable')) {
-            return; // Skip injecting contract checks for this specific function/method!
+        // Respect per-function suppression tag unless respect_ignore_tags is false
+        if ((Config::get()['respect_ignore_tags'] ?? true) && str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable')) {
+            return;
         }
 
         $hasParam = $isClassMethod || str_contains($docText, '@param');

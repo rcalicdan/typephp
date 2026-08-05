@@ -28,7 +28,19 @@ final class ContractVisitor extends NodeVisitorAbstract
      */
     public function enterNode(Node $node): int|array|null
     {
-        if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
+        if ($node instanceof Node\Stmt\Function_
+            || $node instanceof Node\Stmt\ClassMethod
+            || $node instanceof Node\Expr\Closure
+            || $node instanceof Node\Expr\ArrowFunction
+            || $node instanceof Node\Stmt\If_
+            || $node instanceof Node\Stmt\Else_
+            || $node instanceof Node\Stmt\ElseIf_
+            || $node instanceof Node\Stmt\Foreach_
+            || $node instanceof Node\Stmt\While_
+            || $node instanceof Node\Stmt\For_
+            || $node instanceof Node\Stmt\Do_
+            || $node instanceof Node\Stmt\TryCatch
+        ) {
             $this->scopeManager->pushScope();
         }
 
@@ -50,7 +62,6 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $this->scopeManager->extractVarDocblock($doc->getText(), $node->expr);
             }
 
-            // Handle list($a, $b) = $data and [$a, $b] = $data destructuring assignments
             if ($node->expr instanceof Node\Expr\Assign) {
                 $assign = $node->expr;
                 if ($assign->var instanceof Node\Expr\List_ || ($assign->var instanceof Node\Expr\Array_ && $assign->var->getAttribute('kind') === Node\Expr\Array_::KIND_SHORT)) {
@@ -107,8 +118,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $propName = $node->var->name->toString();
                 $classExpr = $node->var->class;
 
-                $classArg = $classExpr instanceof Node\Name
-                    ? new Node\Expr\ClassConstFetch($classExpr, 'class')
+                $classArg = $classExpr instanceof Node\Name 
+                    ? new Node\Expr\ClassConstFetch($classExpr, 'class') 
                     : $classExpr;
 
                 $checkCall = NodeBuilder::createPropertyCheckCall($node->expr, $classArg, $propName);
@@ -120,11 +131,23 @@ final class ContractVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Pops the current lexical scope stack frame when leaving a function, method, or closure.
+     * Pops the current lexical scope stack frame when leaving a function, method, closure, or control block.
      */
     public function leaveNode(Node $node): ?int
     {
-        if ($node instanceof Node\Stmt\Function_ || $node instanceof Node\Stmt\ClassMethod || $node instanceof Node\Expr\Closure || $node instanceof Node\Expr\ArrowFunction) {
+        if ($node instanceof Node\Stmt\Function_
+            || $node instanceof Node\Stmt\ClassMethod
+            || $node instanceof Node\Expr\Closure
+            || $node instanceof Node\Expr\ArrowFunction
+            || $node instanceof Node\Stmt\If_
+            || $node instanceof Node\Stmt\Else_
+            || $node instanceof Node\Stmt\ElseIf_
+            || $node instanceof Node\Stmt\Foreach_
+            || $node instanceof Node\Stmt\While_
+            || $node instanceof Node\Stmt\For_
+            || $node instanceof Node\Stmt\Do_
+            || $node instanceof Node\Stmt\TryCatch
+        ) {
             $this->scopeManager->popScope();
         }
 
