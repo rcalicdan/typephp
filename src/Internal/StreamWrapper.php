@@ -24,28 +24,24 @@ final class StreamWrapper implements StreamWrapperInterface
     public $context;
 
     /**
-     * Active file handle resource.
-     *
      * @var resource|null
      */
     private $handle = null;
 
     /**
-     * Active directory handle resource.
-     *
      * @var resource|null
      */
     private $dirHandle = null;
 
     /**
-     * @var array<int, string>
+     * @var array<string, string>
      */
-    private static array $includePatterns = [];
+    private static array $includeRawPatterns = [];
 
     /**
-     * @var array<int, string>
+     * @var array<string, string>
      */
-    private static array $excludePatterns = [];
+    private static array $excludeRawPatterns = [];
 
     private static string $baseDir = '';
 
@@ -58,8 +54,6 @@ final class StreamWrapper implements StreamWrapperInterface
     private static string $cacheDir = '';
 
     /**
-     * Registers the custom StreamWrapper for the 'file://' protocol, merging optional config with Config::get().
-     *
      * @param array<string, mixed> $config
      */
     public static function register(array $config = []): void
@@ -77,8 +71,15 @@ final class StreamWrapper implements StreamWrapperInterface
             /** @var array<int, string> $excludes */
             $excludes = is_array($resolvedConfig['exclude'] ?? null) ? $resolvedConfig['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
-            self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
-            self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
+            self::$includeRawPatterns = [];
+            foreach ($includes as $pattern) {
+                self::$includeRawPatterns[trim($pattern)] = self::compileGlobToRegex($pattern);
+            }
+
+            self::$excludeRawPatterns = [];
+            foreach ($excludes as $pattern) {
+                self::$excludeRawPatterns[trim($pattern)] = self::compileGlobToRegex($pattern);
+            }
 
             self::$cacheEnabled = (bool) ($resolvedConfig['cache'] ?? true);
             self::$cacheDir = CacheManager::getCacheDir();
@@ -93,9 +94,11 @@ final class StreamWrapper implements StreamWrapperInterface
         }
     }
 
-    /**
-     * Restores PHP's native 'file://' stream wrapper protocol handler.
-     */
+    public static function isRegistered(): bool
+    {
+        return self::$isRegistered;
+    }
+
     public static function unregister(): void
     {
         if (self::$isRegistered) {
@@ -142,7 +145,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $printer = new TypePHPPrinter();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
-        // Remove the newline and indentation preceding any injected statement.
+        // Critical: Remove the newline and indentation preceding any injected statement.
         $transformed = preg_replace('/[ \t]*\r?\n[ \t]*\/\*__TYPEPHP_INJECTED__\*\//', ' /*__TYPEPHP_INJECTED__*/', $transformed) ?? $transformed;
         $transformed = str_replace('/*__TYPEPHP_INJECTED__*/', '', $transformed);
 
@@ -155,7 +158,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         self::unregister();
-        $exists = self::silent(fn () => file_exists($path));
+        $exists = self::silent(fn() => file_exists($path));
         $resolvedPath = $exists ? realpath($path) : '';
         self::register();
 
@@ -166,7 +169,7 @@ final class StreamWrapper implements StreamWrapperInterface
             $targetFile = ($resolvedPath !== false && $resolvedPath !== '') ? $resolvedPath : $path;
 
             /** @var resource|false $handle */
-            $handle = self::silent(fn () => fopen($targetFile, $mode));
+            $handle = self::silent(fn() => fopen($targetFile, $mode));
 
             $this->handle = $handle !== false ? $handle : null;
             self::register();
@@ -288,7 +291,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var array<int|string, int>|false $result */
-        $result = self::silent(fn () => stat($path));
+        $result = self::silent(fn() => stat($path));
         self::register();
 
         return $result;
@@ -303,11 +306,11 @@ final class StreamWrapper implements StreamWrapperInterface
             $valueArray = is_array($value) ? $value : [];
             $time = $valueArray[0] ?? time();
             $atime = $valueArray[1] ?? $time;
-            $result = (bool) self::silent(fn () => touch($path, (int) $time, (int) $atime));
+            $result = (bool) self::silent(fn() => touch($path, (int) $time, (int) $atime));
         } elseif ($option === STREAM_META_ACCESS) {
             /** @var int $mode */
             $mode = is_int($value) ? $value : 0777;
-            $result = (bool) self::silent(fn () => chmod($path, $mode));
+            $result = (bool) self::silent(fn() => chmod($path, $mode));
         }
         self::register();
 
@@ -318,7 +321,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var resource|false $dh */
-        $dh = self::silent(fn () => opendir($path));
+        $dh = self::silent(fn() => opendir($path));
         $this->dirHandle = $dh !== false ? $dh : null;
         self::register();
 
@@ -358,7 +361,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function mkdir(string $path, int $mode, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
+        $result = (bool) self::silent(fn() => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
         self::register();
 
         return $result;
@@ -367,7 +370,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rmdir(string $path, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => rmdir($path));
+        $result = (bool) self::silent(fn() => rmdir($path));
         self::register();
 
         return $result;
@@ -376,7 +379,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function unlink(string $path): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => unlink($path));
+        $result = (bool) self::silent(fn() => unlink($path));
         self::register();
 
         return $result;
@@ -385,7 +388,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rename(string $pathFrom, string $pathTo): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn () => rename($pathFrom, $pathTo));
+        $result = (bool) self::silent(fn() => rename($pathFrom, $pathTo));
         self::register();
 
         return $result;
@@ -407,7 +410,7 @@ final class StreamWrapper implements StreamWrapperInterface
         } elseif (str_starts_with($glob, '**')) {
             $pattern = '.*' . substr($regex, 4) . '$';
         } else {
-            $pattern = '^' . preg_quote(self::$baseDir . '/', '#') . $regex . '$';
+            $pattern = '(^' . preg_quote(self::$baseDir . '/', '#') . '|^.*\/)' . $regex . '$';
         }
 
         return '#' . $pattern . '#i';
@@ -424,7 +427,7 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     private static function silent(callable $callback): mixed
     {
-        set_error_handler(fn () => true);
+        set_error_handler(fn() => true);
 
         try {
             return $callback();
@@ -434,24 +437,19 @@ final class StreamWrapper implements StreamWrapperInterface
     }
 
     /**
-     * Determines if the current stream_open call is for reading file contents (e.g. by Collision, Pest, IDEs)
+     * Determines if the current stream_open call is directly for reading file contents (e.g. file_get_contents)
      * rather than PHP engine's require/include execution.
      */
     private static function isReadOnlyCall(): bool
     {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
-        foreach ($trace as $frame) {
-            $func = strtolower($frame['function'] ?? '');
-            if (in_array($func, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all', 'file_exists'], true)) {
-                return true;
-            }
-        }
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        $callerFunc = strtolower($trace[2]['function'] ?? '');
 
-        return false;
+        return in_array($callerFunc, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all'], true);
     }
 
     /**
-     * Determines whether a target PHP file path should be intercepted and transformed based on include/exclude patterns.
+     * Determines whether a target PHP file path should be intercepted using Pattern Specificity.
      */
     private static function isApplicationFile(string $path, string|false $resolvedPath): bool
     {
@@ -460,6 +458,7 @@ final class StreamWrapper implements StreamWrapperInterface
         }
 
         $normalizedPath = str_replace('\\', '/', $resolvedPath);
+
         $parentDir = realpath(__DIR__ . '/..');
         $libSrcDir = $parentDir !== false ? str_replace('\\', '/', $parentDir) : '';
 
@@ -467,24 +466,27 @@ final class StreamWrapper implements StreamWrapperInterface
             return false;
         }
 
-        foreach (self::$excludePatterns as $pattern) {
-            if (preg_match($pattern, $normalizedPath) === 1) {
-                return false;
+        $longestIncludeMatch = 0;
+        foreach (self::$includeRawPatterns as $pattern => $regex) {
+            if (preg_match($regex, $normalizedPath) === 1) {
+                $longestIncludeMatch = max($longestIncludeMatch, strlen($pattern));
             }
         }
 
-        foreach (self::$includePatterns as $pattern) {
-            if (preg_match($pattern, $normalizedPath) === 1) {
-                return true;
+        if ($longestIncludeMatch === 0) {
+            return false;
+        }
+
+        $longestExcludeMatch = 0;
+        foreach (self::$excludeRawPatterns as $pattern => $regex) {
+            if (preg_match($regex, $normalizedPath) === 1) {
+                $longestExcludeMatch = max($longestExcludeMatch, strlen($pattern));
             }
         }
 
-        return false;
+        return $longestIncludeMatch >= $longestExcludeMatch;
     }
 
-    /**
-     * Transforms and loads source code directly into RAM (php://memory).
-     */
     private function openMemoryStream(string $resolvedPath): bool
     {
         $source = file_get_contents($resolvedPath);
@@ -510,13 +512,13 @@ final class StreamWrapper implements StreamWrapperInterface
     private function openCachedStream(string $resolvedPath, string $mode): bool
     {
         if (! is_dir(self::$cacheDir)) {
-            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
+            self::silent(fn() => mkdir(self::$cacheDir, 0777, true));
         }
 
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v36_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v37_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {

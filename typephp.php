@@ -39,9 +39,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths
+    | Included Paths & Vendor Whitelisting
     |--------------------------------------------------------------------------
     | Globs matching files that should be intercepted and type-checked.
+    |
+    | Pattern Specificity & Vendor Whitelisting:
+    | More specific include patterns take precedence over general exclude rules.
+    | To type-check a specific vendor package while excluding all others, simply
+    | add the package path here (e.g. 'vendor/my-org/my-package/**').
     */
     'include' => [
         'src/**',
@@ -55,6 +60,8 @@ return [
     | Excluded Paths
     |--------------------------------------------------------------------------
     | Globs matching files that should be ignored by the type checker.
+    | By default, 'vendor/**' is excluded to prevent vendor docblock bleed
+    | and performance overhead, but specific vendor paths in 'include' take priority.
     */
     'exclude' => [
         'vendor/**',
