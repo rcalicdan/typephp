@@ -7,13 +7,13 @@ namespace TypePHP\Contract;
 use TypePHP\Internal\Config;
 
 /**
- * Checks file paths against vendor directories and user-configured include/exclude globs.
+ * Checks file paths against vendor directories, file extensions, and user-configured include/exclude globs.
  */
 final class FileFilter
 {
     /**
      * Determines whether a given file path is excluded from contract inheritance.
-     * Uses pattern specificity to allow whitelisting specific vendor directories.
+     * Non-PHP files and excluded paths return true.
      */
     public static function isFileExcluded(?string $fileName): bool
     {
@@ -22,6 +22,11 @@ final class FileFilter
         }
 
         $normalizedPath = str_replace('\\', '/', $fileName);
+
+        // Non-PHP files are always excluded from PHPDoc contract processing
+        if (! str_ends_with(strtolower($normalizedPath), '.php')) {
+            return true;
+        }
 
         $config = Config::get();
         $includes = is_array($config['include'] ?? null) ? $config['include'] : ['**'];

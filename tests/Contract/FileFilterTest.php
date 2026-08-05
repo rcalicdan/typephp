@@ -81,4 +81,10 @@ describe('FileFilter Unit Tests', function () {
 
         Config::reset();
     });
+
+    test('excludes non-PHP files automatically', function () {
+        expect(FileFilter::isFileExcluded('/var/www/project/composer.json'))->toBeTrue()
+            ->and(FileFilter::isFileExcluded('/var/www/project/README.md'))->toBeTrue()
+            ->and(FileFilter::isFileExcluded('/var/www/project/assets/style.css'))->toBeTrue();
+    });
 });
