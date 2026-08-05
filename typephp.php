@@ -60,8 +60,6 @@ return [
     | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
-        'src/**',
-        'app/**',
         'internals/**',
         'tests/**',
     ],

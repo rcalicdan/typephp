@@ -112,6 +112,11 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     public static function transformSource(string $source, string $filePath = ''): string
     {
+        // Per-File Suppression Tag
+        if (str_contains($source, '@typephp-ignore-file') || str_contains($source, '@typephp-disable-file')) {
+            return $source; // Pass raw source through completely untouched!
+        }
+
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
 
         try {
@@ -523,7 +528,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v37_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v38_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {

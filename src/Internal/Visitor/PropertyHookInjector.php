@@ -19,6 +19,11 @@ final class PropertyHookInjector
             return;
         }
 
+        $doc = $node->getDocComment();
+        if ($doc !== null && (str_contains($doc->getText(), '@typephp-ignore') || str_contains($doc->getText(), '@typephp-disable'))) {
+            return; // Skip property hook validation!
+        }
+
         $propertyName = $node->props[0]->name->toString();
 
         foreach ($node->hooks as $hook) {
@@ -65,10 +70,8 @@ final class PropertyHookInjector
     private static function wrapHookReturnStatements(array $stmts, string $propertyName): array
     {
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class ($propertyName) extends NodeVisitorAbstract {
-            public function __construct(private string $propertyName)
-            {
-            }
+        $traverser->addVisitor(new class($propertyName) extends NodeVisitorAbstract {
+            public function __construct(private string $propertyName) {}
 
             public function enterNode(Node $n): ?Node
             {
