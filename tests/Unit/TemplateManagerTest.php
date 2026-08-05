@@ -24,7 +24,8 @@ describe('TemplateManager Unit Tests', function () {
             ->and(TemplateManager::inferTypeFromValue([1, 2, 3])->__toString())->toBe('list')
             ->and(TemplateManager::inferTypeFromValue(['a' => 1])->__toString())->toBe('array')
             ->and(TemplateManager::inferTypeFromValue(null)->__toString())->toBe('null')
-            ->and(TemplateManager::inferTypeFromValue(new Dog())->__toString())->toBe(Dog::class);
+            ->and(TemplateManager::inferTypeFromValue(new Dog())->__toString())->toBe(Dog::class)
+        ;
     });
 
     test('manages function call stack frame template bindings', function () {

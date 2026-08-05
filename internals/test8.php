@@ -12,5 +12,4 @@ class Numbers
     }
 }
 
-
 new Numbers(['a', 'b', 'c', 1]);

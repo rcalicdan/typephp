@@ -35,7 +35,7 @@ final class TemplateSubstitutor
             if (isset($declaredTemplates[$node->name])) {
                 $templateTag = $declaredTemplates[$node->name];
 
-                return $templateTag->bound ?? new IdentifierTypeNode('mixed');
+                return $templateTag->default ?? $templateTag->bound ?? new IdentifierTypeNode('mixed');
             }
 
             return $node;

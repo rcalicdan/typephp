@@ -99,9 +99,9 @@ final class StreamWrapper implements StreamWrapperInterface
     /**
      * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
      */
-   /**
-     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
-     */
+    /**
+      * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
+      */
     public static function transformSource(string $source, string $filePath = ''): string
     {
         $parser = (new ParserFactory())->createForNewestSupportedVersion();

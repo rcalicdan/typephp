@@ -9,7 +9,8 @@ describe('CacheManager Unit Tests', function () {
         $dir = CacheManager::getCacheDir();
 
         expect($dir)->toBeString()
-            ->and($dir)->not()->toBeEmpty();
+            ->and($dir)->not()->toBeEmpty()
+        ;
     });
 
     test('clears cached files from directory and returns count', function () {
@@ -25,6 +26,7 @@ describe('CacheManager Unit Tests', function () {
         $count = CacheManager::clear();
 
         expect($count)->toBeGreaterThanOrEqual(1)
-            ->and(file_exists($testFile))->toBeFalse();
+            ->and(file_exists($testFile))->toBeFalse()
+        ;
     });
 });

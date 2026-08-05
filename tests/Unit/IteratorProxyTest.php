@@ -19,7 +19,8 @@ describe('IteratorProxy Unit Tests', function () {
         }
 
         expect($out)->toBe(['a' => 10, 'b' => 20])
-            ->and($checkedKeys)->toBe(['a' => 10, 'b' => 20]);
+            ->and($checkedKeys)->toBe(['a' => 10, 'b' => 20])
+        ;
     });
 
     test('allows multiple foreach iterations (rewindability)', function () {
@@ -37,7 +38,8 @@ describe('IteratorProxy Unit Tests', function () {
         }
 
         expect($count1)->toBe(2)
-            ->and($count2)->toBe(2);
+            ->and($count2)->toBe(2)
+        ;
     });
 
     test('forwards count() call to inner countable iterator', function () {
@@ -53,6 +55,7 @@ describe('IteratorProxy Unit Tests', function () {
 
         // ArrayIterator has offsetExists
         expect($proxy->offsetExists('a'))->toBeTrue()
-            ->and($proxy->offsetExists('z'))->toBeFalse();
+            ->and($proxy->offsetExists('z'))->toBeFalse()
+        ;
     });
 });

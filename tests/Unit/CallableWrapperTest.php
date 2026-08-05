@@ -31,7 +31,7 @@ describe('CallableWrapper Unit Tests', function () {
                     false,
                     'id',
                     false
-                )
+                ),
             ],
             new IdentifierTypeNode('string'),
             []
@@ -42,7 +42,8 @@ describe('CallableWrapper Unit Tests', function () {
         expect($wrapped(10))->toBe('id_10');
 
         expect(fn () => $wrapped(-5))
-            ->toThrow(TypeError::class, 'TestCallback argument #1');
+            ->toThrow(TypeError::class, 'TestCallback argument #1')
+        ;
     });
 
     test('enforces static-closure constraints', function () {
@@ -57,6 +58,7 @@ describe('CallableWrapper Unit Tests', function () {
         $nonStatic = fn () => null;
 
         expect(fn () => CallableWrapper::wrapTypeNode($typeNode, $nonStatic, 'TestStatic', $registry))
-            ->toThrow(TypeError::class, 'must be a static Closure');
+            ->toThrow(TypeError::class, 'must be a static Closure')
+        ;
     });
 });

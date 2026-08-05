@@ -15,7 +15,7 @@ use PhpParser\PrettyPrinterAbstract;
 final class TypePHPPrinter extends Standard
 {
     /**
-     * Overrides base node printing to intercept injected statements, squash their 
+     * Overrides base node printing to intercept injected statements, squash their
      * formatting, and tag them with a unique marker for post-processing.
      */
     protected function p(
@@ -28,6 +28,7 @@ final class TypePHPPrinter extends Standard
 
         if ($node instanceof Node\Stmt && $node->getAttribute('typephp_injected') === true) {
             $output = preg_replace('/\s+/', ' ', trim($output)) ?? $output;
+
             return '/*__TYPEPHP_INJECTED__*/' . $output;
         }
 

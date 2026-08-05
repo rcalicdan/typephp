@@ -21,7 +21,8 @@ PHP;
         $transformed = StreamWrapper::transformSource($source, 'test_sample.php');
 
         expect($transformed)->toContain('RuntimeTypeChecker::setupScope')
-            ->and($transformed)->toContain('testUser');
+            ->and($transformed)->toContain('testUser')
+        ;
     });
 
     test('transformSource returns raw source unchanged if source is not valid PHP', function () {
@@ -49,6 +50,7 @@ PHP;
         $transformed = StreamWrapper::transformSource($genSource, 'gen.php');
 
         expect($transformed)->toContain('RuntimeTypeChecker::checkYield')
-            ->and($transformed)->toContain('RuntimeTypeChecker::checkSend');
+            ->and($transformed)->toContain('RuntimeTypeChecker::checkSend')
+        ;
     });
 });

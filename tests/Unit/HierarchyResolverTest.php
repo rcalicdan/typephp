@@ -15,7 +15,8 @@ describe('HierarchyResolver Unit Tests', function () {
         $classNames = array_map(fn ($r) => $r->getName(), $hierarchy);
 
         expect($classNames)->toContain(UserService::class)
-            ->and($classNames)->toContain(BaseService::class);
+            ->and($classNames)->toContain(BaseService::class)
+        ;
     });
 
     test('resolves interface inheritance chain for implementing classes', function () {
@@ -26,7 +27,8 @@ describe('HierarchyResolver Unit Tests', function () {
 
         expect($classNames)->toContain(CountableArrayAccess::class)
             ->and($classNames)->toContain(Countable::class)
-            ->and($classNames)->toContain(ArrayAccess::class);
+            ->and($classNames)->toContain(ArrayAccess::class)
+        ;
     });
 
     test('resolves method hierarchy across parent classes', function () {
@@ -35,6 +37,7 @@ describe('HierarchyResolver Unit Tests', function () {
 
         expect($hierarchy)->toHaveCount(2)
             ->and($hierarchy[0]->getDeclaringClass()->getName())->toBe(UserService::class)
-            ->and($hierarchy[1]->getDeclaringClass()->getName())->toBe(BaseService::class);
+            ->and($hierarchy[1]->getDeclaringClass()->getName())->toBe(BaseService::class)
+        ;
     });
 });

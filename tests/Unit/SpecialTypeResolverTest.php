@@ -16,7 +16,8 @@ describe('SpecialTypeResolver Unit Tests', function () {
         $resolved = SpecialTypeResolver::resolve($node, $ref);
 
         expect($resolved)->toBeInstanceOf(IdentifierTypeNode::class)
-            ->and($resolved->name)->toBe(UserService::class);
+            ->and($resolved->name)->toBe(UserService::class)
+        ;
     });
 
     test('resolves parent to parent class FQCN', function () {
@@ -26,17 +27,19 @@ describe('SpecialTypeResolver Unit Tests', function () {
         $resolved = SpecialTypeResolver::resolve($node, $ref);
 
         expect($resolved)->toBeInstanceOf(IdentifierTypeNode::class)
-            ->and($resolved->name)->toBe(BaseService::class);
+            ->and($resolved->name)->toBe(BaseService::class)
+        ;
     });
 
     test('preserves $this and static keyword nodes', function () {
         $ref = new ReflectionMethod(UserService::class, 'find');
-        
+
         $thisNode = new IdentifierTypeNode('$this');
         $staticNode = new IdentifierTypeNode('static');
 
         expect(SpecialTypeResolver::resolve($thisNode, $ref)->name)->toBe('$this')
-            ->and(SpecialTypeResolver::resolve($staticNode, $ref)->name)->toBe('static');
+            ->and(SpecialTypeResolver::resolve($staticNode, $ref)->name)->toBe('static')
+        ;
     });
 
     test('resolves imported class names using Reflection file context', function () {
@@ -69,6 +72,7 @@ describe('SpecialTypeResolver Unit Tests', function () {
         $resolved = SpecialTypeResolver::resolveForFile($node, (string) $filePath);
 
         expect($resolved)->toBeInstanceOf(IdentifierTypeNode::class)
-            ->and($resolved->name)->toBe('TypePHP\Tests\Fixtures\Types\GlobalTypes');
+            ->and($resolved->name)->toBe('TypePHP\Tests\Fixtures\Types\GlobalTypes')
+        ;
     });
 });

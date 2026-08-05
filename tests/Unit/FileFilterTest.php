@@ -8,7 +8,8 @@ use TypePHP\Internal\Config;
 describe('FileFilter Unit Tests', function () {
     test('returns false for null, empty, or false file paths', function () {
         expect(FileFilter::isFileExcluded(null))->toBeFalse()
-            ->and(FileFilter::isFileExcluded(''))->toBeFalse();
+            ->and(FileFilter::isFileExcluded(''))->toBeFalse()
+        ;
     });
 
     test('excludes vendor directory paths automatically', function () {
@@ -16,7 +17,8 @@ describe('FileFilter Unit Tests', function () {
         $vendorPath2 = '/var/www/project/vendor/phpunit/phpunit/src/Framework.php';
 
         expect(FileFilter::isFileExcluded($vendorPath1))->toBeTrue()
-            ->and(FileFilter::isFileExcluded($vendorPath2))->toBeTrue();
+            ->and(FileFilter::isFileExcluded($vendorPath2))->toBeTrue()
+        ;
     });
 
     test('excludes storage and cache paths matching default config patterns', function () {
@@ -26,7 +28,8 @@ describe('FileFilter Unit Tests', function () {
         $varPath = str_replace('\\', '/', getcwd() . '/var/cache/test.php');
 
         expect(FileFilter::isFileExcluded($storagePath))->toBeTrue()
-            ->and(FileFilter::isFileExcluded($varPath))->toBeTrue();
+            ->and(FileFilter::isFileExcluded($varPath))->toBeTrue()
+        ;
     });
 
     test('allows application source and test files', function () {
@@ -34,6 +37,7 @@ describe('FileFilter Unit Tests', function () {
         $testPath = str_replace('\\', '/', getcwd() . '/tests/Feature/ParamContractsTest.php');
 
         expect(FileFilter::isFileExcluded($srcPath))->toBeFalse()
-            ->and(FileFilter::isFileExcluded($testPath))->toBeFalse();
+            ->and(FileFilter::isFileExcluded($testPath))->toBeFalse()
+        ;
     });
 });

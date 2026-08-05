@@ -78,6 +78,7 @@ final class ContractParser
             while ($current !== false) {
                 if ($current->hasProperty($propertyName)) {
                     $declaringClass = $current;
+
                     break;
                 }
                 $current = $current->getParentClass();

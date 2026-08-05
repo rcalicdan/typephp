@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use PHPStan\PhpDocParser\Ast\PhpDoc\PhpDocNode;
-use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use TypePHP\Contract\DocblockExtractor;
 use TypePHP\Tests\Fixtures\Services\UserService;
-use TypePHP\Tests\Fixtures\Types\GlobalTypes;
 use TypePHP\Tests\Fixtures\Types\UserApi;
 
 describe('DocblockExtractor Unit Tests', function () {
@@ -15,7 +13,8 @@ describe('DocblockExtractor Unit Tests', function () {
         $node = DocblockExtractor::parseDocString($doc);
 
         expect($node)->toBeInstanceOf(PhpDocNode::class)
-            ->and(count($node->getParamTagValues()))->toBe(1);
+            ->and(count($node->getParamTagValues()))->toBe(1)
+        ;
     });
 
     test('extracts @template tags from docblock node', function () {
@@ -25,7 +24,8 @@ describe('DocblockExtractor Unit Tests', function () {
         $templates = DocblockExtractor::extractTemplates($node);
 
         expect($templates)->toHaveKey('T')
-            ->and($templates['T']->name)->toBe('T');
+            ->and($templates['T']->name)->toBe('T')
+        ;
     });
 
     test('extracts property promotion type from property @var docblock', function () {
