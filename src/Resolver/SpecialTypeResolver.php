@@ -440,8 +440,11 @@ final class SpecialTypeResolver
             'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
             'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
             'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',
-            'class-string', 'callable-string', 'numeric-string', 'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string',
-            'literal-string', 'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
+            'positive-float', 'negative-float', 'non-positive-float', 'non-negative-float', 'non-zero-float',
+            'class-string', 'interface-string', 'trait-string', 'enum-string', 'callable-string', 'numeric-string',
+            'non-empty-string', 'lowercase-string', 'non-empty-lowercase-string', 'literal-string', 'truthy-string',
+            'non-empty-array', 'non-empty-list', 'number', 'numeric', 'truthy', 'falsy', 'falsey', 'min', 'max', '*',
+            'never', 'never-return', 'never-returns', 'no-return', 'open-resource', 'closed-resource',
         ], true);
     }
 

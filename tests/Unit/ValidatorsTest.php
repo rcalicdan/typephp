@@ -13,7 +13,6 @@ use TypePHP\Validator\TypeValidatorRegistry;
 
 beforeEach(function () {
     $this->registry = new TypeValidatorRegistry();
-
     $config = new ParserConfig(usedAttributes: []);
     $this->lexer = new Lexer($config);
     $constExprParser = new ConstExprParser($config);
@@ -95,6 +94,35 @@ describe('IdentifierValidator', function () {
         expect($this->registry->validate(0, $nonZero, 'arg'))->toBeInstanceOf(ErrorMessage::class);
         expect($this->registry->validate(-1, $nonZero, 'arg'))->toBeNull();
         expect($this->registry->validate(1, $nonZero, 'arg'))->toBeNull();
+    });
+
+    test('validates interface-string, trait-string, and enum-string', function () {
+        $interfaceStr = parseType('interface-string', $this->lexer, $this->typeParser);
+        expect($this->registry->validate(DateTimeInterface::class, $interfaceStr, 'arg'))->toBeNull();
+        expect($this->registry->validate(stdClass::class, $interfaceStr, 'arg'))->toBeInstanceOf(ErrorMessage::class);
+
+        $enumStr = parseType('enum-string', $this->lexer, $this->typeParser);
+        expect($this->registry->validate(TypePHP\Tests\Fixtures\Types\StatusEnum::class, $enumStr, 'arg'))->toBeNull();
+        expect($this->registry->validate(stdClass::class, $enumStr, 'arg'))->toBeInstanceOf(ErrorMessage::class);
+    });
+
+    test('validates float refinements (positive-float, negative-float, non-zero-float)', function () {
+        $posFloat = parseType('positive-float', $this->lexer, $this->typeParser);
+        expect($this->registry->validate(12.34, $posFloat, 'arg'))->toBeNull();
+        expect($this->registry->validate(-12.34, $posFloat, 'arg'))->toBeInstanceOf(ErrorMessage::class);
+
+        $nonZeroFloat = parseType('non-zero-float', $this->lexer, $this->typeParser);
+        expect($this->registry->validate(0.0, $nonZeroFloat, 'arg'))->toBeInstanceOf(ErrorMessage::class);
+        expect($this->registry->validate(1.5, $nonZeroFloat, 'arg'))->toBeNull();
+    });
+
+    test('validates truthy-string and never return type', function () {
+        $truthyStr = parseType('truthy-string', $this->lexer, $this->typeParser);
+        expect($this->registry->validate('hello', $truthyStr, 'arg'))->toBeNull();
+        expect($this->registry->validate('0', $truthyStr, 'arg'))->toBeInstanceOf(ErrorMessage::class);
+
+        $neverNode = parseType('never', $this->lexer, $this->typeParser);
+        expect($this->registry->validate('returned_value', $neverNode, 'arg'))->toBeInstanceOf(ErrorMessage::class);
     });
 });
 
@@ -253,7 +281,7 @@ describe('IntersectionValidator', function () {
     test('edge case: object failing one interface in intersection', function () {
         $intersection = parseType('Countable&ArrayAccess', $this->lexer, $this->typeParser);
 
-        $countableOnly = new class () implements Countable {
+        $countableOnly = new class() implements Countable {
             public function count(): int
             {
                 return 0;
