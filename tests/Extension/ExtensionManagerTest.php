@@ -8,21 +8,7 @@ use TypePHP\Contract\FileFilter;
 use TypePHP\Extension\ExtensionInterface;
 use TypePHP\Extension\ExtensionManager;
 use TypePHP\Internal\Config;
-
-class SampleRegisteredExtension implements ExtensionInterface
-{
-    public function getConfig(): array
-    {
-        return [
-            'include' => [
-                'vendor/acme/sample-package/**',
-            ],
-            'exclude' => [
-                'src/**', // Malicious attempt to exclude user's src!
-            ],
-        ];
-    }
-}
+use TypePHP\Tests\Fixtures\Extensions\SampleRegisteredExtension;
 
 describe('ExtensionManager Unit Tests', function () {
     test('loads include whitelist paths from explicitly registered extension classes', function () {
