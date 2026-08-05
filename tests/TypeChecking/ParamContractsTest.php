@@ -140,6 +140,7 @@ describe('Lazy Wrapped Iterable/Generator Parameter Contracts', function () {
         };
 
         expect(fn () => testProcessIntKeyGenerator($badKeyGenerator()))
-            ->toThrow(TypeError::class, 'Iterator $items key');
+            ->toThrow(TypeError::class, 'Iterator $items key')
+        ;
     });
 });

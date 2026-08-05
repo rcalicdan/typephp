@@ -11,13 +11,13 @@ describe('FunctionContractInjector Unit Tests', function () {
 
         $fn = new Node\Stmt\Function_('testUser', [
             'params' => [
-                new Node\Param(new Node\Expr\Variable('id'), null, new Node\Identifier('int'))
+                new Node\Param(new Node\Expr\Variable('id'), null, new Node\Identifier('int')),
             ],
             'stmts' => [
-                new Node\Stmt\Return_(new Node\Scalar\String_('alice'))
-            ]
+                new Node\Stmt\Return_(new Node\Scalar\String_('alice')),
+            ],
         ], [
-            'comments' => [$doc]
+            'comments' => [$doc],
         ]);
 
         FunctionContractInjector::inject($fn);
@@ -26,7 +26,8 @@ describe('FunctionContractInjector Unit Tests', function () {
 
         $firstStmt = $fn->stmts[0];
         expect($firstStmt)->toBeInstanceOf(Node\Stmt\If_::class)
-            ->and($firstStmt->getAttribute('typephp_injected'))->toBeTrue();
+            ->and($firstStmt->getAttribute('typephp_injected'))->toBeTrue()
+        ;
     });
 
     test('injects wrapCallable and wrapIterable for parameters with callable or iterable docblocks', function () {
@@ -35,11 +36,11 @@ describe('FunctionContractInjector Unit Tests', function () {
         $fn = new Node\Stmt\Function_('processData', [
             'params' => [
                 new Node\Param(new Node\Expr\Variable('cb')),
-                new Node\Param(new Node\Expr\Variable('items'))
+                new Node\Param(new Node\Expr\Variable('items')),
             ],
-            'stmts' => []
+            'stmts' => [],
         ], [
-            'comments' => [$doc]
+            'comments' => [$doc],
         ]);
 
         FunctionContractInjector::inject($fn);
@@ -47,6 +48,7 @@ describe('FunctionContractInjector Unit Tests', function () {
         // Statement 0 is setupScope, Statement 1 is wrapCallable, Statement 2 is wrapIterable
         expect(count($fn->stmts))->toBeGreaterThanOrEqual(3)
             ->and($fn->stmts[1]->getAttribute('typephp_injected'))->toBeTrue()
-            ->and($fn->stmts[2]->getAttribute('typephp_injected'))->toBeTrue();
+            ->and($fn->stmts[2]->getAttribute('typephp_injected'))->toBeTrue()
+        ;
     });
 });

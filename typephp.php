@@ -14,6 +14,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registered Extensions
+    |--------------------------------------------------------------------------
+    | Explicitly list third-party extension classes that provide path overrides,
+    | custom validators, or framework integrations.
+    */
+    'extensions' => [
+        // \Acme\Domain\TypePHPExtension::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Inline Variable Validation (@var $x = ...)
     |--------------------------------------------------------------------------
     | Fine-grained control over which type categories are enforced on local
@@ -39,29 +50,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths & Vendor Whitelisting
+    | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
-    | Globs matching files that should be intercepted and type-checked.
+    | Globs or specific file paths that should be intercepted and type-checked.
     |
-    | Pattern Specificity & Vendor Whitelisting:
-    | More specific include patterns take precedence over general exclude rules.
-    | To type-check a specific vendor package while excluding all others, simply
-    | add the package path here (e.g. 'vendor/my-org/my-package/**').
+    | Pattern Specificity:
+    | More specific patterns take precedence over broader rules.
+    | You can specify directory globs (e.g. 'src/**'), single vendor packages
+    | (e.g. 'vendor/my-org/my-package/**'), or single specific files
+    | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
         'src/**',
         'app/**',
         'internals/**',
         'tests/**',
+        // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Excluded Paths
     |--------------------------------------------------------------------------
-    | Globs matching files that should be ignored by the type checker.
-    | By default, 'vendor/**' is excluded to prevent vendor docblock bleed
-    | and performance overhead, but specific vendor paths in 'include' take priority.
+    | Globs or specific file paths that should be ignored by the type checker.
     */
     'exclude' => [
         'vendor/**',

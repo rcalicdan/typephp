@@ -34,7 +34,7 @@ describe('PropertyHookInjector Unit Tests', function () {
                         new Node\Expr\PropertyFetch(new Node\Expr\Variable('this'), 'title'),
                         new Node\Expr\Variable('value')
                     )
-                )
+                ),
             ]
         );
 
@@ -49,6 +49,7 @@ describe('PropertyHookInjector Unit Tests', function () {
         $body = $prop->hooks[0]->body;
         expect($body)->toBeArray()
             ->and($body[0])->toBeInstanceOf(Node\Stmt\Expression::class)
-            ->and($body[0]->getAttribute('typephp_injected'))->toBeTrue();
+            ->and($body[0]->getAttribute('typephp_injected'))->toBeTrue()
+        ;
     });
 });

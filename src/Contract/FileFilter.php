@@ -51,7 +51,8 @@ final class FileFilter
             }
         }
 
-        return $longestExcludeMatch > $longestIncludeMatch;
+        // Equal specificity tie-breaker: Exclude wins!
+        return $longestExcludeMatch >= $longestIncludeMatch;
     }
 
     /**

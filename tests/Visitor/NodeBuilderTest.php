@@ -13,7 +13,8 @@ describe('NodeBuilder Unit Tests', function () {
         $call = NodeBuilder::createPropertyCheckCall($val, $obj, 'propName');
 
         expect($call)->toBeInstanceOf(Node\Expr\FuncCall::class)
-            ->and($call->name->toString())->toBe('\TypePHP\Internal\RuntimeTypeChecker::checkProperty');
+            ->and($call->name->toString())->toBe('\TypePHP\Internal\RuntimeTypeChecker::checkProperty')
+        ;
     });
 
     test('createVariableCheckCall creates FuncCall node for RuntimeTypeChecker::checkVariable', function () {
@@ -22,7 +23,8 @@ describe('NodeBuilder Unit Tests', function () {
         $call = NodeBuilder::createVariableCheckCall($val, 'positive-int', 'age');
 
         expect($call)->toBeInstanceOf(Node\Expr\FuncCall::class)
-            ->and($call->name->toString())->toBe('\TypePHP\Internal\RuntimeTypeChecker::checkVariable');
+            ->and($call->name->toString())->toBe('\TypePHP\Internal\RuntimeTypeChecker::checkVariable')
+        ;
     });
 
     test('createTernaryThrowExpr wraps FuncCall in a Ternary throw expression', function () {
@@ -32,6 +34,7 @@ describe('NodeBuilder Unit Tests', function () {
         $ternary = NodeBuilder::createTernaryThrowExpr($checkCall);
 
         expect($ternary)->toBeInstanceOf(Node\Expr\Ternary::class)
-            ->and($ternary->if)->toBeInstanceOf(Node\Expr\Throw_::class);
+            ->and($ternary->if)->toBeInstanceOf(Node\Expr\Throw_::class)
+        ;
     });
 });
