@@ -30,7 +30,8 @@ final class Config
             return self::$cachedConfig;
         }
 
-        $defaultConfig = [
+      $defaultConfig = [
+            'enabled' => true, 
             'cache' => true,
             'inline_vars' => [
                 'properties' => true,

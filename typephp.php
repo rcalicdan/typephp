@@ -5,6 +5,15 @@ declare(strict_types=1);
 return [
     /*
     |--------------------------------------------------------------------------
+    | Global Master Switch
+    |--------------------------------------------------------------------------
+    | Set to false to disable TypePHP completely. Useful for emergency kill-switches,
+    | performance benchmarking, or environment-specific toggles.
+    */
+    'enabled' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Enable Caching
     |--------------------------------------------------------------------------
     | When enabled, transformed PHP files are cached on disk for speed.
@@ -16,8 +25,7 @@ return [
     |--------------------------------------------------------------------------
     | Registered Extensions
     |--------------------------------------------------------------------------
-    | Explicitly list third-party extension classes that provide path overrides,
-    | custom validators, or framework integrations.
+    | Explicitly list third-party extension classes that provide path overrides.
     */
     'extensions' => [
         // \Acme\Domain\TypePHPExtension::class,
@@ -29,15 +37,6 @@ return [
     |--------------------------------------------------------------------------
     | Fine-grained control over which type categories are enforced on local
     | variable assignments with inline @var Type $var docblocks.
-    |
-    | Supported options:
-    | - 'properties': Validates class property assignments (e.g. $this->id = 1).
-    | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
-    | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
-    | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
-    | - 'shapes'    : Enforces array shapes and lists (e.g. array{id: int}).
-    | - 'objects'   : Enforces class instance checks (e.g. @var User $user).
-    |
     */
     'inline_vars' => [
         'properties' => true,
@@ -50,7 +49,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths & Whitelisting
+    | Included Paths
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
     |
@@ -65,7 +64,6 @@ return [
         'app/**',
         'internals/**',
         'tests/**',
-        // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
 
     /*

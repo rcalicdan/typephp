@@ -23,10 +23,22 @@ final class RuntimeTypeChecker
     private static ?TypeValidatorRegistry $registry = null;
 
     /**
+     * Returns whether TypePHP is globally enabled in configuration.
+     */
+    public static function isEnabled(): bool
+    {
+        return (bool) (Config::get()['enabled'] ?? true);
+    }
+
+    /**
      * Delegates generic template binding for class instances.
      */
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?ErrorMessage
     {
+        if (! self::isEnabled()) {
+            return null;
+        }
+
         return TemplateManager::bindInstanceFromNode($instance, $typeNode, $context, $forceBind);
     }
 
@@ -35,6 +47,10 @@ final class RuntimeTypeChecker
      */
     public static function checkVariable(mixed $value, string $typeString, string $varName, string $file): mixed
     {
+        if (! self::isEnabled()) {
+            return $value;
+        }
+
         return InlineChecker::checkVariable($value, $typeString, $varName, $file, self::getRegistry());
     }
 
@@ -43,6 +59,10 @@ final class RuntimeTypeChecker
      */
     public static function checkProperty(mixed $value, mixed $objectOrClass, string $propName, string $file): mixed
     {
+        if (! self::isEnabled()) {
+            return $value;
+        }
+
         return InlineChecker::checkProperty($value, $objectOrClass, $propName, $file, self::getRegistry());
     }
 
@@ -53,6 +73,10 @@ final class RuntimeTypeChecker
      */
     public static function setupScope(string $function, array $vars, ?object $thisObj = null): ErrorMessage|ScopeCleaner|null
     {
+        if (! self::isEnabled()) {
+            return null;
+        }
+
         $err = self::checkParams($function, $vars, $thisObj);
 
         if ($err !== null) {
@@ -73,6 +97,10 @@ final class RuntimeTypeChecker
      */
     public static function checkParams(string $function, array $vars, ?object $thisObj = null): ?ErrorMessage
     {
+        if (! self::isEnabled()) {
+            return null;
+        }
+
         return ParamChecker::checkParams($function, $vars, $thisObj, self::getRegistry());
     }
 
@@ -83,6 +111,10 @@ final class RuntimeTypeChecker
      */
     public static function checkReturn(string $function, mixed $value, ?object $thisObj = null, array $vars = []): mixed
     {
+        if (! self::isEnabled()) {
+            return $value;
+        }
+
         return ReturnChecker::checkReturn($function, $value, $thisObj, $vars, self::getRegistry(), [self::class, 'wrapIterable']);
     }
 
@@ -91,6 +123,10 @@ final class RuntimeTypeChecker
      */
     public static function checkSend(string $function, mixed $sendValue): mixed
     {
+        if (! self::isEnabled()) {
+            return $sendValue;
+        }
+
         return GeneratorChecker::checkSend($function, $sendValue, self::getRegistry());
     }
 
@@ -99,6 +135,10 @@ final class RuntimeTypeChecker
      */
     public static function checkYield(string $function, mixed $key, mixed $value): mixed
     {
+        if (! self::isEnabled()) {
+            return $value;
+        }
+
         return GeneratorChecker::checkYield($function, $key, $value, self::getRegistry());
     }
 
@@ -107,6 +147,10 @@ final class RuntimeTypeChecker
      */
     public static function wrapCallable(string $function, string $paramName, mixed $callable): mixed
     {
+        if (! self::isEnabled()) {
+            return $callable;
+        }
+
         return CallableWrapper::wrap($function, $paramName, $callable, self::getRegistry());
     }
 
@@ -115,6 +159,10 @@ final class RuntimeTypeChecker
      */
     public static function wrapIterable(string $function, string $paramName, mixed $iterable): mixed
     {
+        if (! self::isEnabled()) {
+            return $iterable;
+        }
+
         return IterableWrapper::wrap($function, $paramName, $iterable, self::getRegistry());
     }
 

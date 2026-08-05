@@ -94,4 +94,45 @@ describe('FileFilter Unit Tests', function () {
             ->and(FileFilter::isFileExcluded('/var/www/project/assets/style.css'))->toBeTrue()
         ;
     });
+
+    test('excludes a specific single file inside an explicitly included directory', function () {
+        Config::set([
+            'include' => [
+                'app/Services/**',
+            ],
+            'exclude' => [
+                'app/Services/LegacyService.php',
+            ],
+        ]);
+
+        $normalService = str_replace('\\', '/', getcwd() . '/app/Services/UserService.php');
+        $excludedService = str_replace('\\', '/', getcwd() . '/app/Services/LegacyService.php');
+
+        expect(FileFilter::isFileExcluded($normalService))->toBeFalse()
+            ->and(FileFilter::isFileExcluded($excludedService))->toBeTrue();
+
+        Config::reset();
+    });
+
+    test('allows including entire working directory using double asterisk glob', function () {
+        Config::set([
+            'include' => [
+                '**',
+            ],
+            'exclude' => [
+                'vendor/**',
+                'storage/**',
+            ],
+        ]);
+
+        $rootPhpFile = str_replace('\\', '/', getcwd() . '/index.php');
+        $deepPhpFile = str_replace('\\', '/', getcwd() . '/app/Http/Controllers/UserController.php');
+        $vendorPhpFile = str_replace('\\', '/', getcwd() . '/vendor/composer/autoload.php');
+
+        expect(FileFilter::isFileExcluded($rootPhpFile))->toBeFalse()
+            ->and(FileFilter::isFileExcluded($deepPhpFile))->toBeFalse()
+            ->and(FileFilter::isFileExcluded($vendorPhpFile))->toBeTrue();
+
+        Config::reset();
+    });
 });
