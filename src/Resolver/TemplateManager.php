@@ -20,6 +20,7 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
 use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Internal\ClassNameValidator;
 use TypePHP\Internal\ErrorFactory;
+use TypePHP\Internal\ErrorMessage;
 
 /**
  * Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
@@ -149,15 +150,8 @@ final class TemplateManager
 
     /**
      * Binds generic template types to an object instance or validates variance against an existing binding.
-     *
-     * Performs the following steps:
-     * 1. Resolves actual class name for self/static/$this keywords.
-     * 2. Resolves inherited @extends and @implements template declarations.
-     * 3. Reflects target class to extract declared @template tags and variance modifiers.
-     * 4. Validates existing bindings against expected generic types under variance rules.
-     * 5. Binds or updates expected generic types on the instance.
      */
-    public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?\TypeError
+    public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?ErrorMessage
     {
         $className = $typeNode->type->name;
         if (in_array(strtolower($className), ['self', 'static', '$this'], true)) {
@@ -316,7 +310,6 @@ final class TemplateManager
 
     /**
      * Recursively checks if an existing type node satisfies an expected type node under a given variance modifier.
-     * Handles Identifiers, Generics, Unions, and Intersections as AST nodes.
      */
     public static function checkVariance(TypeNode $existing, TypeNode $expected, string $variance): bool
     {

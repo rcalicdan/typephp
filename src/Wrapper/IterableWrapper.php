@@ -9,10 +9,11 @@ use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Contract\ContractParser;
+use TypePHP\Internal\ErrorFactory;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * @internal Wraps Traversable objects and Generators to evaluate key and value type constraints lazily during iteration.
+ * Wraps Traversable objects and Generators to evaluate key and value type constraints lazily during iteration.
  */
 final class IterableWrapper
 {
@@ -40,7 +41,7 @@ final class IterableWrapper
         $prefix = ($paramName === 'return') ? "$function(): Return iterator" : "$function(): Iterator \$$paramName";
         $typeCheckCallback = self::createValidationCallback($registry, $keyTypeNode, $itemTypeNode, $prefix);
 
-        if (! ($iterable instanceof \Generator)) {
+        if ($iterable instanceof \Traversable && ! ($iterable instanceof \Generator)) {
             return new IteratorProxy($iterable, $typeCheckCallback);
         }
 
@@ -93,14 +94,14 @@ final class IterableWrapper
             if ($keyTypeNode !== null && $key !== null) {
                 $err = $registry->validate($key, $keyTypeNode, "$prefix key");
                 if ($err !== null) {
-                    throw $err;
+                    throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
                 }
             }
 
             if ($itemTypeNode !== null) {
                 $err = $registry->validate($value, $itemTypeNode, "$prefix value");
                 if ($err !== null) {
-                    throw $err;
+                    throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
                 }
             }
         };
@@ -109,7 +110,6 @@ final class IterableWrapper
     /**
      * Wraps an iterable generator in an interceptor generator to evaluate type checks on each yield.
      *
-     * @param iterable<mixed, mixed> $iterable
      * @param \Closure(mixed, mixed): void $typeCheckCallback
      */
     private static function wrapGenerator(iterable $iterable, \Closure $typeCheckCallback): \Generator

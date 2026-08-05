@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace TypePHP\Internal;
 
+use TypePHP\Extension\ExtensionInterface;
+use TypePHP\Extension\ExtensionManager;
+
 /**
  * Global configuration manager for loading and dynamically overriding settings.
  *
@@ -17,7 +20,7 @@ final class Config
     private static ?array $cachedConfig = null;
 
     /**
-     * Loads and caches the global configuration from 'typephp.php' in the working directory.
+     * Loads and caches global configuration from 'typephp.php', explicitly registered extensions, and base defaults.
      *
      * @return array<string, mixed>
      */
@@ -27,18 +30,42 @@ final class Config
             return self::$cachedConfig;
         }
 
+        $defaultConfig = [
+            'cache' => true,
+            'inline_vars' => [
+                'properties' => true,
+                'generics' => true,
+                'callables' => true,
+                'scalars' => true,
+                'shapes' => true,
+                'objects' => true,
+            ],
+            'include' => ['src/**', 'app/**', 'internals/**', 'tests/**'],
+            'exclude' => ['vendor/**', 'storage/**', 'var/**', 'cache/**'],
+            'extensions' => [],
+        ];
+
         $cwd = getcwd();
         $configFile = $cwd !== false ? $cwd . '/typephp.php' : '';
+        $userConfig = [];
 
         if ($configFile !== '' && file_exists($configFile)) {
             $loadedConfig = require $configFile;
-            if (is_array($loadedConfig)) {
-                /** @var array<string, mixed> $loadedConfig */
-                return self::$cachedConfig = $loadedConfig;
+            if (\is_array($loadedConfig)) {
+                /** @var array<string, mixed> $userConfig */
+                $userConfig = $loadedConfig;
             }
         }
 
-        return self::$cachedConfig = [];
+        /** @var array<int, class-string<ExtensionInterface>> $configuredExtensions */
+        $configuredExtensions = is_array($userConfig['extensions'] ?? null) ? $userConfig['extensions'] : [];
+
+        $extensionIncludes = ExtensionManager::loadExtensionIncludes($configuredExtensions);
+        $defaultConfig['include'] = array_unique(\array_merge($defaultConfig['include'], $extensionIncludes));
+        /** @var array<string, mixed> $mergedConfig */
+        $mergedConfig = array_replace_recursive($defaultConfig, $userConfig);
+
+        return self::$cachedConfig = $mergedConfig;
     }
 
     /**

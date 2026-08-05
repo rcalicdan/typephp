@@ -14,12 +14,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registered Extensions
+    |--------------------------------------------------------------------------
+    | Explicitly list third-party extension classes that provide path overrides,
+    | custom validators, or framework integrations.
+    */
+    'extensions' => [
+        // \Acme\Domain\TypePHPExtension::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Inline Variable Validation (@var $x = ...)
     |--------------------------------------------------------------------------
     | Fine-grained control over which type categories are enforced on local
     | variable assignments with inline @var Type $var docblocks.
     |
     | Supported options:
+    | - 'properties': Validates class property assignments (e.g. $this->id = 1).
     | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
     | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
     | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
@@ -28,6 +40,7 @@ return [
     |
     */
     'inline_vars' => [
+        'properties' => true,
         'generics' => true,
         'callables' => true,
         'scalars' => true,
@@ -37,22 +50,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths
+    | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
-    | Globs matching files that should be intercepted and type-checked.
+    | Globs or specific file paths that should be intercepted and type-checked.
+    |
+    | Pattern Specificity:
+    | More specific patterns take precedence over broader rules.
+    | You can specify directory globs (e.g. 'src/**'), single vendor packages
+    | (e.g. 'vendor/my-org/my-package/**'), or single specific files
+    | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
         'src/**',
         'app/**',
         'internals/**',
         'tests/**',
+        // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Excluded Paths
     |--------------------------------------------------------------------------
-    | Globs matching files that should be ignored by the type checker.
+    | Globs or specific file paths that should be ignored by the type checker.
     */
     'exclude' => [
         'vendor/**',

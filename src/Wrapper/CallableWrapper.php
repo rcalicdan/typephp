@@ -13,7 +13,7 @@ use TypePHP\Internal\TypeFormatter;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * @internal Wraps callables to enforce argument and return type contracts dynamically at runtime and defer checking until the callabck is executed.
+ * Wraps callables to enforce argument and return type contracts dynamically at runtime.
  */
 final class CallableWrapper
 {
@@ -63,7 +63,7 @@ final class CallableWrapper
 
             $err = $registry->validate($result, $typeNode->returnType, "$prefix return value");
             if ($err !== null) {
-                throw $err;
+                throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
             }
 
             if ($typeNode->returnType instanceof CallableTypeNode && is_callable($result)) {
@@ -80,13 +80,13 @@ final class CallableWrapper
     private static function enforceClosureConstraints(string $identifierName, mixed $callable, string $prefix): void
     {
         if (str_contains($identifierName, 'closure') && ! ($callable instanceof \Closure)) {
-            throw ErrorFactory::createError($prefix . ' must be of type Closure, ' . TypeFormatter::formatGivenValue($callable) . ' given');
+            throw ErrorFactory::prepareException(new \TypeError($prefix . ' must be of type Closure, ' . TypeFormatter::formatGivenValue($callable) . ' given'));
         }
 
         if (str_contains($identifierName, 'static') && $callable instanceof \Closure) {
             $refFunc = new \ReflectionFunction($callable);
             if ($refFunc->getClosureThis() !== null) {
-                throw ErrorFactory::createError($prefix . ' must be a static Closure (not bound to $this)');
+                throw ErrorFactory::prepareException(new \TypeError($prefix . ' must be a static Closure (not bound to $this)'));
             }
         }
     }
@@ -105,7 +105,7 @@ final class CallableWrapper
                 for ($vIdx = $index; $vIdx < $argCount; $vIdx++) {
                     $err = $registry->validate($args[$vIdx], $paramNode->type, "$prefix variadic argument #" . ($vIdx + 1));
                     if ($err !== null) {
-                        throw $err;
+                        throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
                     }
                 }
 
@@ -115,7 +115,7 @@ final class CallableWrapper
             if (array_key_exists($index, $args)) {
                 $err = $registry->validate($args[$index], $paramNode->type, "$prefix argument #" . ($index + 1));
                 if ($err !== null) {
-                    throw $err;
+                    throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
                 }
             }
         }

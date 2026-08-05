@@ -344,6 +344,7 @@ describe('Associative Arrays with Union Keys and Values (array<K1|K2, V1|V2>)', 
         ];
 
         expect(fn () => testAssocUnionArrayContract($badValueMap))
-            ->toThrow(TypeError::class);
+            ->toThrow(TypeError::class)
+        ;
     });
 });

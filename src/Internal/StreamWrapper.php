@@ -7,7 +7,6 @@ namespace TypePHP\Internal;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\CloningVisitor;
 use PhpParser\ParserFactory;
-use PhpParser\PrettyPrinter\Standard;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
@@ -25,40 +24,36 @@ final class StreamWrapper implements StreamWrapperInterface
     public $context;
 
     /**
-     * Active file handle resource.
-     *
      * @var resource|null
      */
     private $handle = null;
 
     /**
-     * Active directory handle resource.
-     *
      * @var resource|null
      */
     private $dirHandle = null;
 
     /**
-     * @var array<int, string>
+     * @var array<string, string>
      */
-    private static array $includePatterns = [];
+    private static array $includeRawPatterns = [];
 
     /**
-     * @var array<int, string>
+     * @var array<string, string>
      */
-    private static array $excludePatterns = [];
+    private static array $excludeRawPatterns = [];
 
     private static string $baseDir = '';
 
     private static bool $isInitialized = false;
+
+    private static bool $isRegistered = false;
 
     private static bool $cacheEnabled = true;
 
     private static string $cacheDir = '';
 
     /**
-     * Registers the custom StreamWrapper for the 'file://' protocol, merging optional config with Config::get().
-     *
      * @param array<string, mixed> $config
      */
     public static function register(array $config = []): void
@@ -76,8 +71,15 @@ final class StreamWrapper implements StreamWrapperInterface
             /** @var array<int, string> $excludes */
             $excludes = is_array($resolvedConfig['exclude'] ?? null) ? $resolvedConfig['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
-            self::$includePatterns = array_map([self::class, 'compileGlobToRegex'], $includes);
-            self::$excludePatterns = array_map([self::class, 'compileGlobToRegex'], $excludes);
+            self::$includeRawPatterns = [];
+            foreach ($includes as $pattern) {
+                self::$includeRawPatterns[trim($pattern)] = self::compileGlobToRegex($pattern);
+            }
+
+            self::$excludeRawPatterns = [];
+            foreach ($excludes as $pattern) {
+                self::$excludeRawPatterns[trim($pattern)] = self::compileGlobToRegex($pattern);
+            }
 
             self::$cacheEnabled = (bool) ($resolvedConfig['cache'] ?? true);
             self::$cacheDir = CacheManager::getCacheDir();
@@ -85,27 +87,73 @@ final class StreamWrapper implements StreamWrapperInterface
             self::$isInitialized = true;
         }
 
-        stream_wrapper_unregister('file');
-        stream_wrapper_register('file', self::class);
+        if (! self::$isRegistered) {
+            stream_wrapper_unregister('file');
+            stream_wrapper_register('file', self::class);
+            self::$isRegistered = true;
+        }
+    }
+
+    public static function isRegistered(): bool
+    {
+        return self::$isRegistered;
+    }
+
+    public static function unregister(): void
+    {
+        if (self::$isRegistered) {
+            @stream_wrapper_restore('file');
+            self::$isRegistered = false;
+        }
     }
 
     /**
-     * Restores PHP's native 'file://' stream wrapper protocol handler.
+     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
      */
-    public static function unregister(): void
+    public static function transformSource(string $source, string $filePath = ''): string
     {
-        stream_wrapper_restore('file');
+        $parser = (new ParserFactory())->createForNewestSupportedVersion();
+
+        try {
+            $oldStmts = $parser->parse($source);
+            if ($oldStmts === null) {
+                return $source;
+            }
+        } catch (\Throwable $e) {
+            return $source;
+        }
+
+        self::extractAndSeedFileMetadata($oldStmts, $filePath);
+
+        $oldTokens = $parser->getTokens();
+
+        $traverser1 = new NodeTraverser();
+        $traverser1->addVisitor(new CloningVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
+        $nodesToTraverse = $oldStmts;
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser1->traverse($nodesToTraverse);
+
+        $traverser2 = new NodeTraverser();
+        $traverser2->addVisitor(new ContractVisitor());
+
+        /** @var array<\PhpParser\Node\Stmt> $newStmts */
+        $newStmts = $traverser2->traverse($newStmts);
+
+        $printer = new TypePHPPrinter();
+        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
+
+        // Critical: Remove the newline and indentation preceding any injected statement.
+        $transformed = preg_replace('/[ \t]*\r?\n[ \t]*\/\*__TYPEPHP_INJECTED__\*\//', ' /*__TYPEPHP_INJECTED__*/', $transformed) ?? $transformed;
+        $transformed = str_replace('/*__TYPEPHP_INJECTED__*/', '', $transformed);
+
+        return $transformed;
     }
 
     /**
      * Opens a file stream, intercepting application files for AST transformation.
-     *
-     * Performs the following steps:
-     * 1. Checks file existence and resolves path.
-     * 2. Checks if call is a read-only request from test runners or debuggers.
-     * 3. Determines if the file matches application include/exclude patterns.
-     * 4. Pass-through to native fopen if the file is read-only, excluded, or non-app PHP.
-     * 5. Intercepts execution inclusions and transforms source using RAM memory stream or disk cache.
      */
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
@@ -172,7 +220,6 @@ final class StreamWrapper implements StreamWrapperInterface
             return true;
         }
 
-        // @phpstan-ignore-next-line
         return @flock($this->handle, $operation);
     }
 
@@ -363,7 +410,7 @@ final class StreamWrapper implements StreamWrapperInterface
         } elseif (str_starts_with($glob, '**')) {
             $pattern = '.*' . substr($regex, 4) . '$';
         } else {
-            $pattern = '^' . preg_quote(self::$baseDir . '/', '#') . $regex . '$';
+            $pattern = '(^' . preg_quote(self::$baseDir . '/', '#') . '|^.*\/)' . $regex . '$';
         }
 
         return '#' . $pattern . '#i';
@@ -390,24 +437,19 @@ final class StreamWrapper implements StreamWrapperInterface
     }
 
     /**
-     * Determines if the current stream_open call is for reading file contents (e.g. by Collision, Pest, IDEs)
+     * Determines if the current stream_open call is directly for reading file contents (e.g. file_get_contents)
      * rather than PHP engine's require/include execution.
      */
     private static function isReadOnlyCall(): bool
     {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
-        foreach ($trace as $frame) {
-            $func = strtolower($frame['function']);
-            if (\in_array($func, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all', 'file_exists'], true)) {
-                return true;
-            }
-        }
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+        $callerFunc = strtolower($trace[2]['function'] ?? '');
 
-        return false;
+        return in_array($callerFunc, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all'], true);
     }
 
     /**
-     * Determines whether a target PHP file path should be intercepted and transformed based on include/exclude patterns.
+     * Determines whether a target PHP file path should be intercepted using Pattern Specificity.
      */
     private static function isApplicationFile(string $path, string|false $resolvedPath): bool
     {
@@ -416,6 +458,7 @@ final class StreamWrapper implements StreamWrapperInterface
         }
 
         $normalizedPath = str_replace('\\', '/', $resolvedPath);
+
         $parentDir = realpath(__DIR__ . '/..');
         $libSrcDir = $parentDir !== false ? str_replace('\\', '/', $parentDir) : '';
 
@@ -423,24 +466,28 @@ final class StreamWrapper implements StreamWrapperInterface
             return false;
         }
 
-        foreach (self::$excludePatterns as $pattern) {
-            if (preg_match($pattern, $normalizedPath) === 1) {
-                return false;
+        $longestIncludeMatch = 0;
+        foreach (self::$includeRawPatterns as $pattern => $regex) {
+            if (preg_match($regex, $normalizedPath) === 1) {
+                $longestIncludeMatch = max($longestIncludeMatch, strlen($pattern));
             }
         }
 
-        foreach (self::$includePatterns as $pattern) {
-            if (preg_match($pattern, $normalizedPath) === 1) {
-                return true;
+        if ($longestIncludeMatch === 0) {
+            return false;
+        }
+
+        $longestExcludeMatch = 0;
+        foreach (self::$excludeRawPatterns as $pattern => $regex) {
+            if (preg_match($regex, $normalizedPath) === 1) {
+                $longestExcludeMatch = max($longestExcludeMatch, strlen($pattern));
             }
         }
 
-        return false;
+        // Equal specificity tie-breaker: Exclude wins!
+        return $longestIncludeMatch > $longestExcludeMatch;
     }
 
-    /**
-     * Transforms and loads source code directly into RAM (php://memory).
-     */
     private function openMemoryStream(string $resolvedPath): bool
     {
         $source = file_get_contents($resolvedPath);
@@ -472,7 +519,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $mtime = filemtime($resolvedPath);
         $mtimeStr = $mtime !== false ? (string) $mtime : '0';
 
-        $cacheKey = hash('xxh128', 'v36_' . $resolvedPath . $mtimeStr);
+        $cacheKey = hash('xxh128', 'v37_' . $resolvedPath . $mtimeStr);
         $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
 
         if (! file_exists($cachedFile)) {
@@ -540,57 +587,5 @@ final class StreamWrapper implements StreamWrapperInterface
         }
 
         SpecialTypeResolver::seedFileMetadata($filePath, $namespace, $imports);
-    }
-
-    /**
-     * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
-     *
-     * Performs the following steps:
-     * 1. Parses raw PHP source into AST statement nodes.
-     * 2. Scans namespace and use import statements to seed file metadata.
-     * 3. Traverses AST with CloningVisitor and ContractVisitor.
-     * 4. Prints format-preserved source code.
-     * 5. Squashes single-level scope setup statements to guarantee zero line-number drift.
-     */
-    private static function transformSource(string $source, string $filePath = ''): string
-    {
-        $parser = (new ParserFactory())->createForNewestSupportedVersion();
-
-        $oldStmts = $parser->parse($source);
-        if ($oldStmts === null) {
-            return $source;
-        }
-
-        self::extractAndSeedFileMetadata($oldStmts, $filePath);
-
-        $oldTokens = $parser->getTokens();
-
-        $traverser1 = new NodeTraverser();
-        $traverser1->addVisitor(new CloningVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $nodesToTraverse */
-        $nodesToTraverse = $oldStmts;
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser1->traverse($nodesToTraverse);
-
-        $traverser2 = new NodeTraverser();
-        $traverser2->addVisitor(new ContractVisitor());
-
-        /** @var array<\PhpParser\Node\Stmt> $newStmts */
-        $newStmts = $traverser2->traverse($newStmts);
-
-        $printer = new Standard();
-        $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
-
-        $result = preg_replace_callback(
-            '/if\s*\(\(\$__typephpErr\s*=\s*\\\\TypePHP\\\\Internal\\\\RuntimeTypeChecker::setupScope\(.*?\)\)\s*instanceof\s*\\\\TypePHP\\\\Internal\\\\ErrorMessage\)\s*\{[^}]*\}\r?\n?\s*/s',
-            function (array $match): string {
-                return preg_replace('/\s+/', ' ', trim($match[0])) . ' ';
-            },
-            $transformed
-        );
-
-        return $result ?? $transformed;
     }
 }

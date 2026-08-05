@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use TypePHP\Tests\Fixtures\Types\NonCpmStrings;
+
 /**
  * @param positive-int $id
  * @param non-empty-string $name
@@ -75,6 +77,12 @@ describe('Function & Method Parameter Contracts', function () {
     test('throws TypeError on invalid array shape item', function () {
         expect(fn () => testProcessUserParam(10, 'Alice', ['role' => 'superadmin', 'active' => true]))
             ->toThrow(TypeError::class, "['role']")
+        ;
+    });
+
+    test('inherits constructor parameter contracts from property @var docblocks when constructor docblock is absent', function () {
+        expect(fn () => new NonCpmStrings(['a', 'b', 'c', 1]))
+            ->toThrow(TypeError::class, 'Argument $strings[3] must be of type string')
         ;
     });
 });

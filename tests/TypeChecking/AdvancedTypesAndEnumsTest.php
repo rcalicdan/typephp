@@ -264,6 +264,7 @@ describe('Class Constants as Type Literals (Class::CONST)', function () {
         expect($setting)->toBe(100);
 
         expect(fn () => $setting = 999)
-            ->toThrow(TypeError::class, 'Variable $setting');
+            ->toThrow(TypeError::class, 'Variable $setting')
+        ;
     });
 });

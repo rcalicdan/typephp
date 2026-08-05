@@ -1,6 +1,9 @@
 #!/usr/bin/env php
 <?php
 
+// Prevent automatic booting during composer autoload
+define('TYPEPHP_BOOTED', true);
+
 $autoloadFiles = [
     __DIR__ . '/../vendor/autoload.php',
     __DIR__ . '/../../../autoload.php'

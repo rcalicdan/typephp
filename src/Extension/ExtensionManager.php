@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace TypePHP\Extension;
+
+/**
+ * Loads explicitly registered TypePHP extensions from user configuration.
+ */
+final class ExtensionManager
+{
+    /**
+     * Safely loads and merges whitelist include paths from explicitly configured extensions.
+     * Extensions are structurally restricted to 'include' paths only.
+     * Exclude authority belongs strictly to the end-user's local typephp.php file.
+     *
+     * @param array<int, class-string<ExtensionInterface>> $configuredExtensions
+     *
+     * @return array<int, string>
+     */
+    public static function loadExtensionIncludes(array $configuredExtensions = []): array
+    {
+        $extensionIncludes = [];
+        $uniqueExtensions = array_unique($configuredExtensions);
+
+        foreach ($uniqueExtensions as $extensionClass) {
+            if (is_string($extensionClass) && class_exists($extensionClass) && is_a($extensionClass, ExtensionInterface::class, true)) {
+                /** @var ExtensionInterface $instance */
+                $instance = new $extensionClass();
+                $config = $instance->getConfig();
+
+                // Extensions can ONLY append include paths (whitelisting)
+                if (isset($config['include']) && is_array($config['include'])) {
+                    foreach ($config['include'] as $inc) {
+                        if (is_string($inc) && $inc !== '') {
+                            $extensionIncludes[] = $inc;
+                        }
+                    }
+                }
+            }
+        }
+
+        return array_unique($extensionIncludes);
+    }
+}

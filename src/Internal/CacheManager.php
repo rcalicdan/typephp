@@ -25,14 +25,25 @@ final class CacheManager
      */
     public static function clear(): int
     {
+        $wasRegistered = StreamWrapper::isRegistered();
+        StreamWrapper::unregister();
+
         $cacheDir = self::getCacheDir();
 
         if (! is_dir($cacheDir)) {
+            if ($wasRegistered) {
+                StreamWrapper::register();
+            }
+
             return 0;
         }
 
         $files = glob($cacheDir . '/*.php');
         if ($files === false || count($files) === 0) {
+            if ($wasRegistered) {
+                StreamWrapper::register();
+            }
+
             return 0;
         }
 
@@ -42,6 +53,10 @@ final class CacheManager
                 @unlink($file);
                 $count++;
             }
+        }
+
+        if ($wasRegistered) {
+            StreamWrapper::register();
         }
 
         return $count;
