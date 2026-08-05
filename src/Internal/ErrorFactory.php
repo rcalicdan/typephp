@@ -23,32 +23,39 @@ final class ErrorFactory
 
     /**
      * Prepares a native TypeError exception before throwing.
-     * For parameter errors, it sets the file and line to accurately blame the caller site.
+     * For parameter and callback argument errors, it filters out internal library frames
+     * and sets the file and line to accurately blame the caller site.
      */
     public static function prepareException(\TypeError $e): \TypeError
     {
         $message = $e->getMessage();
-        $isParamError = ! str_contains($message, 'Return value')
-            && ! str_contains($message, 'Variable $')
-            && ! str_contains($message, 'Property ')
-            && ! str_contains($message, 'Return iterator')
-            && ! str_contains($message, 'Generator sent value');
 
-        if ($isParamError) {
+        $isCallSiteError = str_contains($message, 'Argument $')
+            || str_contains($message, 'argument #')
+            || str_contains($message, 'Callback argument');
+
+        if ($isCallSiteError) {
             $trace = $e->getTrace();
-            $callerFrame = $trace[0] ?? [];
 
-            if (isset($callerFrame['file'], $callerFrame['line'])) {
-                $ref = new \ReflectionObject($e);
+            foreach ($trace as $frame) {
+                if (isset($frame['file'], $frame['line'])) {
+                    $file = str_replace('\\', '/', $frame['file']);
 
-                if ($ref->hasProperty('file')) {
-                    $propFile = $ref->getProperty('file');
-                    $propFile->setValue($e, $callerFrame['file']);
-                }
+                    if (! str_contains($file, 'Internal/ErrorFactory.php') && ! str_contains($file, 'Wrapper/CallableWrapper.php')) {
+                        $ref = new \ReflectionObject($e);
 
-                if ($ref->hasProperty('line')) {
-                    $propLine = $ref->getProperty('line');
-                    $propLine->setValue($e, $callerFrame['line']);
+                        if ($ref->hasProperty('file')) {
+                            $propFile = $ref->getProperty('file');
+                            $propFile->setValue($e, $frame['file']);
+                        }
+
+                        if ($ref->hasProperty('line')) {
+                            $propLine = $ref->getProperty('line');
+                            $propLine->setValue($e, $frame['line']);
+                        }
+
+                        break;
+                    }
                 }
             }
         }
