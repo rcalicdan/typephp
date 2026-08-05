@@ -56,4 +56,29 @@ describe('FileFilter Unit Tests', function () {
 
         Config::reset();
     });
+
+    test('allows including or excluding single specific files', function () {
+        Config::set([
+            'include' => [
+                'src/**',
+                'vendor/monolog/monolog/src/Monolog/Logger.php',
+            ],
+            'exclude' => [
+                'src/Legacy/UnsafeFile.php',
+                'vendor/**',
+            ],
+        ]);
+
+        $normalSrc = str_replace('\\', '/', getcwd() . '/src/TypePHP.php');
+        $excludedSingleFile = str_replace('\\', '/', getcwd() . '/src/Legacy/UnsafeFile.php');
+        $includedSingleVendorFile = str_replace('\\', '/', getcwd() . '/vendor/monolog/monolog/src/Monolog/Logger.php');
+        $otherVendorFile = str_replace('\\', '/', getcwd() . '/vendor/monolog/monolog/src/Monolog/Formatter.php');
+
+        expect(FileFilter::isFileExcluded($normalSrc))->toBeFalse()
+            ->and(FileFilter::isFileExcluded($excludedSingleFile))->toBeTrue()
+            ->and(FileFilter::isFileExcluded($includedSingleVendorFile))->toBeFalse()
+            ->and(FileFilter::isFileExcluded($otherVendorFile))->toBeTrue();
+
+        Config::reset();
+    });
 });
