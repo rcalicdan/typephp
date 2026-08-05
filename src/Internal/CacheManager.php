@@ -25,6 +25,8 @@ final class CacheManager
      */
     public static function clear(): int
     {
+        StreamWrapper::unregister();
+
         $cacheDir = self::getCacheDir();
 
         if (! is_dir($cacheDir)) {

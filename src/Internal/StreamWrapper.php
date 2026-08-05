@@ -51,6 +51,8 @@ final class StreamWrapper implements StreamWrapperInterface
 
     private static bool $isInitialized = false;
 
+    private static bool $isRegistered = false;
+
     private static bool $cacheEnabled = true;
 
     private static string $cacheDir = '';
@@ -84,8 +86,11 @@ final class StreamWrapper implements StreamWrapperInterface
             self::$isInitialized = true;
         }
 
-        stream_wrapper_unregister('file');
-        stream_wrapper_register('file', self::class);
+        if (! self::$isRegistered) {
+            stream_wrapper_unregister('file');
+            stream_wrapper_register('file', self::class);
+            self::$isRegistered = true;
+        }
     }
 
     /**
@@ -93,15 +98,15 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     public static function unregister(): void
     {
-        stream_wrapper_restore('file');
+        if (self::$isRegistered) {
+            @stream_wrapper_restore('file');
+            self::$isRegistered = false;
+        }
     }
 
     /**
      * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
      */
-    /**
-      * Transforms PHP source code by parsing AST, extracting metadata, applying ContractVisitor, and formatting output.
-      */
     public static function transformSource(string $source, string $filePath = ''): string
     {
         $parser = (new ParserFactory())->createForNewestSupportedVersion();
@@ -112,7 +117,6 @@ final class StreamWrapper implements StreamWrapperInterface
                 return $source;
             }
         } catch (\Throwable $e) {
-            // Gracefully fall back to returning raw source if file contains syntax errors
             return $source;
         }
 
@@ -138,7 +142,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $printer = new TypePHPPrinter();
         $transformed = $printer->printFormatPreserving($newStmts, $oldStmts, $oldTokens);
 
-        // Critical: Remove the newline and indentation preceding any injected statement to preserve line counts.
+        // Remove the newline and indentation preceding any injected statement.
         $transformed = preg_replace('/[ \t]*\r?\n[ \t]*\/\*__TYPEPHP_INJECTED__\*\//', ' /*__TYPEPHP_INJECTED__*/', $transformed) ?? $transformed;
         $transformed = str_replace('/*__TYPEPHP_INJECTED__*/', '', $transformed);
 
