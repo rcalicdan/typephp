@@ -33,11 +33,21 @@ use TypePHP\Wrapper\CallableWrapper;
  */
 final class InlineChecker
 {
+    /**
+     * In-memory cache for tokenized and parsed TypeNode ASTs keyed by normalized type string.
+     *
+     * @var array<string, TypeNode>
+     */
+    private static array $parsedTypeNodeCache = [];
+
+    /**
+     * Evaluates inline variable validation dynamically based on configuration.
+     */
     public static function checkVariable(mixed $value, string $typeString, string $varName, string $file, TypeValidatorRegistry $registry): mixed
     {
         $rawConfig = Config::get()['inline_vars'] ?? [];
         /** @var array<string, bool> $config */
-        $config = \is_array($rawConfig) ? $rawConfig : [];
+        $config = is_array($rawConfig) ? $rawConfig : [];
 
         $checkGenerics = (bool) ($config['generics'] ?? true);
         $checkCallables = (bool) ($config['callables'] ?? true);
@@ -51,10 +61,7 @@ final class InlineChecker
 
         try {
             $typeString = DocblockNormalizer::normalize($typeString);
-            [$typeParser, $lexer] = self::getTypeParserComponents();
-
-            $tokens = new TokenIterator($lexer->tokenize($typeString));
-            $typeNode = $typeParser->parse($tokens);
+            $typeNode = self::parseTypeString($typeString);
 
             if ($file !== '') {
                 $typeNode = SpecialTypeResolver::resolveForFile($typeNode, $file);
@@ -88,6 +95,9 @@ final class InlineChecker
         return $value;
     }
 
+    /**
+     * Evaluates class property validation dynamically based on configuration.
+     */
     public static function checkProperty(mixed $value, mixed $objectOrClass, string $propName, string $file, TypeValidatorRegistry $registry): mixed
     {
         if (! is_object($objectOrClass) && ! is_string($objectOrClass)) {
@@ -125,6 +135,21 @@ final class InlineChecker
         }
 
         return $value;
+    }
+
+    /**
+     * Parses and caches a type string into a TypeNode AST.
+     */
+    private static function parseTypeString(string $typeString): TypeNode
+    {
+        if (isset(self::$parsedTypeNodeCache[$typeString])) {
+            return self::$parsedTypeNodeCache[$typeString];
+        }
+
+        [$typeParser, $lexer] = self::getTypeParserComponents();
+        $tokens = new TokenIterator($lexer->tokenize($typeString));
+
+        return self::$parsedTypeNodeCache[$typeString] = $typeParser->parse($tokens);
     }
 
     /**

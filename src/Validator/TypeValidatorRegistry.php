@@ -26,6 +26,13 @@ final class TypeValidatorRegistry
      */
     private array $validators = [];
 
+    /**
+     * WeakMap memoizing previously validated object instances against TypeNode signatures.
+     *
+     * @var \WeakMap<object, array<string, bool>>|null
+     */
+    private static ?\WeakMap $validatedObjectCache = null;
+
     public function __construct()
     {
         $this->validators = [
@@ -46,11 +53,29 @@ final class TypeValidatorRegistry
      */
     public function validate(mixed $value, TypeNode $node, string $context): ?ErrorMessage
     {
+        // Object Validation Memoization Optimization (O(1) lookup for repeated object checks)
+        if (\is_object($value)) {
+            self::$validatedObjectCache ??= new \WeakMap();
+            $nodeKey = (string) $node;
+
+            if (isset(self::$validatedObjectCache[$value][$nodeKey])) {
+                return null;
+            }
+        }
+
         $validator = $this->validators[get_class($node)] ?? null;
         if ($validator === null) {
             return null;
         }
 
-        return $validator->validate($value, $node, $context, $this);
+        $err = $validator->validate($value, $node, $context, $this);
+
+        if ($err === null && is_object($value)) {
+            $cache = self::$validatedObjectCache[$value] ?? [];
+            $cache[(string) $node] = true;
+            self::$validatedObjectCache[$value] = $cache;
+        }
+
+        return $err;
     }
 }
