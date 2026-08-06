@@ -23,7 +23,7 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\ErrorMessage;
 
 /**
- * Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
+ * @internal Manages generic template bindings for object instances (via WeakMap) and static call stack frames.
  */
 final class TemplateManager
 {

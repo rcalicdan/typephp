@@ -7,7 +7,7 @@ namespace TypePHP\Contract;
 use TypePHP\Internal\Config;
 
 /**
- * Checks file paths against vendor directories, file extensions, and user-configured include/exclude globs.
+ * @internal Checks file paths against vendor directories, file extensions, and user-configured include/exclude globs.
  */
 final class FileFilter
 {

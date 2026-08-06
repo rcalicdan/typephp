@@ -13,7 +13,7 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * Wraps Traversable objects and Generators to evaluate key and value type constraints lazily during iteration.
+ * @internal Wraps Traversable objects and Generators to evaluate key and value type constraints lazily during iteration.
  */
 final class IterableWrapper
 {

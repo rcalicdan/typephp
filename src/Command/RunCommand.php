@@ -6,7 +6,10 @@ namespace TypePHP\Command;
 
 use TypePHP\TypePHP;
 
-final class RunCommand implements CommandInterface
+/**
+ * @internal Executes TypePHP CLI commands.
+ */
+final class RunCommand implements CommandInterface 
 {
     public function execute(array $args, $outputStream = STDOUT, $errorStream = STDERR): int
     {

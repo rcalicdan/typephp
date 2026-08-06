@@ -11,6 +11,9 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * @internal Class for validating array shapes like array<1:string,2:int>.
+ */
 final class ArrayShapeValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage

@@ -16,7 +16,7 @@ use TypePHP\Wrapper\CallableWrapper;
 use TypePHP\Wrapper\IterableWrapper;
 
 /**
- * Core runtime type checking engine facade for parameter validation, return type enforcement, and variable tracking.
+ * @internal Core runtime type checking engine facade for parameter validation, return type enforcement, and variable tracking.
  */
 final class RuntimeTypeChecker
 {

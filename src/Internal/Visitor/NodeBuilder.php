@@ -7,7 +7,7 @@ namespace TypePHP\Internal\Visitor;
 use PhpParser\Node;
 
 /**
- * Factory class building AST check nodes and ternary throw expressions.
+ * @internal Factory class building AST check nodes and ternary throw expressions.
  */
 final class NodeBuilder
 {

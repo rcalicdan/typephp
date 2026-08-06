@@ -7,7 +7,7 @@ namespace TypePHP\Internal;
 use TypePHP\Resolver\TemplateManager;
 
 /**
- * @internal
+ * @internal ensures proper scope cleanup for variable tracking.
  */
 final class ScopeCleaner
 {

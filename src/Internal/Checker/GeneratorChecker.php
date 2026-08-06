@@ -10,7 +10,7 @@ use TypePHP\Contract\ContractParser;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * Evaluates generator yield and send (TSend) type validations.
+ * @internal Evaluates generator yield and send (TSend) type validations.
  */
 final class GeneratorChecker
 {

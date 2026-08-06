@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace TypePHP\Internal;
 
 /**
- * Factory creating ErrorMessage value objects and preparing native TypeError instances with exact caller traces.
+ * @internal Factory creating ErrorMessage value objects and preparing TypeError instances with exact caller traces.
  */
 final class ErrorFactory
 {
@@ -22,7 +22,7 @@ final class ErrorFactory
     }
 
     /**
-     * Prepares a native TypeError exception before throwing.
+     * Prepares a TypeError exception before throwing.
      * For parameter and callback argument errors, it filters out internal library frames
      * and sets the file and line to accurately blame the caller site.
      */

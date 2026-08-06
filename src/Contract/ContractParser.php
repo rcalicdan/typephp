@@ -12,7 +12,7 @@ use TypePHP\Internal\Config;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
- * Main orchestrator parsing and caching PHPDoc contracts (@param, @return, @template, @phpstan-type, @var).
+ * @internal Main orchestrator parsing and caching PHPDoc contracts (@param, @return, @template, @phpstan-type, @var).
  */
 final class ContractParser
 {

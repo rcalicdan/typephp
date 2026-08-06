@@ -18,7 +18,7 @@ use TypePHP\Internal\DocblockNormalizer;
 use TypePHP\Resolver\SpecialTypeResolver;
 
 /**
- * Encapsulates PHPDoc AST parsing, tokenizing, and tag extractions.
+ * @internal Encapsulates PHPDoc AST parsing, tokenizing, and tag extractions.
  */
 final class DocblockExtractor
 {

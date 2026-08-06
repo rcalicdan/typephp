@@ -10,7 +10,7 @@ use PhpParser\NodeVisitorAbstract;
 use TypePHP\Internal\Config;
 
 /**
- * Injects parameter checks, return checks, and generator interceptors into functions and methods.
+ * @internal Injects parameter checks, return checks, and generator interceptors into functions and methods.
  */
 final class FunctionContractInjector
 {

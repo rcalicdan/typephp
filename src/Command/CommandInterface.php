@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace TypePHP\Command;
 
 /**
- * Contract defining a CLI command action.
+ * @internal Contract defining a CLI command action.
  */
 interface CommandInterface
 {

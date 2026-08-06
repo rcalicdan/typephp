@@ -10,7 +10,7 @@ use PhpParser\NodeVisitorAbstract;
 use TypePHP\Internal\Config;
 
 /**
- * Injects property contract checks into PHP 8.4 get and set property hooks.
+ * @internal Injects property contract checks into PHP 8.4 get and set property hooks.
  */
 final class PropertyHookInjector
 {

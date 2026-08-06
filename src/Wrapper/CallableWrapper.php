@@ -13,7 +13,7 @@ use TypePHP\Internal\TypeFormatter;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * Wraps callables to enforce argument and return type contracts dynamically at runtime.
+ * @internal Wraps callables to enforce argument and return type contracts dynamically at runtime.
  */
 final class CallableWrapper
 {

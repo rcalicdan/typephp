@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace TypePHP\Command;
 
 /**
- * Helper class for ANSI color formatting and terminal STDOUT/STDERR output styling.
+ * @internal Helper class for ANSI color formatting and terminal STDOUT/STDERR output styling.
  */
 final class CliFormatter
 {

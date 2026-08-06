@@ -24,7 +24,7 @@ use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
+ * @internal Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
  */
 final class SpecialTypeResolver
 {

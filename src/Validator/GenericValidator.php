@@ -14,7 +14,7 @@ use TypePHP\Internal\RuntimeTypeChecker;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * Validates values against generic AST structures (int ranges, class-string<T>, list<T>, array<K,V>, object generics).
+ * @internal values against generic AST structures (int ranges, class-string<T>, list<T>, array<K,V>, object generics).
  */
 final class GenericValidator implements TypeValidatorInterface
 {

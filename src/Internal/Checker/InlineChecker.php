@@ -30,7 +30,7 @@ use TypePHP\Validator\TypeValidatorRegistry;
 use TypePHP\Wrapper\CallableWrapper;
 
 /**
- * Evaluates inline variable (@var) and class property validation rules.
+ * @internal Evaluates inline variable (@var) and class property validation rules.
  */
 final class InlineChecker
 {

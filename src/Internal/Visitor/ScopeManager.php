@@ -10,7 +10,7 @@ use TypePHP\Contract\DocblockExtractor;
 use TypePHP\Internal\DocblockNormalizer;
 
 /**
- * Manages lexical scope stack frames and extracts local @var variable annotations.
+ * @internal Manages lexical scope stack frames and extracts local @var variable annotations.
  */
 final class ScopeManager
 {

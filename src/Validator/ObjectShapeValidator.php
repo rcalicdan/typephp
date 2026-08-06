@@ -11,7 +11,7 @@ use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * Validates stdClass dynamic properties and custom class instances against PHPDoc object shape structures.
+ * @internal Validates stdClass dynamic properties and custom class instances against PHPDoc object shape structures.
  */
 final class ObjectShapeValidator implements TypeValidatorInterface
 {

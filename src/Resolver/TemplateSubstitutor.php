@@ -13,6 +13,9 @@ use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\PhpDocParser\Ast\Type\UnionTypeNode;
 
+/**
+ * @internal Recursively substitutes template placeholders (like T) with their bound concrete types (like int).
+ */
 final class TemplateSubstitutor
 {
     /**

@@ -10,6 +10,9 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * @internal Class for validating basic scalar identifier types like int, string, bool, array, list, object, callable, resource, null, true, false, mixed, scalar, void.
+ */
 final class IdentifierValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage

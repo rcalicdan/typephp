@@ -17,7 +17,7 @@ use TypePHP\Resolver\TemplateSubstitutor;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * Evaluates function and method return contract validations.
+ * @internal Evaluates function and method return contract validations.
  */
 final class ReturnChecker
 {

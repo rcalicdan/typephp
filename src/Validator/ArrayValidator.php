@@ -10,6 +10,9 @@ use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
+/**
+ * @internal Class for validating array types like array<int, string>.
+ */
 final class ArrayValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage

@@ -6,6 +6,9 @@ namespace TypePHP\Command;
 
 use TypePHP\Internal\CacheManager;
 
+/**
+ * @internal Warms up the TypePHP cache.
+ */
 final class CacheWarmCommand implements CommandInterface
 {
     public function execute(array $args, $outputStream = STDOUT, $errorStream = STDERR): int

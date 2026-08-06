@@ -12,7 +12,7 @@ use TypePHP\Internal\Visitor\PropertyHookInjector;
 use TypePHP\Internal\Visitor\ScopeManager;
 
 /**
- * AST Node Visitor that injects contract checks, scope tracking, property hook validation, and parameter/return wrappers into functions and methods.
+ * @internal AST Node Visitor that injects contract checks, scope tracking, property hook validation, and parameter/return wrappers into functions and methods.
  */
 final class ContractVisitor extends NodeVisitorAbstract
 {

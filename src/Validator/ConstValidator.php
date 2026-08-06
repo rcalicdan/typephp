@@ -18,7 +18,7 @@ use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * Validates literal values, class constants, and PHP 8.1 Enum cases against ConstTypeNode ASTs.
+ * @internal Validates literal values, class constants, and PHP 8.1 Enum cases against ConstTypeNode ASTs.
  */
 final class ConstValidator implements TypeValidatorInterface
 {

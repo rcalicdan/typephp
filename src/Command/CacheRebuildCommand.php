@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace TypePHP\Command;
 
+/**
+ * @internal Rebuilds the TypePHP cache.
+ */
 final class CacheRebuildCommand implements CommandInterface
 {
     public function execute(array $args, $outputStream = STDOUT, $errorStream = STDERR): int

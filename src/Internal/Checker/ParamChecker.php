@@ -20,7 +20,7 @@ use TypePHP\Resolver\TemplateManager;
 use TypePHP\Validator\TypeValidatorRegistry;
 
 /**
- * Evaluates function and method parameter contract validations.
+ * @internal Evaluates function and method parameter contract validations.
  */
 final class ParamChecker
 {

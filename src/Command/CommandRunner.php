@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace TypePHP\Command;
 
+/**
+ * @internal Executes TypePHP CLI commands.
+ */
 final class CommandRunner
 {
     /**
-     * Parses CLI arguments and routes execution to the corresponding command class.
+     * @internal Parses CLI arguments and routes execution to the corresponding command class.
      *
      * @param array<int, string> $args
      * @param resource $outputStream

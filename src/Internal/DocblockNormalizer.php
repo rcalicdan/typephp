@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace TypePHP\Internal;
 
 /**
+ * @internal
+ * 
  * Normalizes PHPDoc comment strings before AST parsing.
  * Converts class-specific shapes like stdClass{id: int} into intersection shapes (stdClass & object{id: int}).
  */
