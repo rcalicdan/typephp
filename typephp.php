@@ -9,6 +9,10 @@ return [
     |--------------------------------------------------------------------------
     | Set to false to disable TypePHP completely. Useful for emergency kill-switches,
     | performance benchmarking, or environment-specific toggles.
+    |
+    | Note: This affects file transformation at load-time. If toggled dynamically
+    | during a long-running process (e.g., Swoole, PHPUnit), classes already 
+    | loaded in memory will retain their previous transformation state.
     */
     'enabled' => true,
 
@@ -20,6 +24,8 @@ return [
     | skip type-checking on specific methods/files. Set to false in CI/CD or
     | audit runs to force type-checking on all ignored methods without deleting
     | the docblock tags from source code.
+    |
+    | Note: Like 'enabled', this applies when a file is first loaded into memory.
     */
     'respect_ignore_tags' => true,
 
@@ -51,16 +57,16 @@ return [
     */
     'inline_vars' => [
         'properties' => true,
-        'generics' => true,
-        'callables' => true,
-        'scalars' => true,
-        'shapes' => true,
-        'objects' => true,
+        'generics'   => true,
+        'callables'  => true,
+        'scalars'    => true,
+        'shapes'     => true,
+        'objects'    => true,
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths
+    | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
     |
@@ -79,9 +85,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Excluded Paths
+    | Excluded Paths & Single-File Blacklisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be ignored by the type checker.
+    | You can exclude entire directories (e.g. 'vendor/**') or blacklist
+    | single legacy files inside included directories (e.g. 'src/Legacy/File.php').
     */
     'exclude' => [
         'vendor/**',

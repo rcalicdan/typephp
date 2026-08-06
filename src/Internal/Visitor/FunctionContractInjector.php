@@ -29,9 +29,9 @@ final class FunctionContractInjector
 
         $docText = $doc !== null ? $doc->getText() : '';
 
-        // Respect per-function suppression tag unless respect_ignore_tags is false
-        if ((Config::get()['respect_ignore_tags'] ?? true) && str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable')) {
-            return;
+        // Per-Function/Method Suppression Tag 
+        if ((Config::get()['respect_ignore_tags'] ?? true) && (str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable'))) {
+            return; // Skip injecting contract checks for this specific function/method!
         }
 
         $hasParam = $isClassMethod || str_contains($docText, '@param');
@@ -68,7 +68,7 @@ final class FunctionContractInjector
             return false;
         }
 
-        $visitor = new class() extends NodeVisitorAbstract {
+        $visitor = new class () extends NodeVisitorAbstract {
             public bool $isGen = false;
 
             public function enterNode(Node $n): ?int
@@ -140,11 +140,11 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         )
-                    ),
+                    )
                 ],
             ]
         );
@@ -203,13 +203,12 @@ final class FunctionContractInjector
 
     /**
      * @param array<Node\Stmt> $stmts
-     *
      * @return array<Node\Stmt>
      */
     private static function wrapGeneratorReturns(array $stmts): array
     {
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class() extends NodeVisitorAbstract {
+        $traverser->addVisitor(new class () extends NodeVisitorAbstract {
             public function enterNode(Node $n): int|Node|null
             {
                 if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
@@ -248,10 +247,10 @@ final class FunctionContractInjector
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
-                                                ),
+                                                )
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -282,10 +281,10 @@ final class FunctionContractInjector
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
-                                                ),
+                                                )
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -322,17 +321,17 @@ final class FunctionContractInjector
 
     /**
      * @param array<Node\Stmt> $stmts
-     *
      * @return array<Node\Stmt>
      */
     private static function wrapNonGeneratorReturns(array $stmts, Node\Expr $thisArg, bool $isNativeVoid): array
     {
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
+        $traverser->addVisitor(new class ($thisArg, $isNativeVoid) extends NodeVisitorAbstract {
             public function __construct(
                 private Node\Expr $thisArg,
                 private bool $isNativeVoid
-            ) {}
+            ) {
+            }
 
             public function enterNode(Node $n): int|array|null
             {
@@ -382,7 +381,7 @@ final class FunctionContractInjector
                                                                 ),
                                                             ]
                                                         )
-                                                    ),
+                                                    )
                                                 ]
                                             )
                                         )
@@ -426,7 +425,7 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
@@ -482,7 +481,7 @@ final class FunctionContractInjector
                                                         ),
                                                     ]
                                                 )
-                                            ),
+                                            )
                                         ]
                                     )
                                 )
@@ -523,7 +522,7 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    ),
+                                    )
                                 ]
                             )
                         ),
