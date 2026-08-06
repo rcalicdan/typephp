@@ -7,6 +7,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started/installation' },
+      { text: 'Architecture', link: '/architecture/how-it-works' },
       { text: 'CLI', link: '/production/cache-commands' },
       { text: 'GitHub', link: 'https://github.com/typephp/typephp' }
     ],
@@ -17,6 +18,12 @@ export default defineConfig({
           { text: 'Installation', link: '/getting-started/installation' },
           { text: 'Quick Start', link: '/getting-started/quick-start' },
           { text: 'Configuration', link: '/getting-started/configuration' },
+        ]
+      },
+      {
+        text: 'Architecture',
+        items: [
+          { text: 'How It Works', link: '/architecture/how-it-works' },
         ]
       },
       {

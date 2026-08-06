@@ -1,12 +1,24 @@
 # Quick Start Guide
 
-TypePHP enforces PHPDoc type contracts at runtime. Below is an overview of core features.
+TypePHP enforces PHPDoc type contracts at runtime. Below is a tour of core features and code examples.
 
 ---
 
-## Parameter and Return Contracts
+## Executing Standalone Scripts via CLI
 
-Write standard PHPDoc annotations on functions or class methods:
+Run any standalone PHP script with active runtime type enforcement using the `vendor/bin/typephp` binary:
+
+```bash
+vendor/bin/typephp index.php
+```
+
+Your script executes naturally using your system's native PHP engine while TypePHP actively validates type contracts on every function call, return value, and local variable assignment.
+
+---
+
+## Parameter Contracts (`@param`)
+
+Write standard PHPDoc annotations on function or method parameters:
 
 ```php
 <?php
@@ -16,23 +28,65 @@ declare(strict_types=1);
 /**
  * @param positive-int $id
  * @param non-empty-string $username
- * @return array{id: positive-int, username: non-empty-string, role: 'admin'|'user'}
  */
-function createUser(int $id, string $username): array
+function processUser(int $id, string $username): void
 {
-    return [
-        'id' => $id,
-        'username' => $username,
-        'role' => 'admin',
-    ];
+    // ...
 }
 
 // Valid Call
-createUser(42, 'Alice');
+processUser(42, 'Alice');
 
 // Invalid Call (Passing negative integer)
-createUser(-5, 'Alice');
-// Throws: TypeError: createUser(): Argument $id must be of type positive-int, negative int (-5) given
+processUser(-5, 'Alice');
+// Throws: TypeError: processUser(): Argument $id must be of type positive-int, negative int (-5) given
+```
+
+---
+
+## Return Contracts (`@return`)
+
+TypePHP validates function return values before they are returned to the caller:
+
+```php
+/**
+ * @return array{id: positive-int, status: 'active'|'pending'}
+ */
+function fetchUserData(int $id): array
+{
+    if ($id <= 0) {
+        return ['id' => $id, 'status' => 'active']; // Invalid: $id is not positive-int
+    }
+
+    return ['id' => $id, 'status' => 'active'];
+}
+
+fetchUserData(-10);
+// Throws: TypeError: fetchUserData(): Return value['id'] must be of type positive-int
+```
+
+---
+
+## Typed Arrays, Lists, and Shapes
+
+Enforce strict structure on arrays, sequential lists, and key-value maps:
+
+```php
+/**
+ * @param list<positive-int> $scores
+ * @param array<string, non-empty-string> $headers
+ */
+function processBatch(array $scores, array $headers): void
+{
+    // ...
+}
+
+// Valid Call
+processBatch([10, 20, 30], ['Authorization' => 'Bearer token']);
+
+// Invalid Call (Associative array passed where sequential list was expected)
+processBatch(['score' => 10], ['Authorization' => 'Bearer token']);
+// Throws: TypeError: processBatch(): Argument $scores must be a list
 ```
 
 ---
@@ -71,7 +125,7 @@ $users->add(new Product('SKU-100'));
 
 ---
 
-## PHP 8.4 Property Hooks
+## PHP 8.4 Property Hooks & Asymmetric Visibility
 
 TypePHP validates incoming and returned values on PHP 8.4 Property Hooks:
 
@@ -94,3 +148,49 @@ $profile = new UserProfile();
 $profile->username = '   '; 
 // Throws: TypeError: Property UserProfile::$username must be of type non-empty-string
 ```
+
+---
+
+## Suppressing Type Checks (`@typephp-ignore` & `@typephp-ignore-file`)
+
+TypePHP provides annotations to skip type enforcement on legacy code or performance-critical sections without removing docblock types.
+
+### Function & Method Level Suppression
+
+Add `@typephp-ignore` to a function or class method docblock to skip type-checking for that specific function:
+
+```php
+/**
+ * @typephp-ignore
+ * @param positive-int $id
+ */
+function legacyProcess(int $id): void
+{
+    // TypePHP skips type enforcement for this specific function
+}
+
+legacyProcess(-500); // Passes without error
+```
+
+Here is the updated section addressing the reader directly as **"you"**:
+
+### File-Level Suppression (`@typephp-ignore-file`)
+
+Place `@typephp-ignore-file` in a file-level docblock at the top of a file:
+
+```php
+<?php
+
+/**
+ * @typephp-ignore-file
+ */
+
+declare(strict_types=1);
+
+namespace App\Legacy;
+
+// All functions, methods, and properties in this file are skipped by TypePHP
+```
+
+> **Technical Note & Coding Convention:**
+> Under the hood, TypePHP scans the raw file contents for `@typephp-ignore-file` before performing AST transformations, meaning the tag will function regardless of its position in the file. However, you should always place `@typephp-ignore-file` at the very top of the file (right after `<?php`) as a clean coding convention.
