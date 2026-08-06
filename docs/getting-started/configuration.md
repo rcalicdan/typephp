@@ -21,6 +21,7 @@ return [
     | Global Master Switch
     |--------------------------------------------------------------------------
     | Controls whether TypePHP enforces type checks at runtime.
+    | Set to false for an emergency kill-switch or zero-overhead benchmarking.
     */
     'enabled' => true,
 
@@ -105,49 +106,30 @@ return [
 
 ---
 
-## Configuration Reference
+## Inline Variable Categories Reference (`inline_vars`)
 
-### Global Master Switch (`enabled`)
-The `enabled` flag acts as the master kill-switch for TypePHP. When set to `false`, the interceptor completely steps out of the way, and no runtime type checking is performed.
+How each `inline_vars` toggle maps to PHPDoc type annotations:
 
-**Config vs. Environment Variables:** 
-While you can hardcode this value in `typephp.php`, it is highly recommended to bind this to your environment variables (e.g., `'enabled' => env('TYPEPHP_ENABLED', true)`). This allows you to easily toggle TypePHP across different environments:
-*   **Local/Testing:** Set to `true` to catch type errors during development.
-*   **Production:** Set to `false` for zero overhead, or `true` if you require absolute type safety in your production application.
+| Config Option | Covered PHPDoc Types | Examples |
+| :--- | :--- | :--- |
+| **`'scalars'`** | Primitive & Refined Scalars | `int`, `string`, `bool`, `positive-int`, `non-empty-string`, `truthy` |
+| **`'objects'`** | Class Instances & Bare Class References | `User`, `stdClass`, `class-string`, `interface-string`, `enum-string` |
+| **`'generics'`** | Template & Bound Types | `Collection<User>`, `Producer<T>`, `class-string<T>` |
+| **` illegible 'arrays'`** | All Arrays, Shapes, & Lists | `array{id: int}`, `int[]`, `User[]`, `list<string>`, `array<string, int>` |
+| **`'callables'`** | Callables & Closures | `callable`, `Closure`, `callable(int): string`, `static-closure` |
+| **`'properties'`** | Class Property Writes | `$this->id = 1`, `UserProfile::$username = 'Alice'` |
 
-### Respect Ignore Tags (`respect_ignore_tags`)
-Developers can bypass runtime checks on performance-critical loops or legacy methods by adding the `@typephp-ignore` tag to a docblock. 
-By default (`true`), TypePHP honors these tags and skips checking those specific methods. 
+### Important Notes on `inline_vars` Behavior
 
-However, if you set this to `false`, TypePHP will **ignore the ignore tags** and enforce type-checking universally. This is incredibly useful for **CI/CD pipelines** or comprehensive test suites where you want to verify total type safety across the entire application without developers' local optimizations bypassing the tests.
-
-### Function Boundary Contracts (`params` & `returns`)
-These options dictate whether TypePHP enforces the types defined in your method signatures and docblocks. 
-*   `params`: Validates incoming arguments against `@param` tags.
-*   `returns`: Validates outbound data against `@return` tags.
-
-> **Why is there no fine-grained configuration for boundaries?**
-> You might notice that `inline_vars` allows you to selectively disable specific type checks (like scalars or generics), but `params` and `returns` do not. **This is an intentional architectural decision.**
-> 
-> Function boundaries represent the **public contract** of your application. If a method claims to return an `array<int, User>`, that contract must be absolute. Allowing selective enforcement at boundaries (e.g., checking the `User` object but ignoring the `int` key) creates an unreliable, unpredictable API. 
-> 
-> Inline variables, on the other hand, represent **internal state**. We provide fine-grained controls for inline variables so developers can optimize internal loop performance (e.g., turning off heavy generic checks locally) without breaking the guarantees of the public API boundaries.
-
-### Caching (`cache`)
-When enabled, TypePHP stores the transformed, type-injected versions of your PHP files on disk. Subsequent executions bypass the AST parsing phase entirely, resulting in near-native PHP execution speeds.
-
-### Extensions (`extensions`)
-This array allows you to register custom type handlers or third-party TypePHP plugins. Provide the fully qualified class name (FQCN) of your extension to have it booted during TypePHP's initialization.
-
-### Inline Variable Validation (`inline_vars`)
-Unlike boundaries, local variable assignments (using `@var` docblocks) offer granular control. You can toggle specific types of runtime checks on or off. For instance, you may want to ensure `objects` are strictly typed but disable `generics` checks if you are iterating over massive arrays and need to squeeze out extra micro-optimizations.
+* **Inner Structural Types Are Always Validated:** Disabling `'scalars' => false` only turns off standalone scalar assignments (such as `/** @var positive-int $x */`). If `'arrays'` or `'generics'` is enabled, TypePHP **will still validate inner scalar constraints** inside array shapes (`array{id: positive-int}`), lists (`list<positive-int>`), or generic containers (`Collection<positive-int>`) to maintain structural type integrity.
+* **Active Generic Instance Prebinding:** Enabling `'generics' => true` allows inline `@var` annotations on object instantiations (such as `/** @var Collection<User> $users */ $users = new Collection();`) to **actively prebind generic template parameters (`T = User`)** directly to that object instance in `WeakMap` memory. Every subsequent method call on that instance (`$users->add()`, `$users->get()`) will enforce `T = User`!
 
 ---
 
-## Path Resolution & Specificity Rules
+## Pattern Specificity Rules
 
-The `include` and `exclude` arrays determine which files TypePHP should analyze. If a file matches both an `include` rule and an `exclude` rule, TypePHP resolves the conflict by comparing the character length of the patterns:
+If a file matches both an `include` rule and an `exclude` rule, TypePHP compares pattern lengths:
 
-* **Specific Whitelist Wins:** `'vendor/my-org/package/**'` (length 25) takes precedence over `'vendor/**'` (length 8). This allows you to exclude an entire directory but whitelist a specific package inside it.
+* **Specific Whitelist Wins:** `'vendor/my-org/package/**'` (length 25) takes precedence over `'vendor/**'` (length 8).
 * **Single File Override:** `'src/LegacyFile.php'` (length 22) takes precedence over `'src/**'` (length 6).
-* **Tie-Breaker:** If pattern lengths are exactly equal, `exclude` takes precedence by default to ensure application safety and prevent unintended parsing errors.
+* **Tie-Breaker:** If pattern lengths are equal, `exclude` takes precedence to ensure application safety.

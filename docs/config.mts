@@ -43,6 +43,7 @@ export default defineConfig({
           { text: 'Arrays & Shapes', link: '/supported-types/arrays-and-shapes' },
           { text: 'Callables & Closures', link: '/supported-types/callables-and-closures' },
           { text: 'Iterators & Generators', link: '/supported-types/iterators-and-generators' },
+          { text: 'Unions, Intersections & Conditionals', link: '/supported-types/unions-intersections-and-conditionals' },
         ]
       },
       {
