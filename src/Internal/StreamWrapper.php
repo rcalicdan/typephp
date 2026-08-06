@@ -163,7 +163,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         self::unregister();
-        $exists = self::silent(fn() => file_exists($path));
+        $exists = self::silent(fn () => file_exists($path));
         $resolvedPath = $exists ? realpath($path) : '';
         self::register();
 
@@ -174,7 +174,7 @@ final class StreamWrapper implements StreamWrapperInterface
             $targetFile = ($resolvedPath !== false && $resolvedPath !== '') ? $resolvedPath : $path;
 
             /** @var resource|false $handle */
-            $handle = self::silent(fn() => fopen($targetFile, $mode));
+            $handle = self::silent(fn () => fopen($targetFile, $mode));
 
             $this->handle = $handle !== false ? $handle : null;
             self::register();
@@ -296,7 +296,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var array<int|string, int>|false $result */
-        $result = self::silent(fn() => stat($path));
+        $result = self::silent(fn () => stat($path));
         self::register();
 
         return $result;
@@ -311,11 +311,11 @@ final class StreamWrapper implements StreamWrapperInterface
             $valueArray = is_array($value) ? $value : [];
             $time = $valueArray[0] ?? time();
             $atime = $valueArray[1] ?? $time;
-            $result = (bool) self::silent(fn() => touch($path, (int) $time, (int) $atime));
+            $result = (bool) self::silent(fn () => touch($path, (int) $time, (int) $atime));
         } elseif ($option === STREAM_META_ACCESS) {
             /** @var int $mode */
             $mode = is_int($value) ? $value : 0777;
-            $result = (bool) self::silent(fn() => chmod($path, $mode));
+            $result = (bool) self::silent(fn () => chmod($path, $mode));
         }
         self::register();
 
@@ -326,7 +326,7 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         self::unregister();
         /** @var resource|false $dh */
-        $dh = self::silent(fn() => opendir($path));
+        $dh = self::silent(fn () => opendir($path));
         $this->dirHandle = $dh !== false ? $dh : null;
         self::register();
 
@@ -366,7 +366,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function mkdir(string $path, int $mode, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn() => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
+        $result = (bool) self::silent(fn () => mkdir($path, $mode, (bool) ($options & STREAM_MKDIR_RECURSIVE)));
         self::register();
 
         return $result;
@@ -375,7 +375,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rmdir(string $path, int $options): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn() => rmdir($path));
+        $result = (bool) self::silent(fn () => rmdir($path));
         self::register();
 
         return $result;
@@ -384,7 +384,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function unlink(string $path): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn() => unlink($path));
+        $result = (bool) self::silent(fn () => unlink($path));
         self::register();
 
         return $result;
@@ -393,7 +393,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public function rename(string $pathFrom, string $pathTo): bool
     {
         self::unregister();
-        $result = (bool) self::silent(fn() => rename($pathFrom, $pathTo));
+        $result = (bool) self::silent(fn () => rename($pathFrom, $pathTo));
         self::register();
 
         return $result;
@@ -432,7 +432,7 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     private static function silent(callable $callback): mixed
     {
-        set_error_handler(fn() => true);
+        set_error_handler(fn () => true);
 
         try {
             return $callback();
@@ -522,7 +522,7 @@ final class StreamWrapper implements StreamWrapperInterface
     private function openCachedStream(string $resolvedPath, string $mode): bool
     {
         if (! is_dir(self::$cacheDir)) {
-            self::silent(fn() => mkdir(self::$cacheDir, 0777, true));
+            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
         }
 
         $mtime = filemtime($resolvedPath);

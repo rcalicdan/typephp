@@ -32,14 +32,14 @@ final class Config
 
         $defaultConfig = [
             'enabled' => true,
+            'respect_ignore_tags' => true,
             'cache' => true,
-            'respect_ignore_tags' => true, 
             'inline_vars' => [
                 'properties' => true,
                 'generics' => true,
                 'callables' => true,
                 'scalars' => true,
-                'shapes' => true,
+                'arrays' => true,
                 'objects' => true,
             ],
             'include' => ['src/**', 'app/**', 'internals/**', 'tests/**'],

@@ -29,7 +29,7 @@ final class FunctionContractInjector
 
         $docText = $doc !== null ? $doc->getText() : '';
 
-        // Per-Function/Method Suppression Tag 
+        // Per-Function/Method Suppression Tag
         if ((Config::get()['respect_ignore_tags'] ?? true) && (str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable'))) {
             return; // Skip injecting contract checks for this specific function/method!
         }
@@ -140,11 +140,11 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         )
-                    )
+                    ),
                 ],
             ]
         );
@@ -203,6 +203,7 @@ final class FunctionContractInjector
 
     /**
      * @param array<Node\Stmt> $stmts
+     *
      * @return array<Node\Stmt>
      */
     private static function wrapGeneratorReturns(array $stmts): array
@@ -247,10 +248,10 @@ final class FunctionContractInjector
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
-                                                )
+                                                ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -281,10 +282,10 @@ final class FunctionContractInjector
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
-                                                )
+                                                ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -321,6 +322,7 @@ final class FunctionContractInjector
 
     /**
      * @param array<Node\Stmt> $stmts
+     *
      * @return array<Node\Stmt>
      */
     private static function wrapNonGeneratorReturns(array $stmts, Node\Expr $thisArg, bool $isNativeVoid): array
@@ -381,7 +383,7 @@ final class FunctionContractInjector
                                                                 ),
                                                             ]
                                                         )
-                                                    )
+                                                    ),
                                                 ]
                                             )
                                         )
@@ -425,7 +427,7 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),
@@ -481,7 +483,7 @@ final class FunctionContractInjector
                                                         ),
                                                     ]
                                                 )
-                                            )
+                                            ),
                                         ]
                                     )
                                 )
@@ -522,7 +524,7 @@ final class FunctionContractInjector
                                                 ),
                                             ]
                                         )
-                                    )
+                                    ),
                                 ]
                             )
                         ),

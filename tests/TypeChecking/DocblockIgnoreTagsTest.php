@@ -9,7 +9,9 @@ use TypePHP\Tests\Fixtures\IgnoreTags\IgnoredMethod;
  * Standalone function with @typephp-ignore
  *
  * @typephp-ignore
+ *
  * @param positive-int $id
+ *
  * @return positive-int
  */
 function testIgnoredFunction(int $id): int
@@ -27,16 +29,18 @@ describe('DocBlock Ignore Tags (@typephp-ignore & @typephp-ignore-file)', functi
         $fixture = new IgnoredMethod();
 
         expect(fn () => $fixture->normalMethod(-5))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         expect($fixture->ignoredMethod(-100))->toBe(-100);
     });
 
-   test('skips type-checking on class property marked with @typephp-ignore', function () {
+    test('skips type-checking on class property marked with @typephp-ignore', function () {
         $fixture = new IgnoredMethod();
 
         expect(fn () => $fixture->setNormalProperty(-5))
-            ->toThrow(TypeError::class, 'Property');
+            ->toThrow(TypeError::class, 'Property')
+        ;
 
         $fixture->setIgnoredProperty(-5);
         expect($fixture->ignoredProperty)->toBe(-5);

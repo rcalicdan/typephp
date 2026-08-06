@@ -43,6 +43,7 @@ try {
 }
 
 echo "\n--- Test 5b: direct full-array reassignment bypassing add() ---\n";
+
 try {
     $c->items = [1, 2, 'sneaky_bypass'];
     echo "unexpectedly succeeded — direct assignment bypassed validation!\n";
@@ -51,9 +52,10 @@ try {
 }
 
 echo "\n--- Test 5c: in-place array mutation via offset push, does the hook fire? ---\n";
+
 try {
     $c->items[] = 'still_sneaky'; // this is read-modify-write, NOT necessarily a full 'set'
-    echo "items after offset push: " . json_encode($c->items) . "\n";
+    echo 'items after offset push: ' . json_encode($c->items) . "\n";
 } catch (TypeError $e) {
     echo "caught: {$e->getMessage()}\n";
 }

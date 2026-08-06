@@ -54,13 +54,21 @@ return [
     |--------------------------------------------------------------------------
     | Fine-grained control over which type categories are enforced on local
     | variable assignments with inline @var Type $var docblocks.
+    |
+    | Supported options:
+    | - 'properties': Validates class property assignments (e.g. $this->id = 1).
+    | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
+    | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
+    | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
+    | - 'arrays'    : Enforces array shapes, lists, & typed arrays (e.g. array{id: int}, int[]).
+    | - 'objects'   : Enforces class instance checks (e.g. @var User $user).
     */
     'inline_vars' => [
         'properties' => true,
         'generics'   => true,
         'callables'  => true,
         'scalars'    => true,
-        'shapes'     => true,
+        'arrays'     => true, 
         'objects'    => true,
     ],
 
@@ -69,12 +77,6 @@ return [
     | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
-    |
-    | Pattern Specificity:
-    | More specific patterns take precedence over broader rules.
-    | You can specify directory globs (e.g. 'src/**'), single vendor packages
-    | (e.g. 'vendor/my-org/my-package/**'), or single specific files
-    | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
         'src/**',
@@ -85,11 +87,9 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Excluded Paths & Single-File Blacklisting
+    | Excluded Paths
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be ignored by the type checker.
-    | You can exclude entire directories (e.g. 'vendor/**') or blacklist
-    | single legacy files inside included directories (e.g. 'src/Legacy/File.php').
     */
     'exclude' => [
         'vendor/**',

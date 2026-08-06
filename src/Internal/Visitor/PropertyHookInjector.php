@@ -71,8 +71,10 @@ final class PropertyHookInjector
     private static function wrapHookReturnStatements(array $stmts, string $propertyName): array
     {
         $traverser = new NodeTraverser();
-        $traverser->addVisitor(new class($propertyName) extends NodeVisitorAbstract {
-            public function __construct(private string $propertyName) {}
+        $traverser->addVisitor(new class ($propertyName) extends NodeVisitorAbstract {
+            public function __construct(private string $propertyName)
+            {
+            }
 
             public function enterNode(Node $n): ?Node
             {

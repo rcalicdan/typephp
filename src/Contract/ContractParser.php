@@ -92,7 +92,7 @@ final class ContractParser
             $refProp = $declaringClass->getProperty($propertyName);
             $doc = $refProp->getDocComment();
 
-           // Skip property type checks if docblock is missing or contains @typephp-ignore (unless respect_ignore_tags is false)
+            // Skip property type checks if docblock is missing or contains @typephp-ignore (unless respect_ignore_tags is false)
             $shouldRespectIgnore = (Config::get()['respect_ignore_tags'] ?? true);
             if ($doc === false || ($shouldRespectIgnore && (str_contains($doc, '@typephp-ignore') || str_contains($doc, '@typephp-disable')))) {
                 return self::$propertyCache[$cacheKey] = null;

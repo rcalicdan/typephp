@@ -14,6 +14,7 @@ class IgnoredFile
      * Type-checking is skipped for ALL methods in this file because of @typephp-ignore-file above.
      *
      * @param positive-int $id
+     *
      * @return positive-int
      */
     public function process(int $id): int

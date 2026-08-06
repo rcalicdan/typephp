@@ -8,7 +8,9 @@ class ForceCheckedMethod
 {
     /**
      * @typephp-ignore
+     *
      * @param positive-int $id
+     *
      * @return positive-int
      */
     public function ignoredMethod(int $id): int

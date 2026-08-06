@@ -14,7 +14,8 @@ describe('Generic Template Substitution in PHP 8.4 Property Hooks', function () 
         expect($collection->items)->toBe([10, 20]);
 
         expect(fn () => $collection->add(-5))
-            ->toThrow(TypeError::class, 'Argument $item (template T = positive-int) must be of type positive-int, negative int (-5) given');
+            ->toThrow(TypeError::class, 'Argument $item (template T = positive-int) must be of type positive-int, negative int (-5) given')
+        ;
     });
 
     test('substitutes object-bound templates inside property hook validation (direct external assignment)', function () {
@@ -25,6 +26,7 @@ describe('Generic Template Substitution in PHP 8.4 Property Hooks', function () 
         expect($collection->items)->toBe([100, 200]);
 
         expect(fn () => $collection->items = [100, -50])
-            ->toThrow(TypeError::class, "Property TypePHP\Tests\Fixtures\Generics\HookedCollection::\$items['1'] must be of type positive-int, negative int (-50) given");
+            ->toThrow(TypeError::class, "Property TypePHP\Tests\Fixtures\Generics\HookedCollection::\$items['1'] must be of type positive-int, negative int (-50) given")
+        ;
     });
 });

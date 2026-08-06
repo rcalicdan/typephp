@@ -16,7 +16,8 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         expect($config)->toBeArray()
             ->and($config)->toHaveKey('cache')
-            ->and($config)->toHaveKey('inline_vars');
+            ->and($config)->toHaveKey('inline_vars')
+        ;
     });
 
     test('dynamically overrides configuration settings using setConfig', function () {

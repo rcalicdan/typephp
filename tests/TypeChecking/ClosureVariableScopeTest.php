@@ -34,7 +34,7 @@ describe('Closure Variable Type Preservation (Arrow Functions & Long Closures)',
         $num = 50;
 
         $refClosure = function () use (&$num) {
-            $num = -99; 
+            $num = -99;
         };
 
         expect($refClosure)->toThrow(TypeError::class, 'Variable $num');

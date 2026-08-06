@@ -14,7 +14,7 @@ class HookedCollection
      */
     public array $items = [] {
         set {
-            $this->items = $value; 
+            $this->items = $value;
         }
     }
 
@@ -23,7 +23,7 @@ class HookedCollection
      */
     public function add(mixed $item): static
     {
-        $this->items = [...$this->items, $item]; 
+        $this->items = [...$this->items, $item];
 
         return $this;
     }

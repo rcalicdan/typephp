@@ -8,9 +8,10 @@ class ExternalPropTest
      * @var positive-int
      */
     public int $age = 10;
-    
+
     /**
      * @typephp-ignore
+     *
      * @var positive-int
      */
     public int $ignoredAge = 10;
@@ -32,9 +33,10 @@ echo "   ✅ Success! Ignored property allowed -50! Value: {$obj->ignoredAge}\n\
 
 // 3. Invalid Assignment (Should Throw)
 echo "3. Assigning invalid value (-5) to normal property...\n";
+
 try {
     $obj->age = -5;
     echo "   ❌ FAIL! The assignment succeeded but it should have thrown a TypeError!\n";
 } catch (TypeError $e) {
-    echo "   ✅ SUCCESS! Caught expected TypeError: " . $e->getMessage() . "\n";
+    echo '   ✅ SUCCESS! Caught expected TypeError: ' . $e->getMessage() . "\n";
 }

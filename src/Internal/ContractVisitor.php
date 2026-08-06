@@ -118,8 +118,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $propName = $node->var->name->toString();
                 $classExpr = $node->var->class;
 
-                $classArg = $classExpr instanceof Node\Name 
-                    ? new Node\Expr\ClassConstFetch($classExpr, 'class') 
+                $classArg = $classExpr instanceof Node\Name
+                    ? new Node\Expr\ClassConstFetch($classExpr, 'class')
                     : $classExpr;
 
                 $checkCall = NodeBuilder::createPropertyCheckCall($node->expr, $classArg, $propName);

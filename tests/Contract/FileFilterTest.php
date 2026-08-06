@@ -109,7 +109,8 @@ describe('FileFilter Unit Tests', function () {
         $excludedService = str_replace('\\', '/', getcwd() . '/app/Services/LegacyService.php');
 
         expect(FileFilter::isFileExcluded($normalService))->toBeFalse()
-            ->and(FileFilter::isFileExcluded($excludedService))->toBeTrue();
+            ->and(FileFilter::isFileExcluded($excludedService))->toBeTrue()
+        ;
 
         Config::reset();
     });
@@ -131,7 +132,8 @@ describe('FileFilter Unit Tests', function () {
 
         expect(FileFilter::isFileExcluded($rootPhpFile))->toBeFalse()
             ->and(FileFilter::isFileExcluded($deepPhpFile))->toBeFalse()
-            ->and(FileFilter::isFileExcluded($vendorPhpFile))->toBeTrue();
+            ->and(FileFilter::isFileExcluded($vendorPhpFile))->toBeTrue()
+        ;
 
         Config::reset();
     });

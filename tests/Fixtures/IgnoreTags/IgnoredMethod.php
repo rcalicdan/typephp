@@ -17,6 +17,7 @@ class IgnoredMethod
      * Ignored property -> Property assignment checks skipped!
      *
      * @typephp-ignore
+     *
      * @var positive-int
      */
     public int $ignoredProperty = 10;
@@ -25,6 +26,7 @@ class IgnoredMethod
      * Ignored property hook -> Property hook checks skipped!
      *
      * @typephp-ignore
+     *
      * @var positive-int
      */
     public int $ignoredHook {
@@ -58,7 +60,9 @@ class IgnoredMethod
      * Ignored method - Type-checking skipped for this method only.
      *
      * @typephp-ignore
+     *
      * @param positive-int $id
+     *
      * @return positive-int
      */
     public function ignoredMethod(int $id): int
