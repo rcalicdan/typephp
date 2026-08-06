@@ -14,7 +14,7 @@ final class CliFormatter
     public static function initVT100(): void
     {
         if (! self::$vt100Initialized) {
-            if (function_exists('sapi_windows_vt100_support')) {
+            if (\function_exists('sapi_windows_vt100_support')) {
                 @sapi_windows_vt100_support(STDOUT, true);
                 @sapi_windows_vt100_support(STDERR, true);
             }
@@ -27,7 +27,7 @@ final class CliFormatter
         self::initVT100();
 
         $hasColor = (
-            (function_exists('sapi_windows_vt100_support') && @sapi_windows_vt100_support(STDOUT)) ||
+            (\function_exists('sapi_windows_vt100_support') && @sapi_windows_vt100_support(STDOUT)) ||
             DIRECTORY_SEPARATOR === '/' ||
             false !== getenv('ANSICON') ||
             'ON' === getenv('ConEmuANSI') ||

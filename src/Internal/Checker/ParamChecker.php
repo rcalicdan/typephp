@@ -36,14 +36,14 @@ final class ParamChecker
         $effectiveFunction = $function;
         if ($thisObj !== null && str_contains($function, '::')) {
             [$classOrTrait, $methodName] = explode('::', $function, 2);
-            $actualClassName = get_class($thisObj);
+            $actualClassName = \get_class($thisObj);
             if ($actualClassName !== $classOrTrait) {
                 $effectiveFunction = $actualClassName . '::' . $methodName;
             }
         }
 
         $contract = ContractParser::parse($effectiveFunction);
-        if (count($contract['types']) === 0) {
+        if (\count($contract['types']) === 0) {
             return null;
         }
 
@@ -122,7 +122,7 @@ final class ParamChecker
         $templateNode = $templates[$templateName];
 
         if (! TemplateManager::isBound($function, $thisObj, $templateName)) {
-            if (! is_string($val) || ! ClassNameValidator::isValid($val) || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
+            if (! \is_string($val) || ! ClassNameValidator::isValid($val) || (! class_exists($val) && ! interface_exists($val) && ! trait_exists($val) && ! enum_exists($val))) {
                 return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a valid class-string, ' . TypeFormatter::formatGivenValue($val) . ' given');
             }
 
@@ -139,7 +139,7 @@ final class ParamChecker
             $expectedTypeNode = TemplateManager::getBoundType($function, $thisObj, $templateName);
             $targetClass = $expectedTypeNode instanceof IdentifierTypeNode ? $expectedTypeNode->name : (string) $expectedTypeNode;
 
-            if (! is_string($val) || ! is_a($val, $targetClass, true)) {
+            if (! \is_string($val) || ! is_a($val, $targetClass, true)) {
                 $valStr = TypeFormatter::formatGivenValue($val);
 
                 return ErrorFactory::createError($function . '(): Argument $' . $paramName . ' must be a class-string of ' . $targetClass . ', ' . $valStr . ' given');
@@ -179,7 +179,7 @@ final class ParamChecker
         $isVariadic = $typeNode instanceof ArrayTypeNode;
 
         if (! TemplateManager::isBound($function, $thisObj, $templateName)) {
-            $sampleVal = ($isVariadic && is_array($val)) ? ($val[0] ?? null) : $val;
+            $sampleVal = ($isVariadic && \is_array($val)) ? ($val[0] ?? null) : $val;
             $inferredType = TemplateManager::inferTypeFromValue($sampleVal);
 
             if ($templateNode->bound !== null) {
@@ -192,7 +192,7 @@ final class ParamChecker
 
             TemplateManager::bindTemplate($function, $thisObj, $templateName, $inferredType);
 
-            if ($isVariadic && is_array($val)) {
+            if ($isVariadic && \is_array($val)) {
                 foreach ($val as $idx => $item) {
                     $err = $registry->validate($item, $inferredType, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $inferredType . ')');
                     if ($err !== null) {
@@ -206,7 +206,7 @@ final class ParamChecker
                 return null;
             }
 
-            if ($isVariadic && is_array($val)) {
+            if ($isVariadic && \is_array($val)) {
                 foreach ($val as $idx => $item) {
                     $err = $registry->validate($item, $expectedTypeNode, $function . '(): Argument $' . $paramName . '[' . $idx . '] (template ' . $templateName . ' = ' . $expectedTypeNode . ')');
                     if ($err !== null) {

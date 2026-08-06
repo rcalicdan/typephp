@@ -63,7 +63,7 @@ final class ContractParser
     public static function parseProperty(string $className, string $propertyName): ?TypeNode
     {
         $cacheKey = $className . '::$' . $propertyName;
-        if (array_key_exists($cacheKey, self::$propertyCache)) {
+        if (\array_key_exists($cacheKey, self::$propertyCache)) {
             return self::$propertyCache[$cacheKey];
         }
 
@@ -122,7 +122,7 @@ final class ContractParser
             $phpDocNode = DocblockExtractor::parseDocString($doc);
             $varTags = $phpDocNode->getVarTagValues();
 
-            if (count($varTags) === 0) {
+            if (\count($varTags) === 0) {
                 return self::$propertyCache[$cacheKey] = null;
             }
 
@@ -215,7 +215,7 @@ final class ContractParser
         }
 
         $returnTags = $phpDocNode->getReturnTagValues();
-        if (count($returnTags) > 0) {
+        if (\count($returnTags) > 0) {
             $returnType = SpecialTypeResolver::resolve($returnTags[0]->type, $ref);
         }
 
@@ -327,7 +327,7 @@ final class ContractParser
 
             if ($returnType === null) {
                 $returnTags = $phpDocNode->getReturnTagValues();
-                if (count($returnTags) > 0) {
+                if (\count($returnTags) > 0) {
                     $returnType = SpecialTypeResolver::resolve($returnTags[0]->type, $hierRef);
                 }
             }

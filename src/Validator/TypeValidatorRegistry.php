@@ -63,14 +63,14 @@ final class TypeValidatorRegistry
             }
         }
 
-        $validator = $this->validators[get_class($node)] ?? null;
+        $validator = $this->validators[\get_class($node)] ?? null;
         if ($validator === null) {
             return null;
         }
 
         $err = $validator->validate($value, $node, $context, $this);
 
-        if ($err === null && is_object($value)) {
+        if ($err === null && \is_object($value)) {
             $cache = self::$validatedObjectCache[$value] ?? [];
             $cache[(string) $node] = true;
             self::$validatedObjectCache[$value] = $cache;

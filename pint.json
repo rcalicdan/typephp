@@ -9,6 +9,11 @@
                 "const"
             ]
         },
+         "native_function_invocation": {
+            "include": ["@compiler_optimized"],
+            "scope": "all",
+            "strict": true
+        },
         "no_extra_blank_lines": {
             "tokens": [
                 "extra",

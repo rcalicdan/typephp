@@ -45,8 +45,8 @@ final class ConstValidator implements TypeValidatorInterface
                 ? $constExpr->className . '::' . $constExpr->name
                 : $constExpr->name;
 
-            if (defined($fqcnConstant)) {
-                $expected = constant($fqcnConstant);
+            if (\defined($fqcnConstant)) {
+                $expected = \constant($fqcnConstant);
             } else {
                 $expected = (string) $constExpr;
             }

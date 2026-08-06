@@ -6,7 +6,7 @@ namespace TypePHP\Internal;
 
 /**
  * @internal
- * 
+ *
  * Normalizes PHPDoc comment strings before AST parsing.
  * Converts class-specific shapes like stdClass{id: int} into intersection shapes (stdClass & object{id: int}).
  */
@@ -39,7 +39,7 @@ final class DocblockNormalizer
                 $shapeBody = $matches[2];
 
                 $lower = strtolower(ltrim($className, '\\'));
-                if (in_array($lower, self::BUILTIN_SHAPE_KEYWORDS, true)) {
+                if (\in_array($lower, self::BUILTIN_SHAPE_KEYWORDS, true)) {
                     return $matches[0];
                 }
 

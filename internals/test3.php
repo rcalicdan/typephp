@@ -83,7 +83,7 @@ try {
     if ($unwrapped instanceof Box) {
         echo "   ✅ outerBox->get() returned a Box instance — nested structure preserved\n";
         $innerVal = $unwrapped->get();
-        echo '   ℹ️  innerBox->get() returned instance of: ' . get_class($innerVal) . "\n";
+        echo '   ℹ️  innerBox->get() returned instance of: ' . \get_class($innerVal) . "\n";
     } else {
         echo "   ⚠️  outerBox->get() did NOT return a Box\n";
     }

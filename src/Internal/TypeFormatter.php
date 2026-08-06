@@ -11,7 +11,7 @@ final class TypeFormatter
 {
     public static function formatGivenValue(mixed $value): string
     {
-        if (is_int($value)) {
+        if (\is_int($value)) {
             if ($value < 0) {
                 return "negative int ($value)";
             }
@@ -22,11 +22,11 @@ final class TypeFormatter
             return "int ($value)";
         }
 
-        if (is_string($value)) {
+        if (\is_string($value)) {
             if ($value === '') {
                 return "empty string ('')";
             }
-            if (strlen($value) > 20) {
+            if (\strlen($value) > 20) {
                 return "string '" . substr($value, 0, 17) . "...'";
             }
 
@@ -38,7 +38,7 @@ final class TypeFormatter
                 return 'empty array ([])';
             }
             if (array_is_list($value)) {
-                return 'list (' . count($value) . ' items)';
+                return 'list (' . \count($value) . ' items)';
             }
 
             $keys = array_keys($value);

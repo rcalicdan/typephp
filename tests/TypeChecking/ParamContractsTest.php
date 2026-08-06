@@ -89,7 +89,7 @@ describe('Function & Method Parameter Contracts', function () {
 
 describe('Lazy Wrapped Callable Parameter Contracts', function () {
     test('executes valid wrapped callback cleanly', function () {
-        $validCallback = fn (int $id, string $name): bool => strlen($name) > 0;
+        $validCallback = fn (int $id, string $name): bool => \strlen($name) > 0;
         $result = testExecuteCallback($validCallback);
 
         expect($result)->toBeTrue();

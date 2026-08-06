@@ -24,14 +24,14 @@ class Cat extends Animal
  */
 function recursiveGeneric(Animal $item, int $depth = 1): Animal
 {
-    echo "   [Depth {$depth}] Entering with " . get_class($item) . "\n";
+    echo "   [Depth {$depth}] Entering with " . \get_class($item) . "\n";
 
     if ($depth < 2) {
         echo "   [Depth {$depth}] Invoking inner recursive call with Cat...\n";
         recursiveGeneric(new Cat(), $depth + 1);
     }
 
-    echo "   [Depth {$depth}] Exiting and returning " . get_class($item) . "\n";
+    echo "   [Depth {$depth}] Exiting and returning " . \get_class($item) . "\n";
 
     return $item;
 }
@@ -47,7 +47,7 @@ function recursiveGeneric(Animal $item, int $depth = 1): Animal
  */
 function throwingGeneric(Animal $item): Animal
 {
-    throw new RuntimeException('Exception thrown for ' . get_class($item));
+    throw new RuntimeException('Exception thrown for ' . \get_class($item));
 }
 
 echo "=== TESTING RECURSION & EXCEPTION STATE ISOLATION ===\n\n";
@@ -57,7 +57,7 @@ echo "1. Testing Recursive Generic Call (Outer = Dog, Inner = Cat)...\n";
 
 try {
     $result = recursiveGeneric(new Dog(), 1);
-    echo '   ✅ SUCCESS! Outer call returned instance of: ' . get_class($result) . "\n";
+    echo '   ✅ SUCCESS! Outer call returned instance of: ' . \get_class($result) . "\n";
 } catch (TypeError $e) {
     echo '   ❌ RECURSION BUG DETECTED! ' . $e->getMessage() . "\n";
 } catch (Throwable $e) {

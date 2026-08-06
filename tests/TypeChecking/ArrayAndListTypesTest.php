@@ -15,7 +15,7 @@ use TypePHP\Tests\Fixtures\Generics\Producer;
  */
 function testDogArrayParam(array $dogs): int
 {
-    return count($dogs);
+    return \count($dogs);
 }
 
 /**
@@ -25,7 +25,7 @@ function testDogArrayParam(array $dogs): int
  */
 function testAssocScoreArrayParam(array $scores): int
 {
-    return count($scores);
+    return \count($scores);
 }
 
 /**
@@ -35,7 +35,7 @@ function testAssocScoreArrayParam(array $scores): int
  */
 function testTagListParam(array $tags): int
 {
-    return count($tags);
+    return \count($tags);
 }
 
 /**
@@ -43,7 +43,7 @@ function testTagListParam(array $tags): int
  */
 function testNonEmptyNumberListParam(array $numbers): int
 {
-    return count($numbers);
+    return \count($numbers);
 }
 
 /**
@@ -53,7 +53,7 @@ function testNonEmptyNumberListParam(array $numbers): int
  */
 function testNestedMatrixParam(array $matrix): int
 {
-    return count($matrix);
+    return \count($matrix);
 }
 
 /**
@@ -63,7 +63,7 @@ function testNestedMatrixParam(array $matrix): int
  */
 function testGenericProducerListParam(array $producers): int
 {
-    return count($producers);
+    return \count($producers);
 }
 
 /**
@@ -93,7 +93,7 @@ function testUnsealedShapeParam(array $payload): bool
  */
 function testVariadicArrayShapeParam(array ...$users): int
 {
-    return count($users);
+    return \count($users);
 }
 
 /**

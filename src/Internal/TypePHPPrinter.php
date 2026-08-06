@@ -9,8 +9,8 @@ use PhpParser\PrettyPrinter\Standard;
 use PhpParser\PrettyPrinterAbstract;
 
 /**
- * @internal 
- * 
+ * @internal
+ *
  * Custom AST Printer that squashes injected TypePHP validation blocks into a single line
  * without adding trailing newlines to guarantee zero line-number drift.
  */

@@ -17,7 +17,7 @@ final class ObjectShapeValidator implements TypeValidatorInterface
 {
     public function validate(mixed $value, TypeNode $node, string $context, TypeValidatorRegistry $registry): ?ErrorMessage
     {
-        if (! is_object($value)) {
+        if (! \is_object($value)) {
             return ErrorFactory::createError($context . ' must be of type object, ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 

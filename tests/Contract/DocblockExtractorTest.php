@@ -13,7 +13,7 @@ describe('DocblockExtractor Unit Tests', function () {
         $node = DocblockExtractor::parseDocString($doc);
 
         expect($node)->toBeInstanceOf(PhpDocNode::class)
-            ->and(count($node->getParamTagValues()))->toBe(1)
+            ->and(\count($node->getParamTagValues()))->toBe(1)
         ;
     });
 

@@ -101,7 +101,7 @@ function testStaticClosureParam(Closure $closure): string
 
 describe('Standard Callable Contracts (callable(T1, T2): R)', function () {
     test('executes valid callback and validates arguments and return values', function () {
-        $validCallback = fn (int $id, string $name): bool => $id > 0 && strlen($name) > 0;
+        $validCallback = fn (int $id, string $name): bool => $id > 0 && \strlen($name) > 0;
 
         expect(testProcessUserCallback($validCallback))->toBeTrue();
     });
@@ -203,7 +203,7 @@ describe('Advanced PHPStan Callable Specs (Variadics, Optional Args, Static Clos
 describe('Inline @var Callable Variable Contracts', function () {
     test('enforces contracts on callables assigned to variables with @var annotation', function () {
         /** @var callable(positive-int, non-empty-string): bool $formatter */
-        $formatter = fn (int $id, string $name) => strlen($name) > 0;
+        $formatter = fn (int $id, string $name) => \strlen($name) > 0;
 
         expect($formatter(10, 'alice'))->toBeTrue();
 
@@ -214,7 +214,7 @@ describe('Inline @var Callable Variable Contracts', function () {
 
     test('enforces contracts on inline callable with array shapes and list parameters', function () {
         /** @var callable(list<positive-int>, array{status: 'active'}): bool $processor */
-        $processor = fn (array $ids, array $options) => count($ids) > 0 && $options['status'] === 'active';
+        $processor = fn (array $ids, array $options) => \count($ids) > 0 && $options['status'] === 'active';
 
         expect($processor([10, 20], ['status' => 'active']))->toBeTrue();
 
@@ -267,7 +267,7 @@ describe('Inline @var Callable Variable Contracts', function () {
                 return -5;
             }
 
-            return is_int($query) ? $query : strlen($query);
+            return \is_int($query) ? $query : \strlen($query);
         };
 
         expect($finder(10))->toBe(10);

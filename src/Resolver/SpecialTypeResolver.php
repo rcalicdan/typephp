@@ -62,7 +62,7 @@ final class SpecialTypeResolver
      */
     public static function resolve(TypeNode $node, \ReflectionClass|\ReflectionFunction|\ReflectionMethod|string $context, ?object $thisObj = null): TypeNode
     {
-        if (is_string($context)) {
+        if (\is_string($context)) {
             if (str_contains($context, '::')) {
                 [$className, $methodName] = explode('::', $context, 2);
                 $ref = new \ReflectionMethod($className, $methodName);
@@ -436,7 +436,7 @@ final class SpecialTypeResolver
      */
     private static function isBuiltInTypeKeyword(string $name): bool
     {
-        return in_array(strtolower($name), [
+        return \in_array(strtolower($name), [
             'int', 'integer', 'string', 'float', 'double', 'bool', 'boolean', 'array', 'list', 'object', 'callable',
             'iterable', 'resource', 'null', 'true', 'false', 'mixed', 'scalar', 'void', 'self', 'static', 'parent', '$this',
             'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int', 'unsigned-int',

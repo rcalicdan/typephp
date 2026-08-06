@@ -29,7 +29,7 @@ final class GeneratorChecker
             if ($sendTypeNode !== null) {
                 $err = $registry->validate($sendValue, $sendTypeNode, "$function(): Generator sent value (TSend)");
                 if ($err !== null) {
-                    throw new \TypeError($err->getMessage());
+                    throw new \TypePHP\Exception\TypeError($err->getMessage());
                 }
             }
         }
@@ -50,7 +50,7 @@ final class GeneratorChecker
         $keyTypeNode = null;
 
         if ($returnTypeNode instanceof GenericTypeNode) {
-            $typesCount = count($returnTypeNode->genericTypes);
+            $typesCount = \count($returnTypeNode->genericTypes);
             if ($typesCount === 1) {
                 $itemTypeNode = $returnTypeNode->genericTypes[0];
             } elseif ($typesCount >= 2) {
@@ -64,14 +64,14 @@ final class GeneratorChecker
         if ($key !== null && $keyTypeNode !== null) {
             $err = $registry->validate($key, $keyTypeNode, "$function(): Return iterator key");
             if ($err !== null) {
-                throw new \TypeError($err->getMessage());
+                throw new \TypePHP\Exception\TypeError($err->getMessage());
             }
         }
 
         if ($itemTypeNode !== null) {
             $err = $registry->validate($value, $itemTypeNode, "$function(): Return iterator value");
             if ($err !== null) {
-                throw new \TypeError($err->getMessage());
+                throw new \TypePHP\Exception\TypeError($err->getMessage());
             }
         }
 

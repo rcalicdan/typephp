@@ -26,7 +26,7 @@ final class TemplateSubstitutor
      */
     public static function substitute(TypeNode $node, array $boundTemplates, array $declaredTemplates = []): TypeNode
     {
-        if (count($boundTemplates) === 0 && count($declaredTemplates) === 0) {
+        if (\count($boundTemplates) === 0 && \count($declaredTemplates) === 0) {
             return $node;
         }
 

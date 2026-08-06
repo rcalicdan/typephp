@@ -54,7 +54,7 @@ final class NodeBuilder
                     [
                         new Node\Arg(
                             new Node\Expr\New_(
-                                new Node\Name('\TypeError'),
+                                new Node\Name('\TypePHP\Exception\TypeError'),
                                 [
                                     new Node\Arg(
                                         new Node\Expr\MethodCall(

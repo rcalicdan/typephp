@@ -104,6 +104,7 @@ describe('PHP 8.4 Interface Property Inheritance', function () {
         expect($fixture->_writeOnlyVal)->toBe(500);
 
         expect(fn () => $fixture->writeOnlyProp = -10)
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 });

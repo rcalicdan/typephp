@@ -49,6 +49,7 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect(ClassUsingTraitProperties::$traitStaticProp)->toBe('v2.0');
 
         expect(fn () => ClassUsingTraitProperties::setTraitStaticProp(''))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 });

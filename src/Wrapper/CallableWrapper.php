@@ -22,7 +22,7 @@ final class CallableWrapper
      */
     public static function wrap(string $function, string $paramName, mixed $callable, TypeValidatorRegistry $registry): mixed
     {
-        if (! is_callable($callable)) {
+        if (! \is_callable($callable)) {
             return $callable;
         }
 
@@ -49,7 +49,7 @@ final class CallableWrapper
      */
     public static function wrapTypeNode(?TypeNode $typeNode, mixed $callable, string $prefix, TypeValidatorRegistry $registry): mixed
     {
-        if (! is_callable($callable) || ! ($typeNode instanceof CallableTypeNode)) {
+        if (! \is_callable($callable) || ! ($typeNode instanceof CallableTypeNode)) {
             return $callable;
         }
 
@@ -66,7 +66,7 @@ final class CallableWrapper
                 throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));
             }
 
-            if ($typeNode->returnType instanceof CallableTypeNode && is_callable($result)) {
+            if ($typeNode->returnType instanceof CallableTypeNode && \is_callable($result)) {
                 $result = self::wrapTypeNode($typeNode->returnType, $result, "$prefix: Returned callback", $registry);
             }
 
@@ -98,7 +98,7 @@ final class CallableWrapper
      */
     private static function validateCallbackArguments(CallableTypeNode $typeNode, array $args, string $prefix, TypeValidatorRegistry $registry): void
     {
-        $argCount = count($args);
+        $argCount = \count($args);
 
         foreach ($typeNode->parameters as $index => $paramNode) {
             if ($paramNode->isVariadic) {
@@ -112,7 +112,7 @@ final class CallableWrapper
                 break;
             }
 
-            if (array_key_exists($index, $args)) {
+            if (\array_key_exists($index, $args)) {
                 $err = $registry->validate($args[$index], $paramNode->type, "$prefix argument #" . ($index + 1));
                 if ($err !== null) {
                     throw ErrorFactory::prepareException(new \TypeError($err->getMessage()));

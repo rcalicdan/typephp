@@ -18,7 +18,7 @@ class Cat extends Animal
  */
 function processProducers(Producer ...$producers)
 {
-    echo 'Successfully processed ' . count($producers) . " producers!\n";
+    echo 'Successfully processed ' . \count($producers) . " producers!\n";
 }
 
 // 2. Variadic Complex Array Shapes
@@ -27,7 +27,7 @@ function processProducers(Producer ...$producers)
  */
 function processUserShapes(array ...$users)
 {
-    echo 'Successfully processed ' . count($users) . " user shapes!\n";
+    echo 'Successfully processed ' . \count($users) . " user shapes!\n";
 }
 
 /**

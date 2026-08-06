@@ -65,7 +65,7 @@ final class CacheManager
         }
 
         $files = glob($cacheDir . '/*.php');
-        if ($files === false || count($files) === 0) {
+        if ($files === false || \count($files) === 0) {
             if ($wasRegistered) {
                 StreamWrapper::register();
             }
@@ -106,7 +106,7 @@ final class CacheManager
         $baseDir = $cwd !== false ? rtrim(str_replace('\\', '/', $cwd), '/') : '';
 
         $files = self::findFilesToWarm($baseDir);
-        $total = count($files);
+        $total = \count($files);
         $cached = 0;
         $skipped = 0;
 

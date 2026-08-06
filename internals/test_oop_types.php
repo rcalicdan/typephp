@@ -18,7 +18,7 @@ class UserProcessor
      */
     public function processUsers(array $users)
     {
-        return count($users);
+        return \count($users);
     }
 
     /**
@@ -28,7 +28,7 @@ class UserProcessor
      */
     public function processUserShapes(array $userShapes)
     {
-        return count($userShapes);
+        return \count($userShapes);
     }
 
     /**

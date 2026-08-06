@@ -24,15 +24,15 @@ final class ExtensionManager
         $uniqueExtensions = array_unique($configuredExtensions);
 
         foreach ($uniqueExtensions as $extensionClass) {
-            if (is_string($extensionClass) && class_exists($extensionClass) && is_a($extensionClass, ExtensionInterface::class, true)) {
+            if (\is_string($extensionClass) && class_exists($extensionClass) && is_a($extensionClass, ExtensionInterface::class, true)) {
                 /** @var ExtensionInterface $instance */
                 $instance = new $extensionClass();
                 $config = $instance->getConfig();
 
                 // Extensions can ONLY append include paths (whitelisting)
-                if (isset($config['include']) && is_array($config['include'])) {
+                if (isset($config['include']) && \is_array($config['include'])) {
                     foreach ($config['include'] as $inc) {
-                        if (is_string($inc) && $inc !== '') {
+                        if (\is_string($inc) && $inc !== '') {
                             $extensionIncludes[] = $inc;
                         }
                     }

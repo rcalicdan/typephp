@@ -130,7 +130,7 @@ final class FunctionContractInjector
                                 [
                                     new Node\Arg(
                                         new Node\Expr\New_(
-                                            new Node\Name('\TypeError'),
+                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(
@@ -154,7 +154,7 @@ final class FunctionContractInjector
 
         if ($isClassMethod || str_contains($docText, 'callable') || str_contains($docText, 'Closure')) {
             foreach ($node->params as $param) {
-                if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                if ($param->var instanceof Node\Expr\Variable && \is_string($param->var->name)) {
                     $paramName = $param->var->name;
                     $expr = new Node\Stmt\Expression(
                         new Node\Expr\Assign(
@@ -177,7 +177,7 @@ final class FunctionContractInjector
 
         if ($isClassMethod || str_contains($docText, 'iterable') || str_contains($docText, 'Traversable') || str_contains($docText, 'Generator') || str_contains($docText, 'Iterator')) {
             foreach ($node->params as $param) {
-                if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                if ($param->var instanceof Node\Expr\Variable && \is_string($param->var->name)) {
                     $paramName = $param->var->name;
                     $expr = new Node\Stmt\Expression(
                         new Node\Expr\Assign(
@@ -244,7 +244,7 @@ final class FunctionContractInjector
                                 [
                                     new Node\Arg(
                                         new Node\Expr\New_(
-                                            new Node\Name('\TypeError'),
+                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpYld'), 'getMessage')
@@ -278,7 +278,7 @@ final class FunctionContractInjector
                                 [
                                     new Node\Arg(
                                         new Node\Expr\New_(
-                                            new Node\Name('\TypeError'),
+                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(new Node\Expr\Variable('__typephpSnd'), 'getMessage')
@@ -373,7 +373,7 @@ final class FunctionContractInjector
                                                 [
                                                     new Node\Arg(
                                                         new Node\Expr\New_(
-                                                            new Node\Name('\TypeError'),
+                                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                                             [
                                                                 new Node\Arg(
                                                                     new Node\Expr\MethodCall(
@@ -417,7 +417,7 @@ final class FunctionContractInjector
                                 [
                                     new Node\Arg(
                                         new Node\Expr\New_(
-                                            new Node\Name('\TypeError'),
+                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(
@@ -473,7 +473,7 @@ final class FunctionContractInjector
                                         [
                                             new Node\Arg(
                                                 new Node\Expr\New_(
-                                                    new Node\Name('\TypeError'),
+                                                    new Node\Name('\TypePHP\Exception\TypeError'),
                                                     [
                                                         new Node\Arg(
                                                             new Node\Expr\MethodCall(
@@ -514,7 +514,7 @@ final class FunctionContractInjector
                                 [
                                     new Node\Arg(
                                         new Node\Expr\New_(
-                                            new Node\Name('\TypeError'),
+                                            new Node\Name('\TypePHP\Exception\TypeError'),
                                             [
                                                 new Node\Arg(
                                                     new Node\Expr\MethodCall(

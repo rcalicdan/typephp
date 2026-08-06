@@ -112,7 +112,7 @@ try {
 
 // get() should still report/return Dog-typed value at this point
 $got = $box->get();
-echo '   ℹ️  Box<Dog>::get() returned instance of: ' . get_class($got) . "\n";
+echo '   ℹ️  Box<Dog>::get() returned instance of: ' . \get_class($got) . "\n";
 
 echo "\n=== TEST C: Array-shaped T bound consistency ===\n";
 

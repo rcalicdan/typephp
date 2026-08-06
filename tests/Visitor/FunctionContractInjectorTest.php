@@ -46,7 +46,7 @@ describe('FunctionContractInjector Unit Tests', function () {
         FunctionContractInjector::inject($fn);
 
         // Statement 0 is setupScope, Statement 1 is wrapCallable, Statement 2 is wrapIterable
-        expect(count($fn->stmts))->toBeGreaterThanOrEqual(3)
+        expect(\count($fn->stmts))->toBeGreaterThanOrEqual(3)
             ->and($fn->stmts[1]->getAttribute('typephp_injected'))->toBeTrue()
             ->and($fn->stmts[2]->getAttribute('typephp_injected'))->toBeTrue()
         ;

@@ -114,7 +114,8 @@ describe('New Scalar and Pseudo-Type Contracts', function () {
 
         test('throws TypeError when @return never function returns a value instead of exiting', function () {
             expect(fn () => testNeverReturnContract(false))
-                ->toThrow(TypeError::class, 'Return value');
+                ->toThrow(TypeError::class, 'Return value')
+            ;
         });
     });
 });

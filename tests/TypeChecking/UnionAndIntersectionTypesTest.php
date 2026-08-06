@@ -37,7 +37,7 @@ function testIntersectionContract(object $collection): bool
  */
 function testUnionOfShapesAndListsContract(array $data): int
 {
-    return count($data);
+    return \count($data);
 }
 
 /**
@@ -87,7 +87,7 @@ function testUnionOfCallablesContract(callable $callback): mixed
  */
 function testVariadicUnionContract(object ...$animals): int
 {
-    return count($animals);
+    return \count($animals);
 }
 
 /**
@@ -121,7 +121,7 @@ function testTypeAliasUnionAndIntersectionContract(string $status, object $colle
  */
 function testAssocUnionArrayContract(array $map): int
 {
-    return count($map);
+    return \count($map);
 }
 
 describe('Scalar and Literal Union Types', function () {
@@ -262,7 +262,7 @@ describe('Unions of Callables', function () {
     });
 
     test('accepts callback matching second variant in callable union', function () {
-        $cb2 = fn (string $str): int => strlen($str);
+        $cb2 = fn (string $str): int => \strlen($str);
         $wrapped = testUnionOfCallablesContract($cb2);
 
         expect($wrapped('hello'))->toBe(5);

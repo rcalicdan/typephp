@@ -33,7 +33,7 @@ final class ReturnChecker
         $effectiveFunction = $function;
         if ($thisObj !== null && str_contains($function, '::')) {
             [$classOrTrait, $methodName] = explode('::', $function, 2);
-            $actualClassName = get_class($thisObj);
+            $actualClassName = \get_class($thisObj);
             if ($actualClassName !== $classOrTrait) {
                 $effectiveFunction = $actualClassName . '::' . $methodName;
             }
@@ -61,7 +61,7 @@ final class ReturnChecker
         $boundTemplates = TemplateManager::getBoundTemplates($effectiveFunction, $thisObj, $contract['templates']);
         $declaredTemplates = $contract['templates'];
 
-        if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
+        if (\count($boundTemplates) > 0 || \count($declaredTemplates) > 0) {
             $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates, $declaredTemplates);
             $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $effectiveFunction, $thisObj);
         }

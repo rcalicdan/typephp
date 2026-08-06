@@ -28,7 +28,7 @@ final class IterableWrapper
      */
     public static function wrap(string $function, string $paramName, mixed $iterable, TypeValidatorRegistry $registry): mixed
     {
-        if (! is_iterable($iterable) || is_array($iterable)) {
+        if (! is_iterable($iterable) || \is_array($iterable)) {
             return $iterable;
         }
 
@@ -65,7 +65,7 @@ final class IterableWrapper
         $keyTypeNode = null;
 
         if ($typeNode instanceof GenericTypeNode) {
-            $typesCount = count($typeNode->genericTypes);
+            $typesCount = \count($typeNode->genericTypes);
             if ($typesCount === 1) {
                 $itemTypeNode = $typeNode->genericTypes[0];
             } elseif ($typesCount >= 2) {

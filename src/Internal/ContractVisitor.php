@@ -100,7 +100,7 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         if ($node instanceof Node\Expr\Assign) {
-            if ($node->var instanceof Node\Expr\Variable && is_string($node->var->name)) {
+            if ($node->var instanceof Node\Expr\Variable && \is_string($node->var->name)) {
                 $varName = $node->var->name;
                 $typeString = $this->scopeManager->getVarTypeFromScope($varName);
 
@@ -167,7 +167,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            if ($item->value instanceof Node\Expr\Variable && is_string($item->value->name)) {
+            if ($item->value instanceof Node\Expr\Variable && \is_string($item->value->name)) {
                 $vars[] = [
                     'varName' => $item->value->name,
                     'expr' => $item->value,

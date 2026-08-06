@@ -16,7 +16,7 @@ final class ClassNameValidator
      */
     public static function isValid(mixed $name): bool
     {
-        if (! is_string($name) || $name === '') {
+        if (! \is_string($name) || $name === '') {
             return false;
         }
 

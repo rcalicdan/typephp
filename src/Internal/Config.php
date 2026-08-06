@@ -62,10 +62,10 @@ final class Config
         }
 
         /** @var array<int, class-string<ExtensionInterface>> $configuredExtensions */
-        $configuredExtensions = is_array($userConfig['extensions'] ?? null) ? $userConfig['extensions'] : [];
+        $configuredExtensions = \is_array($userConfig['extensions'] ?? null) ? $userConfig['extensions'] : [];
 
         $extensionIncludes = ExtensionManager::loadExtensionIncludes($configuredExtensions);
-        $defaultConfig['include'] = array_unique(\array_merge($defaultConfig['include'], $extensionIncludes));
+        $defaultConfig['include'] = array_unique(array_merge($defaultConfig['include'], $extensionIncludes));
         /** @var array<string, mixed> $mergedConfig */
         $mergedConfig = array_replace_recursive($defaultConfig, $userConfig);
 

@@ -33,7 +33,7 @@ final class ScopeManager
      */
     public function popScope(): void
     {
-        if (count($this->scopeStack) > 1) {
+        if (\count($this->scopeStack) > 1) {
             array_pop($this->scopeStack);
         }
     }
@@ -55,14 +55,14 @@ final class ScopeManager
                 $typeString = (string) $varTag->type;
                 $varName = ltrim($varTag->variableName, '$');
 
-                if ($varName === '' && $expr instanceof Node\Expr\Assign && $expr->var instanceof Node\Expr\Variable && is_string($expr->var->name)) {
+                if ($varName === '' && $expr instanceof Node\Expr\Assign && $expr->var instanceof Node\Expr\Variable && \is_string($expr->var->name)) {
                     $varName = $expr->var->name;
-                } elseif ($varName === '' && $expr instanceof Node\Expr\Variable && is_string($expr->name)) {
+                } elseif ($varName === '' && $expr instanceof Node\Expr\Variable && \is_string($expr->name)) {
                     $varName = $expr->name;
                 }
 
                 if ($varName !== '') {
-                    $currentScopeIndex = count($this->scopeStack) - 1;
+                    $currentScopeIndex = \count($this->scopeStack) - 1;
                     $this->scopeStack[$currentScopeIndex][$varName] = $typeString;
                 }
             }
@@ -73,7 +73,7 @@ final class ScopeManager
 
     public function getVarTypeFromScope(string $varName): ?string
     {
-        for ($i = count($this->scopeStack) - 1; $i >= 0; $i--) {
+        for ($i = \count($this->scopeStack) - 1; $i >= 0; $i--) {
             if (isset($this->scopeStack[$i][$varName])) {
                 return $this->scopeStack[$i][$varName];
             }

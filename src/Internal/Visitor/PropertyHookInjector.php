@@ -34,11 +34,11 @@ final class PropertyHookInjector
                 if ($hook->body instanceof Node\Expr) {
                     $checkCall = NodeBuilder::createPropertyCheckCall($hook->body, new Node\Expr\Variable('this'), $propertyName);
                     $hook->body = NodeBuilder::createTernaryThrowExpr($checkCall);
-                } elseif (is_array($hook->body)) {
+                } elseif (\is_array($hook->body)) {
                     $hook->body = self::wrapHookReturnStatements($hook->body, $propertyName);
                 }
             } elseif ($hookName === 'set') {
-                $paramName = ! empty($hook->params) && $hook->params[0]->var instanceof Node\Expr\Variable && is_string($hook->params[0]->var->name)
+                $paramName = ! empty($hook->params) && $hook->params[0]->var instanceof Node\Expr\Variable && \is_string($hook->params[0]->var->name)
                     ? $hook->params[0]->var->name
                     : 'value';
 
@@ -51,7 +51,7 @@ final class PropertyHookInjector
                 );
                 $paramCheckStmt->setAttribute('typephp_injected', true);
 
-                if (is_array($hook->body)) {
+                if (\is_array($hook->body)) {
                     array_unshift($hook->body, $paramCheckStmt);
                 } elseif ($hook->body instanceof Node\Expr) {
                     $hook->body = [

@@ -29,8 +29,8 @@ final class FileFilter
         }
 
         $config = Config::get();
-        $includes = is_array($config['include'] ?? null) ? $config['include'] : ['**'];
-        $excludes = is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+        $includes = \is_array($config['include'] ?? null) ? $config['include'] : ['**'];
+        $excludes = \is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
         $cwd = getcwd();
         $baseDir = $cwd !== false ? rtrim(str_replace('\\', '/', $cwd), '/') : '';
@@ -39,7 +39,7 @@ final class FileFilter
         foreach ($includes as $pattern) {
             $regex = self::compileGlobToRegex((string) $pattern, $baseDir);
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestIncludeMatch = max($longestIncludeMatch, strlen(trim((string) $pattern)));
+                $longestIncludeMatch = max($longestIncludeMatch, \strlen(trim((string) $pattern)));
             }
         }
 
@@ -47,7 +47,7 @@ final class FileFilter
         foreach ($excludes as $pattern) {
             $regex = self::compileGlobToRegex((string) $pattern, $baseDir);
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestExcludeMatch = max($longestExcludeMatch, strlen(trim((string) $pattern)));
+                $longestExcludeMatch = max($longestExcludeMatch, \strlen(trim((string) $pattern)));
             }
         }
 

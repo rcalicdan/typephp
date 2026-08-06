@@ -60,16 +60,16 @@ final class StreamWrapper implements StreamWrapperInterface
     {
         $resolvedConfig = array_replace_recursive(Config::get(), $config);
 
-        if (! self::$isInitialized || count($config) > 0) {
+        if (! self::$isInitialized || \count($config) > 0) {
             $cwd = getcwd();
             $base = $cwd !== false ? $cwd : '';
             self::$baseDir = rtrim(str_replace('\\', '/', $base), '/');
 
             /** @var array<int, string> $includes */
-            $includes = is_array($resolvedConfig['include'] ?? null) ? $resolvedConfig['include'] : ['**'];
+            $includes = \is_array($resolvedConfig['include'] ?? null) ? $resolvedConfig['include'] : ['**'];
 
             /** @var array<int, string> $excludes */
-            $excludes = is_array($resolvedConfig['exclude'] ?? null) ? $resolvedConfig['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
+            $excludes = \is_array($resolvedConfig['exclude'] ?? null) ? $resolvedConfig['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
             self::$includeRawPatterns = [];
             foreach ($includes as $pattern) {
@@ -308,13 +308,13 @@ final class StreamWrapper implements StreamWrapperInterface
         $result = false;
         if ($option === STREAM_META_TOUCH) {
             /** @var array{0?: int, 1?: int} $valueArray */
-            $valueArray = is_array($value) ? $value : [];
+            $valueArray = \is_array($value) ? $value : [];
             $time = $valueArray[0] ?? time();
             $atime = $valueArray[1] ?? $time;
             $result = (bool) self::silent(fn () => touch($path, (int) $time, (int) $atime));
         } elseif ($option === STREAM_META_ACCESS) {
             /** @var int $mode */
-            $mode = is_int($value) ? $value : 0777;
+            $mode = \is_int($value) ? $value : 0777;
             $result = (bool) self::silent(fn () => chmod($path, $mode));
         }
         self::register();
@@ -450,7 +450,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
         $callerFunc = strtolower($trace[2]['function'] ?? '');
 
-        return in_array($callerFunc, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all'], true);
+        return \in_array($callerFunc, ['file_get_contents', 'file', 'readfile', 'highlight_file', 'show_source', 'token_get_all'], true);
     }
 
     /**
@@ -478,7 +478,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $longestIncludeMatch = 0;
         foreach (self::$includeRawPatterns as $pattern => $regex) {
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestIncludeMatch = max($longestIncludeMatch, strlen($pattern));
+                $longestIncludeMatch = max($longestIncludeMatch, \strlen($pattern));
             }
         }
 
@@ -489,7 +489,7 @@ final class StreamWrapper implements StreamWrapperInterface
         $longestExcludeMatch = 0;
         foreach (self::$excludeRawPatterns as $pattern => $regex) {
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestExcludeMatch = max($longestExcludeMatch, strlen($pattern));
+                $longestExcludeMatch = max($longestExcludeMatch, \strlen($pattern));
             }
         }
 

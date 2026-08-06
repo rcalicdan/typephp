@@ -56,7 +56,7 @@ class Collection
 
     public function count(): int
     {
-        return count($this->items);
+        return \count($this->items);
     }
 }
 
@@ -113,7 +113,7 @@ try {
 echo "\n-- Sub-test 5: toArray() return — are the contents actually User instances? --\n";
 $all = $users->toArray();
 $allAreUsers = array_reduce($all, fn ($carry, $item) => $carry && $item instanceof User, true);
-echo '   ℹ️  toArray() returned ' . count($all) . ' items, all instanceof User: ' . ($allAreUsers ? 'yes' : 'no') . "\n";
+echo '   ℹ️  toArray() returned ' . \count($all) . ' items, all instanceof User: ' . ($allAreUsers ? 'yes' : 'no') . "\n";
 
 echo "\n-- Sub-test 6: no @var annotation at all — does T fall back to unbound/inferred-from-first-add? --\n";
 $mystery = new Collection(); // no docblock this time

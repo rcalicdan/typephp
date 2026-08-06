@@ -9,7 +9,7 @@ use TypePHP\TypePHP;
 /**
  * @internal Executes TypePHP CLI commands.
  */
-final class RunCommand implements CommandInterface 
+final class RunCommand implements CommandInterface
 {
     public function execute(array $args, $outputStream = STDOUT, $errorStream = STDERR): int
     {

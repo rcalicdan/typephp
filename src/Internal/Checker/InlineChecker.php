@@ -48,7 +48,7 @@ final class InlineChecker
     {
         $rawConfig = Config::get()['inline_vars'] ?? [];
         /** @var array<string, bool> $config */
-        $config = is_array($rawConfig) ? $rawConfig : [];
+        $config = \is_array($rawConfig) ? $rawConfig : [];
 
         $checkGenerics = (bool) ($config['generics'] ?? true);
         $checkCallables = (bool) ($config['callables'] ?? true);
@@ -76,7 +76,7 @@ final class InlineChecker
                 return CallableWrapper::wrapTypeNode($typeNode, $value, "Variable \$$varName: Callback", $registry);
             }
 
-            if ($typeNode instanceof GenericTypeNode && $checkGenerics && is_object($value)) {
+            if ($typeNode instanceof GenericTypeNode && $checkGenerics && \is_object($value)) {
                 $err = TemplateManager::bindInstanceFromNode($value, $typeNode, "Variable \$$varName", true);
                 if ($err !== null) {
                     return $err;
@@ -101,19 +101,19 @@ final class InlineChecker
      */
     public static function checkProperty(mixed $value, mixed $objectOrClass, string $propName, string $file, TypeValidatorRegistry $registry): mixed
     {
-        if (! is_object($objectOrClass) && ! is_string($objectOrClass)) {
+        if (! \is_object($objectOrClass) && ! \is_string($objectOrClass)) {
             return $value;
         }
 
         $rawConfig = Config::get()['inline_vars'] ?? [];
         /** @var array<string, bool> $config */
-        $config = is_array($rawConfig) ? $rawConfig : [];
+        $config = \is_array($rawConfig) ? $rawConfig : [];
 
         if (! ($config['properties'] ?? true)) {
             return $value;
         }
 
-        $className = is_string($objectOrClass) ? $objectOrClass : get_class($objectOrClass);
+        $className = \is_string($objectOrClass) ? $objectOrClass : \get_class($objectOrClass);
 
         $typeNode = ContractParser::parseProperty($className, $propName);
         if ($typeNode === null) {
@@ -125,14 +125,14 @@ final class InlineChecker
         }
 
         // Substitute class-level property generics for object instances
-        if (is_object($objectOrClass)) {
+        if (\is_object($objectOrClass)) {
             $constructorTarget = $className . '::__construct';
             $contract = ContractParser::parse($constructorTarget);
 
             $boundTemplates = TemplateManager::getBoundTemplates('none', $objectOrClass, $contract['templates']);
             $declaredTemplates = $contract['templates'];
 
-            if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
+            if (\count($boundTemplates) > 0 || \count($declaredTemplates) > 0) {
                 $typeNode = TemplateSubstitutor::substitute($typeNode, $boundTemplates, $declaredTemplates);
 
                 try {
@@ -219,11 +219,11 @@ final class InlineChecker
                 return (bool) ($config['callables'] ?? true);
             }
 
-            if (in_array($lower, ['array', 'list', 'iterable'], true)) {
+            if (\in_array($lower, ['array', 'list', 'iterable'], true)) {
                 return $checkArrays;
             }
 
-            if (in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'], true)) {
+            if (\in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'], true)) {
                 return (bool) ($config['scalars'] ?? false);
             }
 
@@ -232,7 +232,7 @@ final class InlineChecker
 
         if ($node instanceof GenericTypeNode) {
             $lower = strtolower($node->type->name);
-            if (in_array($lower, ['array', 'list', 'iterable'], true)) {
+            if (\in_array($lower, ['array', 'list', 'iterable'], true)) {
                 return $checkArrays;
             }
 
