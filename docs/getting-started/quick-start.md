@@ -1,6 +1,13 @@
 # Quick Start Guide
 
-TypePHP enforces PHPDoc type contracts at runtime. Below is a tour of core features and code examples.
+TypePHP enforces PHPDoc type contracts at runtime. Below is an overview of core features and code examples.
+
+> **Recommended Workflow: PHPStan / Psalm / Mago / Phan + TypePHP**
+> By design, TypePHP is a **runtime type enforcer, not a docblock linter or static analyzer**. For maximum execution performance, TypePHP gracefully ignores malformed docblock syntax and duplicate type alias declarations, focusing strictly on validating runtime data.
+> 
+> It is highly recommended to use any static analyzer alongside TypePHP:
+> * **PHPStan / Psalm / Mago / Phan (Compile-Time):** Lints your PHPDoc syntax, validates complex intersection rules, and catches static type errors in your IDE before code executes.
+> * **TypePHP (Runtime):** Enforces those PHPDoc contracts during actual execution, ensuring your application against invalid API payloads, database records, and dynamic runtime data or make sure the doctypes will not lie to you at runtime, this is the case when you dont use static analyzers or only allow linient level on static type checking.
 
 ---
 
@@ -55,7 +62,7 @@ TypePHP validates function return values before they are returned to the caller:
 function fetchUserData(int $id): array
 {
     if ($id <= 0) {
-        return ['id' => $id, 'status' => 'active']; // Invalid: $id is not positive-int
+        return ['id' => $id, 'status' => 'active']; // Invalid: $id is negative
     }
 
     return ['id' => $id, 'status' => 'active'];
@@ -172,9 +179,7 @@ function legacyProcess(int $id): void
 legacyProcess(-500); // Passes without error
 ```
 
-Here is the updated section addressing the reader directly as **"you"**:
-
-### File-Level Suppression (`@typephp-ignore-file`)
+### File-Level Suppression
 
 Place `@typephp-ignore-file` in a file-level docblock at the top of a file:
 
