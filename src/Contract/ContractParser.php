@@ -58,7 +58,7 @@ final class ContractParser
     }
 
     /**
-     * Parses and resolves the @var docblock for a given class property.
+     * Parses and resolves the @var docblock for a given class property (including PHP 8.4 interface properties).
      */
     public static function parseProperty(string $className, string $propertyName): ?TypeNode
     {
@@ -67,34 +67,55 @@ final class ContractParser
             return self::$propertyCache[$cacheKey];
         }
 
-        if (! class_exists($className) && ! trait_exists($className)) {
+        if (! class_exists($className) && ! trait_exists($className) && ! interface_exists($className)) {
             return self::$propertyCache[$cacheKey] = null;
         }
 
         try {
             $refClass = new \ReflectionClass($className);
 
+            $doc = false;
             $declaringClass = null;
+
+            // 1. Search Class and Parent Class Hierarchy
             $current = $refClass;
             while ($current !== false) {
                 if ($current->hasProperty($propertyName)) {
-                    $declaringClass = $current;
+                    $refProp = $current->getProperty($propertyName);
+                    $fetchedDoc = $refProp->getDocComment();
+                    if ($fetchedDoc !== false) {
+                        $doc = $fetchedDoc;
+                        $declaringClass = $current;
 
-                    break;
+                        break;
+                    }
                 }
                 $current = $current->getParentClass();
             }
 
-            if ($declaringClass === null) {
+            // 2. Search Implemented Interfaces (PHP 8.4 Interface Properties)
+            if ($doc === false) {
+                foreach ($refClass->getInterfaces() as $interface) {
+                    if ($interface->hasProperty($propertyName)) {
+                        $interfaceProp = $interface->getProperty($propertyName);
+                        $fetchedDoc = $interfaceProp->getDocComment();
+                        if ($fetchedDoc !== false) {
+                            $doc = $fetchedDoc;
+                            $declaringClass = $interface;
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($doc === false || $declaringClass === null) {
                 return self::$propertyCache[$cacheKey] = null;
             }
 
-            $refProp = $declaringClass->getProperty($propertyName);
-            $doc = $refProp->getDocComment();
-
-            // Skip property type checks if docblock is missing or contains @typephp-ignore (unless respect_ignore_tags is false)
+            // Skip property type checks if docblock contains @typephp-ignore
             $shouldRespectIgnore = (Config::get()['respect_ignore_tags'] ?? true);
-            if ($doc === false || ($shouldRespectIgnore && (str_contains($doc, '@typephp-ignore') || str_contains($doc, '@typephp-disable')))) {
+            if ($shouldRespectIgnore && (str_contains($doc, '@typephp-ignore') || str_contains($doc, '@typephp-disable'))) {
                 return self::$propertyCache[$cacheKey] = null;
             }
 

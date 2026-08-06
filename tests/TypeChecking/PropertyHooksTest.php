@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use TypePHP\Internal\Config;
 use TypePHP\Tests\Fixtures\Domain\User;
+use TypePHP\Tests\Fixtures\Types\HookedInterfaceImplementation;
 use TypePHP\Tests\Fixtures\Types\PropertyHooks;
 
 beforeEach(function () {
@@ -15,7 +16,7 @@ beforeEach(function () {
             'generics' => true,
             'callables' => true,
             'scalars' => true,
-            'arrays' => true,
+            'shapes' => true,
             'objects' => true,
         ],
     ]);
@@ -78,5 +79,31 @@ describe('PHP 8.4 Property Hooks Validation', function () {
         expect(fn () => $profile->updateProfile(100, ''))
             ->toThrow(TypeError::class, 'non-empty-string')
         ;
+    });
+});
+
+describe('PHP 8.4 Interface Property Inheritance', function () {
+    test('inherits @var docblock contracts from PHP 8.4 interface properties ({get;}, {get; set;}, {set;})', function () {
+        $fixture = new HookedInterfaceImplementation();
+
+        expect($fixture->readOnlyProp)->toBe(10);
+
+        $fixture->_readOnlyVal = -5;
+        expect(fn () => $fixture->readOnlyProp)
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
+
+        $fixture->readWriteProp = 'Bob';
+        expect($fixture->readWriteProp)->toBe('Bob');
+
+        expect(fn () => $fixture->readWriteProp = '')
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
+
+        $fixture->writeOnlyProp = 500;
+        expect($fixture->_writeOnlyVal)->toBe(500);
+
+        expect(fn () => $fixture->writeOnlyProp = -10)
+            ->toThrow(TypeError::class, 'positive-int');
     });
 });

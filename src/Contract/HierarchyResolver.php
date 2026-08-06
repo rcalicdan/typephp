@@ -12,15 +12,28 @@ final class HierarchyResolver
     /**
      * Builds an array of ReflectionMethods representing the inheritance hierarchy from child to root.
      *
+     * Resolution Flow:
+     * 1. Target Class: Uses $ref->class to inspect the target executing class (ensures interface
+     *    contracts are discovered even when method bodies are fulfilled by a Trait).
+     * 2. Parent Classes: Traverses up the parent class chain to inherit parent method docblocks.
+     * 3. Interfaces: Traverses implemented interfaces to inherit interface contract docblocks.
+     * 4. Traits: Traverses used traits to inherit trait method docblocks.
+     *
      * @return array<int, \ReflectionMethod>
      */
     public static function getMethodHierarchy(\ReflectionMethod $ref): array
     {
         $hierarchy = [$ref];
         $methodName = $ref->getName();
-        $declaringClass = $ref->getDeclaringClass();
+        $targetClassName = $ref->class;
 
-        $parent = $declaringClass->getParentClass();
+        try {
+            $targetClass = new \ReflectionClass($targetClassName);
+        } catch (\ReflectionException $e) {
+            $targetClass = $ref->getDeclaringClass();
+        }
+
+        $parent = $targetClass->getParentClass();
         while ($parent !== false) {
             if ($parent->hasMethod($methodName)) {
                 $hierarchy[] = $parent->getMethod($methodName);
@@ -28,13 +41,13 @@ final class HierarchyResolver
             $parent = $parent->getParentClass();
         }
 
-        foreach ($declaringClass->getInterfaces() as $interface) {
+        foreach ($targetClass->getInterfaces() as $interface) {
             if ($interface->hasMethod($methodName)) {
                 $hierarchy[] = $interface->getMethod($methodName);
             }
         }
 
-        foreach ($declaringClass->getTraits() as $trait) {
+        foreach ($targetClass->getTraits() as $trait) {
             if ($trait->hasMethod($methodName)) {
                 $hierarchy[] = $trait->getMethod($methodName);
             }
@@ -44,7 +57,13 @@ final class HierarchyResolver
     }
 
     /**
-     * Builds an array of ReflectionClasses representing the inheritance hierarchy from child to root.
+     * Builds an array of ReflectionClasses representing the class inheritance hierarchy from child to root.
+     *
+     * Resolution Flow:
+     * 1. Target Class: Includes the primary reflection class.
+     * 2. Parent Classes: Traverses parent classes up the inheritance tree.
+     * 3. Interfaces: Collects all implemented interfaces.
+     * 4. Traits: Collects all used traits.
      *
      * @return array<int, \ReflectionClass>
      */

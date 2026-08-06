@@ -27,45 +27,54 @@ final class ReturnChecker
     public static function checkReturn(string $function, mixed $value, ?object $thisObj, array $vars, TypeValidatorRegistry $registry, callable $wrapIterableCallback): mixed
     {
         if (! (Config::get()['returns'] ?? true)) {
-            return $value; // Return checking disabled!
+            return $value;
         }
 
-        $contract = ContractParser::parse($function);
+        $effectiveFunction = $function;
+        if ($thisObj !== null && str_contains($function, '::')) {
+            [$classOrTrait, $methodName] = explode('::', $function, 2);
+            $actualClassName = get_class($thisObj);
+            if ($actualClassName !== $classOrTrait) {
+                $effectiveFunction = $actualClassName . '::' . $methodName;
+            }
+        }
+
+        $contract = ContractParser::parse($effectiveFunction);
         $returnTypeNode = $contract['return'] ?? null;
 
         if ($returnTypeNode === null) {
             return $value;
         }
 
-        $err = SpecialTypeResolver::checkThisIdentity($returnTypeNode, $value, $thisObj, $function);
+        $err = SpecialTypeResolver::checkThisIdentity($returnTypeNode, $value, $thisObj, $effectiveFunction);
         if ($err !== null) {
             return $err;
         }
 
-        $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $function, $thisObj);
+        $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $effectiveFunction, $thisObj);
 
         $aliases = $contract['aliases'] ?? [];
         if ($returnTypeNode instanceof IdentifierTypeNode && isset($aliases[$returnTypeNode->name])) {
             $returnTypeNode = $aliases[$returnTypeNode->name];
         }
 
-        $boundTemplates = TemplateManager::getBoundTemplates($function, $thisObj, $contract['templates']);
+        $boundTemplates = TemplateManager::getBoundTemplates($effectiveFunction, $thisObj, $contract['templates']);
         $declaredTemplates = $contract['templates'];
 
         if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
             $returnTypeNode = TemplateSubstitutor::substitute($returnTypeNode, $boundTemplates, $declaredTemplates);
-            $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $function, $thisObj);
+            $returnTypeNode = SpecialTypeResolver::resolve($returnTypeNode, $effectiveFunction, $thisObj);
         }
 
         $returnTypeNode = self::resolveConditionalReturnType($returnTypeNode, $vars, $boundTemplates, $registry);
 
-        $err = $registry->validate($value, $returnTypeNode, $function . '(): Return value');
+        $err = $registry->validate($value, $returnTypeNode, $effectiveFunction . '(): Return value');
         if ($err !== null) {
             return $err;
         }
 
         if ($value instanceof \Traversable) {
-            return $wrapIterableCallback($function, 'return', $value);
+            return $wrapIterableCallback($effectiveFunction, 'return', $value);
         }
 
         return $value;

@@ -78,11 +78,11 @@ return [
     */
     'inline_vars' => [
         'properties' => true,
-        'generics'   => true,
-        'callables'  => true,
-        'scalars'    => true,
-        'arrays'     => true,
-        'objects'    => true,
+        'generics' => true,
+        'callables' => true,
+        'scalars' => true,
+        'arrays' => true,
+        'objects' => true,
     ],
 
     /*

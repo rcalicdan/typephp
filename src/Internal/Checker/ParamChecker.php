@@ -30,10 +30,19 @@ final class ParamChecker
     public static function checkParams(string $function, array $vars, ?object $thisObj, TypeValidatorRegistry $registry): ?ErrorMessage
     {
         if (! (Config::get()['params'] ?? true)) {
-            return null; // Parameter checking disabled!
+            return null;
         }
 
-        $contract = ContractParser::parse($function);
+        $effectiveFunction = $function;
+        if ($thisObj !== null && str_contains($function, '::')) {
+            [$classOrTrait, $methodName] = explode('::', $function, 2);
+            $actualClassName = get_class($thisObj);
+            if ($actualClassName !== $classOrTrait) {
+                $effectiveFunction = $actualClassName . '::' . $methodName;
+            }
+        }
+
+        $contract = ContractParser::parse($effectiveFunction);
         if (count($contract['types']) === 0) {
             return null;
         }
@@ -42,9 +51,9 @@ final class ParamChecker
         $aliases = $contract['aliases'];
 
         if ($thisObj === null) {
-            TemplateManager::clearCallBindings($function, $templates);
-        } elseif (str_contains($function, '::')) {
-            $declaringClass = explode('::', $function, 2)[0];
+            TemplateManager::clearCallBindings($effectiveFunction, $templates);
+        } elseif (str_contains($effectiveFunction, '::')) {
+            $declaringClass = explode('::', $effectiveFunction, 2)[0];
             TemplateManager::resolveInheritedTemplates($thisObj, $declaringClass);
         }
 
@@ -57,7 +66,7 @@ final class ParamChecker
                 $typeNode = $aliases[$typeNode->name];
             }
 
-            $typeNode = SpecialTypeResolver::resolve($typeNode, $function, $thisObj);
+            $typeNode = SpecialTypeResolver::resolve($typeNode, $effectiveFunction, $thisObj);
             $val = $vars[$paramName];
 
             if ($typeNode instanceof IdentifierTypeNode && isset($aliases[$typeNode->name])) {
@@ -65,7 +74,7 @@ final class ParamChecker
             }
 
             if ($typeNode instanceof GenericTypeNode && self::isClassStringTemplate($typeNode, $templates)) {
-                $err = self::resolveClassStringTemplate($typeNode, $val, $paramName, $function, $thisObj, $templates);
+                $err = self::resolveClassStringTemplate($typeNode, $val, $paramName, $effectiveFunction, $thisObj, $templates);
                 if ($err !== null) {
                     return $err;
                 }
@@ -74,7 +83,7 @@ final class ParamChecker
             }
 
             if (self::getTemplateName($typeNode, $templates) !== null) {
-                $err = self::resolveTemplateParam($typeNode, $val, $paramName, $function, $thisObj, $templates, $registry);
+                $err = self::resolveTemplateParam($typeNode, $val, $paramName, $effectiveFunction, $thisObj, $templates, $registry);
                 if ($err !== null) {
                     return $err;
                 }
@@ -82,7 +91,7 @@ final class ParamChecker
                 continue;
             }
 
-            $err = $registry->validate($val, $typeNode, $function . '(): Argument $' . $paramName);
+            $err = $registry->validate($val, $typeNode, $effectiveFunction . '(): Argument $' . $paramName);
             if ($err !== null) {
                 return $err;
             }
