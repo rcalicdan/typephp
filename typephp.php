@@ -7,8 +7,16 @@ return [
     |--------------------------------------------------------------------------
     | Global Master Switch
     |--------------------------------------------------------------------------
-    | Set to false to disable TypePHP completely. Useful for emergency kill-switches,
-    | performance benchmarking, or environment-specific toggles.
+    | Controls whether TypePHP enforces type checks at runtime.
+    | Set to false for an emergency kill-switch or zero-overhead benchmarking.
+    |
+    | Note on Disabling Approaches:
+    | - Config Switch ('enabled' => false): TypePHP boots normally, but turns all
+    |   runtime checks into instant no-ops (pass-through mode).
+    | - Bootstrap Prevention (TYPEPHP_DISABLE=true): To completely prevent TypePHP
+    |   from booting or registering its stream wrapper during Composer autoload,
+    |   set the environment variable TYPEPHP_DISABLE=true or define('TYPEPHP_DISABLE', true)
+    |   before requiring 'vendor/autoload.php'.
     */
     'enabled' => true,
 
@@ -31,8 +39,6 @@ return [
     | skip type-checking on specific methods/files. Set to false in CI/CD or
     | audit runs to force type-checking on all ignored methods without deleting
     | the docblock tags from source code.
-    |
-    | Note: Like 'enabled', this applies when a file is first loaded into memory.
     */
     'respect_ignore_tags' => true,
 
@@ -72,36 +78,46 @@ return [
     */
     'inline_vars' => [
         'properties' => true,
-        'generics' => true,
-        'callables' => true,
-        'scalars' => true,
-        'arrays' => true,
-        'objects' => true,
+        'generics'   => true,
+        'callables'  => true,
+        'scalars'    => true,
+        'arrays'     => true,
+        'objects'    => true,
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths
+    | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
+    |
+    | Pattern Specificity:
+    | More specific patterns take precedence over broader rules.
+    | You can specify directory globs (e.g. 'src/**'), single vendor packages
+    | (e.g. 'vendor/my-org/my-package/**'), or single specific files
+    | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
         'src/**',
         'app/**',
         'internals/**',
         'tests/**',
+        // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Excluded Paths
+    | Excluded Paths & Single-File Blacklisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be ignored by the type checker.
+    | You can exclude entire directories (e.g. 'vendor/**') or blacklist
+    | single legacy files inside included directories (e.g. 'src/Legacy/File.php').
     */
     'exclude' => [
         'vendor/**',
         'storage/**',
         'var/**',
         'cache/**',
+        // 'src/Legacy/UnsafeFile.php', // Blacklist a single specific file
     ],
 ];
