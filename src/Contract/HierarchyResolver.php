@@ -5,10 +5,33 @@ declare(strict_types=1);
 namespace TypePHP\Contract;
 
 /**
- * Resolves class, interface, trait, and method inheritance hierarchies from child to root.
+ * @internal Resolves class, interface, trait, and method inheritance hierarchies from child to root.
  */
 final class HierarchyResolver
 {
+    /**
+     * In-memory cache for resolved ReflectionMethod hierarchy arrays.
+     *
+     * @var array<string, array<int, \ReflectionMethod>>
+     */
+    private static array $methodHierarchyCache = [];
+
+    /**
+     * In-memory cache for resolved ReflectionClass hierarchy arrays.
+     *
+     * @var array<string, array<int, \ReflectionClass>>
+     */
+    private static array $classHierarchyCache = [];
+
+    /**
+     * Resets the hierarchy cache. Useful for test isolation.
+     */
+    public static function reset(): void
+    {
+        self::$methodHierarchyCache = [];
+        self::$classHierarchyCache = [];
+    }
+
     /**
      * Builds an array of ReflectionMethods representing the inheritance hierarchy from child to root.
      *
@@ -23,6 +46,11 @@ final class HierarchyResolver
      */
     public static function getMethodHierarchy(\ReflectionMethod $ref): array
     {
+        $cacheKey = $ref->class . '::' . $ref->getName();
+        if (isset(self::$methodHierarchyCache[$cacheKey])) {
+            return self::$methodHierarchyCache[$cacheKey];
+        }
+
         $hierarchy = [$ref];
         $methodName = $ref->getName();
         $targetClassName = $ref->class;
@@ -53,7 +81,7 @@ final class HierarchyResolver
             }
         }
 
-        return $hierarchy;
+        return self::$methodHierarchyCache[$cacheKey] = $hierarchy;
     }
 
     /**
@@ -69,6 +97,11 @@ final class HierarchyResolver
      */
     public static function getClassHierarchy(\ReflectionClass $ref): array
     {
+        $cacheKey = $ref->getName();
+        if (isset(self::$classHierarchyCache[$cacheKey])) {
+            return self::$classHierarchyCache[$cacheKey];
+        }
+
         $hierarchy = [$ref];
 
         $parent = $ref->getParentClass();
@@ -85,6 +118,6 @@ final class HierarchyResolver
             $hierarchy[] = $trait;
         }
 
-        return $hierarchy;
+        return self::$classHierarchyCache[$cacheKey] = $hierarchy;
     }
 }
