@@ -27,7 +27,7 @@ beforeEach(function () {
             'generics' => true,
             'callables' => true,
             'scalars' => true,
-            'shapes' => true,
+            'arrays' => true,
             'objects' => true,
         ],
     ]);
@@ -109,7 +109,7 @@ describe('Inline @var Array Shape Validations', function () {
     });
 
     test('ignores shape validation when disabled in config', function () {
-        Config::set(['inline_vars' => ['shapes' => false]]);
+        Config::set(['inline_vars' => ['arrays' => false]]);
 
         /** @var array{id: int, name: string} $user */
         $user = ['id' => 1, 'name' => 'Alice'];

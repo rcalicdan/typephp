@@ -15,7 +15,7 @@ beforeEach(function () {
             'generics' => true,
             'callables' => true,
             'scalars' => true,
-            'shapes' => true,
+            'arrays' => true,
             'objects' => true,
         ],
     ]);
@@ -76,6 +76,7 @@ describe('PHP 8.4 Property Hooks Validation', function () {
         ;
 
         expect(fn () => $profile->updateProfile(100, ''))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 });

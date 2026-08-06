@@ -53,10 +53,10 @@ final class InlineChecker
         $checkGenerics = (bool) ($config['generics'] ?? true);
         $checkCallables = (bool) ($config['callables'] ?? true);
         $checkScalars = (bool) ($config['scalars'] ?? false);
-        $checkShapes = (bool) ($config['shapes'] ?? false);
+        $checkArrays = (bool) ($config['arrays'] ?? false);
         $checkObjects = (bool) ($config['objects'] ?? false);
 
-        if (! $checkGenerics && ! $checkCallables && ! $checkScalars && ! $checkShapes && ! $checkObjects) {
+        if (! $checkGenerics && ! $checkCallables && ! $checkScalars && ! $checkArrays && ! $checkObjects) {
             return $value;
         }
 
@@ -132,7 +132,7 @@ final class InlineChecker
             $boundTemplates = TemplateManager::getBoundTemplates('none', $objectOrClass, $contract['templates']);
             $declaredTemplates = $contract['templates'];
 
-            if (\count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
+            if (count($boundTemplates) > 0 || count($declaredTemplates) > 0) {
                 $typeNode = TemplateSubstitutor::substitute($typeNode, $boundTemplates, $declaredTemplates);
 
                 try {
@@ -198,12 +198,14 @@ final class InlineChecker
      */
     private static function shouldValidateType(TypeNode $node, array $config): bool
     {
+        $checkArrays = (bool) ($config['arrays'] ?? false);
+
         if ($node instanceof CallableTypeNode) {
             return (bool) ($config['callables'] ?? true);
         }
 
         if ($node instanceof ObjectShapeNode || $node instanceof ArrayShapeNode || $node instanceof ArrayTypeNode) {
-            return (bool) ($config['shapes'] ?? false);
+            return $checkArrays;
         }
 
         if ($node instanceof IdentifierTypeNode) {
@@ -218,7 +220,7 @@ final class InlineChecker
             }
 
             if (in_array($lower, ['array', 'list', 'iterable'], true)) {
-                return (bool) ($config['shapes'] ?? false);
+                return $checkArrays;
             }
 
             if (in_array($lower, ['int', 'integer', 'string', 'bool', 'boolean', 'float', 'double', 'null', 'true', 'false', 'scalar', 'numeric', 'positive-int', 'negative-int', 'non-empty-string', 'numeric-string', 'truthy', 'falsy'], true)) {
@@ -231,7 +233,7 @@ final class InlineChecker
         if ($node instanceof GenericTypeNode) {
             $lower = strtolower($node->type->name);
             if (in_array($lower, ['array', 'list', 'iterable'], true)) {
-                return (bool) ($config['shapes'] ?? false);
+                return $checkArrays;
             }
 
             if ((bool) ($config['generics'] ?? true)) {

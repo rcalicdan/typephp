@@ -15,7 +15,7 @@ beforeEach(function () {
             'generics' => true,
             'callables' => true,
             'scalars' => true,
-            'shapes' => true,
+            'arrays' => true,
             'objects' => true,
         ],
     ]);

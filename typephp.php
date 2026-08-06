@@ -11,7 +11,7 @@ return [
     | performance benchmarking, or environment-specific toggles.
     |
     | Note: This affects file transformation at load-time. If toggled dynamically
-    | during a long-running process (e.g., Swoole, PHPUnit), classes already 
+    | during a long-running process (e.g., Swoole, PHPUnit), classes already
     | loaded in memory will retain their previous transformation state.
     */
     'enabled' => true,
@@ -65,11 +65,11 @@ return [
     */
     'inline_vars' => [
         'properties' => true,
-        'generics'   => true,
-        'callables'  => true,
-        'scalars'    => true,
-        'arrays'     => true, 
-        'objects'    => true,
+        'generics' => true,
+        'callables' => true,
+        'scalars' => true,
+        'arrays' => true,
+        'objects' => true,
     ],
 
     /*

@@ -16,7 +16,7 @@ describe('RuntimeTypeChecker Unit Tests', function () {
                 'generics' => true,
                 'callables' => true,
                 'scalars' => true,
-                'shapes' => true,
+                'arrays' => true,
                 'objects' => true,
             ],
         ]);
