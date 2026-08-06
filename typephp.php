@@ -9,12 +9,19 @@ return [
     |--------------------------------------------------------------------------
     | Set to false to disable TypePHP completely. Useful for emergency kill-switches,
     | performance benchmarking, or environment-specific toggles.
-    |
-    | Note: This affects file transformation at load-time. If toggled dynamically
-    | during a long-running process (e.g., Swoole, PHPUnit), classes already
-    | loaded in memory will retain their previous transformation state.
     */
     'enabled' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Function Boundary Contracts (@param & @return)
+    |--------------------------------------------------------------------------
+    | Controls whether function and method parameter/return contracts are enforced.
+    | When enabled, all parameter and return types (generics, shapes, scalars)
+    | are enforced uniformly to maintain type state consistency.
+    */
+    'params' => true,
+    'returns' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -74,7 +81,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Included Paths & Whitelisting
+    | Included Paths
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
     */

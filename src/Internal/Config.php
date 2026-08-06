@@ -32,6 +32,8 @@ final class Config
 
         $defaultConfig = [
             'enabled' => true,
+            'params' => true,
+            'returns' => true,
             'respect_ignore_tags' => true,
             'cache' => true,
             'inline_vars' => [

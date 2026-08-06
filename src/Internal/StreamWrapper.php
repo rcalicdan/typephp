@@ -521,15 +521,12 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     private function openCachedStream(string $resolvedPath, string $mode): bool
     {
-        if (! is_dir(self::$cacheDir)) {
-            self::silent(fn () => mkdir(self::$cacheDir, 0777, true));
+        $cacheDir = self::$cacheDir;
+        if (! is_dir($cacheDir)) {
+            self::silent(fn () => mkdir($cacheDir, 0777, true));
         }
 
-        $mtime = filemtime($resolvedPath);
-        $mtimeStr = $mtime !== false ? (string) $mtime : '0';
-
-        $cacheKey = hash('xxh128', 'v38_' . $resolvedPath . $mtimeStr);
-        $cachedFile = self::$cacheDir . "/{$cacheKey}.php";
+        $cachedFile = CacheManager::getCachedFilePath($resolvedPath);
 
         if (! file_exists($cachedFile)) {
             $source = file_get_contents($resolvedPath);

@@ -11,6 +11,7 @@ use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Contract\ContractParser;
 use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\Config;
 use TypePHP\Internal\ErrorFactory;
 use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
@@ -28,6 +29,10 @@ final class ParamChecker
      */
     public static function checkParams(string $function, array $vars, ?object $thisObj, TypeValidatorRegistry $registry): ?ErrorMessage
     {
+        if (! (Config::get()['params'] ?? true)) {
+            return null; // Parameter checking disabled!
+        }
+
         $contract = ContractParser::parse($function);
         if (count($contract['types']) === 0) {
             return null;

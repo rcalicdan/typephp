@@ -10,6 +10,7 @@ use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use TypePHP\Contract\ContractParser;
 use TypePHP\Internal\ClassNameValidator;
+use TypePHP\Internal\Config;
 use TypePHP\Resolver\SpecialTypeResolver;
 use TypePHP\Resolver\TemplateManager;
 use TypePHP\Resolver\TemplateSubstitutor;
@@ -25,6 +26,10 @@ final class ReturnChecker
      */
     public static function checkReturn(string $function, mixed $value, ?object $thisObj, array $vars, TypeValidatorRegistry $registry, callable $wrapIterableCallback): mixed
     {
+        if (! (Config::get()['returns'] ?? true)) {
+            return $value; // Return checking disabled!
+        }
+
         $contract = ContractParser::parse($function);
         $returnTypeNode = $contract['return'] ?? null;
 

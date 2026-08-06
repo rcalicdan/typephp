@@ -1,12 +1,11 @@
 #!/usr/bin/env php
 <?php
 
-// Prevent automatic booting during composer autoload
 define('TYPEPHP_BOOTED', true);
 
 $autoloadFiles = [
     __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php'
+    __DIR__ . '/../../../autoload.php',
 ];
 
 foreach ($autoloadFiles as $file) {
@@ -16,27 +15,7 @@ foreach ($autoloadFiles as $file) {
     }
 }
 
-$args = array_slice($argv, 1);
+use TypePHP\Command\CommandRunner;
 
-if (in_array('--clear-cache', $args, true)) {
-    $count = \TypePHP\Internal\CacheManager::clear();
-    fwrite(STDOUT, sprintf("Cleared %d cached file(s).\n", $count));
-    exit(0);
-}
-
-$target = null;
-foreach ($args as $arg) {
-    if (! str_starts_with($arg, '--') && file_exists($arg)) {
-        $target = $arg;
-        break;
-    }
-}
-
-if (! $target) {
-    fwrite(STDERR, "Usage: vendor/bin/typephp <script.php> [--clear-cache]\n");
-    exit(1);
-}
-
-\TypePHP\TypePHP::boot();
-
-require realpath($target);
+$exitCode = CommandRunner::run(array_slice($argv, 1));
+exit($exitCode);
