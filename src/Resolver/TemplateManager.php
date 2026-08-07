@@ -143,6 +143,49 @@ final class TemplateManager
     }
 
     /**
+     * Retrieves all declared template variances ('covariant', 'contravariant', 'invariant') for an object instance.
+     *
+     * @return array<string, string>
+     */
+    public static function getTemplateVariances(object $instance): array
+    {
+        $className = get_class($instance);
+
+        try {
+            $ref = new \ReflectionClass($className);
+            $classDoc = $ref->getDocComment();
+
+            if ($classDoc !== false) {
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
+
+                $classTokens = new TokenIterator($lexer->tokenize($classDoc));
+                $classPhpDocNode = $phpDocParser->parse($classTokens);
+
+                $variances = [];
+                foreach ($classPhpDocNode->getTags() as $tagNode) {
+                    if ($tagNode->value instanceof TemplateTagValueNode) {
+                        $tagName = strtolower($tagNode->name);
+
+                        if (str_contains($tagName, 'covariant')) {
+                            $variances[$tagNode->value->name] = 'covariant';
+                        } elseif (str_contains($tagName, 'contravariant')) {
+                            $variances[$tagNode->value->name] = 'contravariant';
+                        } else {
+                            $variances[$tagNode->value->name] = 'invariant';
+                        }
+                    }
+                }
+
+                return $variances;
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore reflection errors
+        }
+
+        return [];
+    }
+
+    /**
      * Checks if a template name is bound in the current instance or call stack frame.
      */
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool

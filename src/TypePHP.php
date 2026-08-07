@@ -59,6 +59,37 @@ final class TypePHP
     }
 
     /**
+     * Returns the declared variance ('covariant', 'contravariant', or 'invariant') for a template parameter on an object instance.
+     */
+    public static function getGenericVariance(object $instance, ?string $templateName = null): string
+    {
+        $variances = self::getGenericVariances($instance);
+        if (count($variances) === 0) {
+            return 'invariant';
+        }
+
+        if ($templateName !== null && isset($variances[$templateName])) {
+            return $variances[$templateName];
+        }
+
+        if (count($variances) === 1) {
+            return reset($variances);
+        }
+
+        return $variances['T'] ?? 'invariant';
+    }
+
+    /**
+     * Returns all declared template variances ('covariant', 'contravariant', or 'invariant') for an object instance.
+     *
+     * @return array<string, string>
+     */
+    public static function getGenericVariances(object $instance): array
+    {
+        return TemplateManager::getTemplateVariances($instance);
+    }
+
+    /**
      * Returns the current resolved global configuration settings.
      *
      * @return array<string, mixed>

@@ -101,7 +101,7 @@ pairUp(new Car(), new Dog());
 
 ---
 
-## Reified Generics API (`TypePHP::getGenericType`)
+## Reified Generics API (Kind of)
 
 Unlike languages that use Type Erasure (such as TypeScript or Java), TypePHP maintains generic template parameters in memory. 
 
@@ -116,19 +116,25 @@ $users = new Collection();
 /** @var Dictionary<string, Product> $catalog */
 $catalog = new Dictionary();
 
-// 1. Single-Template Smart Fallback (No template name needed!)
-$userType = TypePHP::getGenericType($users); // Returns 'App\Models\User'
+//  Single-Template Smart Fallback (No template name needed!)
+$userType = TypePHP::getGenericType(object: $users); // Returns 'App\Models\User'
 
-// 2. Multi-Template Explicit Inspection
-$keyType   = TypePHP::getGenericType($catalog, 'K'); // Returns 'string'
-$valueType = TypePHP::getGenericType($catalog, 'V'); // Returns 'App\Models\Product'
+//  Multi-Template Explicit Inspection
+$keyType   = TypePHP::getGenericType(object: $catalog, template: 'K'); // Returns 'string'
+$valueType = TypePHP::getGenericType(object: $catalog, template: 'V'); // Returns 'App\Models\Product'
 
-// 3. Inherited Generic Classes (@extends BaseRepository<User>)
+// Inherited Generic Classes (@extends BaseRepository<User>)
 $userRepo = new UserRepository();
-$repoType = TypePHP::getGenericType($userRepo); // Returns 'App\Models\User'
+$repoType = TypePHP::getGenericType(object: $userRepo); // Returns 'App\Models\User'
 
-// 4. Inspect all bound template parameters as an array
-$types = TypePHP::getGenericTypes($catalog); // Returns ['K' => 'string', 'V' => 'App\Models\Product']
+//  Inspect all bound template parameters as an array
+$types = TypePHP::getGenericTypes(object: $catalog); // Returns ['K' => 'string', 'V' => 'App\Models\Product']
+
+//  Inspect Declared Variance ('covariant', 'contravariant', or 'invariant')
+$variance = TypePHP::getGenericVariance(object: $producer); // Returns 'covariant'
+
+//  Inspect All Bound Variances as Arrays
+$variances = TypePHP::getGenericVariances(object: $producer); // Returns ['T' => 'covariant']
 ```
 
 ### How Reified Generic Inspection Works
