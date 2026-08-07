@@ -100,7 +100,7 @@ final class ContractVisitor extends NodeVisitorAbstract
         }
 
         if ($node instanceof Node\Expr\Assign) {
-            if ($node->var instanceof Node\Expr\Variable && \is_string($node->var->name)) {
+            if ($node->var instanceof Node\Expr\Variable && is_string($node->var->name)) {
                 $varName = $node->var->name;
                 $typeString = $this->scopeManager->getVarTypeFromScope($varName);
 
@@ -118,8 +118,8 @@ final class ContractVisitor extends NodeVisitorAbstract
                 $propName = $node->var->name->toString();
                 $classExpr = $node->var->class;
 
-                $classArg = $classExpr instanceof Node\Name
-                    ? new Node\Expr\ClassConstFetch($classExpr, 'class')
+                $classArg = $classExpr instanceof Node\Name 
+                    ? new Node\Expr\ClassConstFetch($classExpr, 'class') 
                     : $classExpr;
 
                 $checkCall = NodeBuilder::createPropertyCheckCall($node->expr, $classArg, $propName);
@@ -131,10 +131,31 @@ final class ContractVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Pops the current lexical scope stack frame when leaving a function, method, closure, or control block.
+     * Pops the current lexical scope stack frame or replaces transformed expressions upon leaving a node.
      */
-    public function leaveNode(Node $node): ?int
+    public function leaveNode(Node $node): Node|int|array|null
     {
+        if ($node instanceof Node\Expr\Clone_) {
+            if ($node->getAttribute('typephp_wrapped') === true) {
+                return null;
+            }
+
+            $node->setAttribute('typephp_wrapped', true);
+
+            return new Node\Expr\FuncCall(
+                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::cloneInstance'),
+                [
+                    new Node\Expr\Clone_(
+                        new Node\Expr\FuncCall(
+                            new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::prepareClone'),
+                            [new Node\Arg($node->expr)]
+                        )
+                    ),
+                    new Node\Arg($node->expr),
+                ]
+            );
+        }
+
         if ($node instanceof Node\Stmt\Function_
             || $node instanceof Node\Stmt\ClassMethod
             || $node instanceof Node\Expr\Closure
@@ -167,7 +188,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            if ($item->value instanceof Node\Expr\Variable && \is_string($item->value->name)) {
+            if ($item->value instanceof Node\Expr\Variable && is_string($item->value->name)) {
                 $vars[] = [
                     'varName' => $item->value->name,
                     'expr' => $item->value,

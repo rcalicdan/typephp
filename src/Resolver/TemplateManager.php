@@ -42,6 +42,22 @@ final class TemplateManager
     private static array $callStackBindings = [];
 
     /**
+     * Temporary storage for an original object instance being cloned.
+     */
+    public static ?object $pendingCloneSource = null;
+
+    /**
+     * Copies bound generic template types from a source object to a cloned target object.
+     */
+    public static function copyInstanceBindings(object $source, object $target): void
+    {
+        if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$source])) {
+            $bindings = self::$instanceTemplateBindings[$source];
+            self::$instanceTemplateBindings[$target] = $bindings;
+        }
+    }
+
+    /**
      * Pushes a new empty call frame onto the stack for a function execution.
      */
     public static function pushCallFrame(string $function): void
@@ -71,6 +87,7 @@ final class TemplateManager
 
     /**
      * Retrieves currently bound template types for a function call or object instance.
+     * Automatically resolves pending clone sources.
      *
      * @param array<string, TemplateTagValueNode> $templates
      *
@@ -78,8 +95,18 @@ final class TemplateManager
      */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
     {
-        if ($thisObj !== null && isset(self::$instanceTemplateBindings[$thisObj])) {
-            return self::$instanceTemplateBindings[$thisObj];
+        if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+            }
+
+            if (isset(self::$instanceTemplateBindings[$thisObj])) {
+                return self::$instanceTemplateBindings[$thisObj];
+            }
         }
 
         if (self::hasCallFrame($function)) {
@@ -92,11 +119,43 @@ final class TemplateManager
     }
 
     /**
+     * Retrieves all bound template TypeNodes for a specific object instance.
+     * Automatically resolves @extends and @implements template mappings if unbound.
+     *
+     * @return array<string, TypeNode>
+     */
+    public static function getBoundTemplatesForInstance(object $instance): array
+    {
+        if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$instance])) {
+            self::copyInstanceBindings(self::$pendingCloneSource, $instance);
+        }
+
+        // Auto-resolve @extends and @implements generic template mappings
+        if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$instance])) {
+            self::resolveInheritedTemplates($instance, get_class($instance));
+        }
+
+        if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$instance])) {
+            return self::$instanceTemplateBindings[$instance];
+        }
+
+        return [];
+    }
+
+    /**
      * Checks if a template name is bound in the current instance or call stack frame.
      */
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool
     {
         if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+            }
+
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
         }
 
@@ -115,6 +174,14 @@ final class TemplateManager
     public static function getBoundType(string $function, ?object $thisObj, string $templateName): ?TypeNode
     {
         if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+            }
+
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
         }
 
@@ -143,7 +210,7 @@ final class TemplateManager
             if (! self::hasCallFrame($function)) {
                 self::$callStackBindings[$function][] = [];
             }
-            $lastIndex = \count(self::$callStackBindings[$function]) - 1;
+            $lastIndex = count(self::$callStackBindings[$function]) - 1;
             self::$callStackBindings[$function][$lastIndex][$templateName] = $inferredType;
         }
     }
@@ -154,8 +221,8 @@ final class TemplateManager
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?ErrorMessage
     {
         $className = $typeNode->type->name;
-        if (\in_array(strtolower($className), ['self', 'static', '$this'], true)) {
-            $className = \get_class($instance);
+        if (in_array(strtolower($className), ['self', 'static', '$this'], true)) {
+            $className = get_class($instance);
         }
 
         if (! is_a($instance, $className)) {
@@ -246,7 +313,7 @@ final class TemplateManager
      */
     public static function resolveInheritedTemplates(object $instance, string $targetClassName): void
     {
-        $actualClassName = \get_class($instance);
+        $actualClassName = get_class($instance);
 
         try {
             $ref = new \ReflectionClass($actualClassName);
@@ -268,7 +335,8 @@ final class TemplateManager
                     if ($genericTypeNode instanceof GenericTypeNode) {
                         $parentName = SpecialTypeResolver::resolveFqcn($genericTypeNode->type->name, $ref);
 
-                        if (ClassNameValidator::isValid($parentName) && ($parentName === $targetClassName || is_a($parentName, $targetClassName, true))) {
+                        // Fixed inverted is_a check: Checks if actual class extends/implements parentName!
+                        if (ClassNameValidator::isValid($parentName) && is_a($actualClassName, $parentName, true)) {
                             if (! class_exists($parentName) && ! interface_exists($parentName)) {
                                 continue;
                             }
@@ -478,25 +546,25 @@ final class TemplateManager
      */
     public static function inferTypeFromValue(mixed $value): TypeNode
     {
-        if (\is_int($value)) {
+        if (is_int($value)) {
             return new IdentifierTypeNode('int');
         }
-        if (\is_string($value)) {
+        if (is_string($value)) {
             return new IdentifierTypeNode('string');
         }
-        if (\is_float($value)) {
+        if (is_float($value)) {
             return new IdentifierTypeNode('float');
         }
-        if (\is_bool($value)) {
+        if (is_bool($value)) {
             return new IdentifierTypeNode('bool');
         }
-        if (\is_array($value)) {
+        if (is_array($value)) {
             return new IdentifierTypeNode(array_is_list($value) ? 'list' : 'array');
         }
 
-        if (\is_object($value)) {
-            $className = \get_class($value);
-            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && \count(self::$instanceTemplateBindings[$value]) > 0) {
+        if (is_object($value)) {
+            $className = get_class($value);
+            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && count(self::$instanceTemplateBindings[$value]) > 0) {
                 $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
 
                 return new GenericTypeNode(new IdentifierTypeNode($className), $genericTypes);
@@ -517,7 +585,7 @@ final class TemplateManager
      */
     private static function hasCallFrame(string $function): bool
     {
-        return isset(self::$callStackBindings[$function]) && \count(self::$callStackBindings[$function]) > 0;
+        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
     }
 
     /**
@@ -532,7 +600,7 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
@@ -543,10 +611,10 @@ final class TemplateManager
             return new NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
         if ($n instanceof UnionTypeNode) {
-            return new UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
         if ($n instanceof IntersectionTypeNode) {
-            return new IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;

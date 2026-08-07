@@ -16,7 +16,7 @@ use TypePHP\Wrapper\CallableWrapper;
 use TypePHP\Wrapper\IterableWrapper;
 
 /**
- * @internal Core runtime type checking engine facade for parameter validation, return type enforcement, and variable tracking.
+ * Core runtime type checking engine facade for parameter validation, return type enforcement, and variable tracking.
  */
 final class RuntimeTypeChecker
 {
@@ -164,6 +164,32 @@ final class RuntimeTypeChecker
         }
 
         return IterableWrapper::wrap($function, $paramName, $iterable, self::getRegistry());
+    }
+
+    /**
+     * Registers a pending clone source object before clone execution.
+     */
+    public static function prepareClone(mixed $original): mixed
+    {
+        if (is_object($original)) {
+            TemplateManager::$pendingCloneSource = $original;
+        }
+
+        return $original;
+    }
+
+    /**
+     * Copies generic template bindings from an original object to a cloned object instance.
+     */
+    public static function cloneInstance(mixed $cloned, mixed $original): mixed
+    {
+        if (is_object($cloned) && is_object($original)) {
+            TemplateManager::copyInstanceBindings($original, $cloned);
+        }
+
+        TemplateManager::$pendingCloneSource = null;
+
+        return $cloned;
     }
 
     /**

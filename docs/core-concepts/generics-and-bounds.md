@@ -99,7 +99,143 @@ pairUp(new Car(), new Dog());
 // Throws: TypeError: pairUp(): Argument $animal (template T) must be an instance of Animal, Car given
 ```
 
-Here is the new **Generics of Scalars, Refinements, and Array Shapes** section for `docs/core-concepts/generics-and-bounds.md`:
+---
+
+## Reified Generics API (`TypePHP::getGenericType`)
+
+Unlike languages that use Type Erasure (such as TypeScript or Java), TypePHP maintains generic template parameters in memory. 
+
+You can inspect an object's bound generic types at runtime using `TypePHP::getGenericType()` or `TypePHP::getGenericTypes()`:
+
+```php
+use TypePHP\TypePHP;
+
+/** @var Collection<User> $users */
+$users = new Collection();
+
+/** @var Dictionary<string, Product> $catalog */
+$catalog = new Dictionary();
+
+// 1. Single-Template Smart Fallback (No template name needed!)
+$userType = TypePHP::getGenericType($users); // Returns 'App\Models\User'
+
+// 2. Multi-Template Explicit Inspection
+$keyType   = TypePHP::getGenericType($catalog, 'K'); // Returns 'string'
+$valueType = TypePHP::getGenericType($catalog, 'V'); // Returns 'App\Models\Product'
+
+// 3. Inherited Generic Classes (@extends BaseRepository<User>)
+$userRepo = new UserRepository();
+$repoType = TypePHP::getGenericType($userRepo); // Returns 'App\Models\User'
+
+// 4. Inspect all bound template parameters as an array
+$types = TypePHP::getGenericTypes($catalog); // Returns ['K' => 'string', 'V' => 'App\Models\Product']
+```
+
+### How Reified Generic Inspection Works
+
+* **Single-Template Smart Fallback:** If a class has only 1 template parameter (e.g. `@template ItemType`), `TypePHP::getGenericType($object)` automatically returns that template's bound type without requiring you to guess whether the author named it `T`, `E`, or `ItemType`.
+* **Inherited Template Resolution:** Automatically resolves generic types declared on parent classes (`@extends BaseRepository<User>`) or interfaces (`@implements ProcessorInterface<Cat>`).
+* **First-Use Inference:** On un-annotated generic instances (`$collection = new Collection()`), `getGenericType()` returns `null` before first use, and returns the inferred type (e.g. `User`) immediately after the first method call!
+```
+
+---
+
+## Cloning Generic Instances (`clone $obj` and `__clone()`)
+
+When you clone an object instance that has bound generic templates (`$cloned = clone $original`), TypePHP automatically preserves and copies all bound generic template parameters (`T`) to the new cloned object instance in `WeakMap` memory:
+
+```php
+/** @var Collection<User> $users */
+$users = new Collection();
+$users->add(new User('Alice'));
+
+// Clone the generic collection
+$clonedUsers = clone $users;
+
+// The cloned collection retains T = User!
+$clonedUsers->add(new User('Bob')); // Valid
+
+$clonedUsers->add(new Product('SKU-100')); 
+// Throws: TypeError: Collection::add(): Argument $item (template T = User) must be of type User
+```
+
+### Explicit `__clone()` Magic Methods
+
+If a generic class defines an explicit `__clone()` magic method, TypePHP copies the generic template bindings to the new object instance **before** the `__clone()` method body executes.
+
+This ensures that any property assignments or method calls inside your `__clone()` implementation are immediately protected by the bound generic types:
+
+```php
+/**
+ * @template T
+ */
+class GenericBox
+{
+    /** @var T */
+    public mixed $item = null;
+
+    /** @param T $item */
+    public function set(mixed $item): void
+    {
+        $this->item = $item;
+    }
+
+    public function __clone(): void
+    {
+        // TypePHP pre-copies T = Dog before __clone() runs!
+        $this->item = new Dog(); // Valid (Dog satisfies T = Dog)
+    }
+}
+
+/** @var GenericBox<Dog> $box */
+$box = new GenericBox();
+$clonedBox = clone $box;
+
+$clonedBox->set(new Car());
+// Throws: TypeError: GenericBox::set(): Argument $item (template T = Dog) must be of type Dog
+```
+
+### Cloned Instance Memory Isolation (`WeakMap`)
+
+When an object is cloned, its generic bindings are copied by value to the new instance. Because TypePHP uses `\WeakMap` keyed by object instance ID, **the original and cloned instances are 100% isolated in memory**.
+
+Re-binding or modifying the generic type on a cloned instance will never affect the original instance:
+
+```php
+/** @var GenericBox<Dog> $box1 */
+$box1 = new GenericBox();
+
+// Clone $box1 into $box2
+$box2 = clone $box1;
+
+// Re-bind $box2 instance to GenericBox<Cat>
+/** @var GenericBox<Cat> $box2 */
+
+// $box2 now accepts Cat
+$box2->set(new Cat()); // Valid for $box2
+
+// $box1 continues enforcing T = Dog and rejects Cat!
+$box1->set(new Cat());
+// Throws: TypeError: GenericBox::set(): Argument $item (template T = Dog) must be of type Dog
+```
+
+### Variance Enforcement on Cloned Assignments
+
+When you assign a cloned generic instance to a variable with an inline `@var` annotation, TypePHP enforces generic variance rules during the assignment.
+
+Because generics are **invariant** by default, assigning a cloned `GenericBox<Dog>` instance into a variable annotated as `GenericBox<Cat>` throws an invariant type mismatch `TypeError`:
+
+```php
+/** @var GenericBox<Dog> $box1 */
+$box1 = new GenericBox();
+
+// Assigning a GenericBox<Dog> clone into a GenericBox<Cat> variable
+/** @var GenericBox<Cat> $box2 */
+$box2 = clone $box1;
+// Throws: TypeError: Variable $box2 expects GenericBox<invariant Cat>, but GenericBox<Dog> was given
+```
+
+> **Deep Dive Guide:** For complete details on how covariance, contravariance, and invariance rules work across generic containers, see the [Demystifying Variance](#demystifying-variance-covariant-contravariant-invariant) section below.
 
 ---
 
@@ -536,7 +672,7 @@ checkBox(new Box(new Dog()));    // Invalid in invariant mode!
 
 Covariance allows **subtypes** (`Dog` for `Animal`). Think of covariance as a **Producer / Read-Only** relationship.
 
-If a function only *reads* from a container producing `Animal`s, passing a container producing `Dog`s is completely safe—because every `Dog` read out of the container is guaranteed to be an `Animal`!
+If a function only *reads* from a container producing `Animal`s, passing a container producing `Dog`s is completely safe because every `Dog` read out of the container is guaranteed to be an `Animal`!
 
 ```php
 /**
@@ -571,7 +707,7 @@ handleProducer(new Producer(new Car()));
 
 Contravariance allows **supertypes** (`Animal` for `Dog`). Think of contravariance as a **Consumer / Write-Only** relationship.
 
-If a function needs a handler that consumes a `Dog`, giving it a handler that can consume any `Animal` is completely safe—because an `Animal` handler can process any `Dog` given to it!
+If a function needs a handler that consumes a `Dog`, giving it a handler that can consume any `Animal` is completely safe because an `Animal` handler can process any `Dog` given to it!
 
 ```php
 class Puppy extends Dog {}
