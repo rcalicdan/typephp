@@ -243,3 +243,34 @@ formatValue(false, 'hello'); // Evaluates return type as non-empty-string
 formatValue(true, 'not_an_int');
 // Throws: TypeError: formatValue(): Return value must be of type positive-int
 ```
+---
+
+## PHP 8.0+ Attributes Coexistence
+
+TypePHP seamlessly coexists with native PHP 8.0+ Attributes (`#[Route]`, `#[Inject]`, `#[Validate]`). 
+
+You can place your PHPDoc annotations **either above or below** native PHP attributes on properties, methods/functions. TypePHP's AST engine and PHP's Reflection API process both metadata channels independently without any syntax conflicts:
+
+```php
+// Option A: DocBlock ABOVE Attribute (Supported)
+/**
+ * @param positive-int $id
+ * @return array{id: positive-int, username: non-empty-string}
+ */
+#[Route('/user/{id}', method: 'GET')]
+public function showUser(int $id): array
+{
+    return ['id' => $id, 'username' => 'Alice'];
+}
+
+// Option B: DocBlock BELOW Attribute (Supported)
+#[Route('/user/{id}', method: 'GET')]
+/**
+ * @param positive-int $id
+ * @return array{id: positive-int, username: non-empty-string}
+ */
+public function showUser(int $id): array
+{
+    return ['id' => $id, 'username' => 'Alice'];
+}
+```

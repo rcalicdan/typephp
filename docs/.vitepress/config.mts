@@ -2,14 +2,15 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "TypePHP",
-  description: "Zero-cost, production-ready runtime type enforcer for PHP.",
+  description: "Runtime Type Enforcement for PHP.",
   themeConfig: {
+    siteTitle: "TypePHP",
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started/installation' },
       { text: 'Architecture', link: '/architecture/how-it-works' },
       { text: 'CLI', link: '/production/cache-commands' },
-      { text: 'GitHub', link: 'https://github.com/typephp/typephp' }
+      { text: 'GitHub', link: 'https://github.com/typephp-php/typephp' }
     ],
     sidebar: [
       {
@@ -61,12 +62,12 @@ export default defineConfig({
         items: [
           { text: 'Production Readiness', link: '/production/production-readiness' },
           { text: 'Cache CLI Commands', link: '/production/cache-commands' },
-          { text: 'Performance Benchmarks', link: '/production/performance-benchmarks' },
+          { text: 'Performance Considerations', link: '/production/performance-considerations' },
         ]
       }
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/typephp/typephp' }
+      { icon: 'github', link: 'https://github.com/typephp-php/typephp' }
     ],
     search: {
       provider: 'local'
