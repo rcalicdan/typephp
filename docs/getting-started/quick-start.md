@@ -74,6 +74,8 @@ processUser(-5, 'Alice');
 // Throws: TypeError: processUser(): Argument $id must be of type positive-int, negative int (-5) given
 ```
 
+> **Execution Order Note:** Native PHP type hints (e.g., `int $id`, `string $username`) are evaluated by PHP's C-engine before function execution begins. TypePHP's extended DocBlock contracts (e.g., `positive-int`, `non-empty-string`) execute at function entry. If a native type hint fails, PHP throws its native `TypeError` before TypePHP guard rails execute.
+
 ---
 
 ## Return Contracts (`@return`)
@@ -224,3 +226,4 @@ namespace App\Legacy;
 
 > **Technical Note & Coding Convention:**
 > Under the hood, TypePHP scans the raw file contents for `@typephp-ignore-file` before performing AST transformations, meaning the tag will function regardless of its position in the file. However, you should always place `@typephp-ignore-file` at the very top of the file (right after `<?php`) as a clean coding convention.
+```
