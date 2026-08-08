@@ -31,7 +31,7 @@
     },
     "require-dev": {
         "laravel/pint": "^1.10",
-        "pestphp/pest": "^1.22 || ^2.0 || ^3.0 || ^4.0",
+        "pestphp/pest": "^2.0 || ^3.0 || ^4.0",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpstan/extension-installer": "^1.4"
