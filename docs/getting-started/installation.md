@@ -14,9 +14,13 @@ composer require --dev typephp/typephp
 
 ---
 
-## Production Installation (Optional & Advanced)
+## Pre-1.0 Stability Warning & Production Usage
 
-If you intend to use TypePHP in production to selectively enforce type contracts on mission-critical domain logic, payment gateways, or security boundaries, install it as a main dependency:
+> **Pre-1.0 Stability Warning:** TypePHP is currently in active pre-1.0 development and has not yet reached its stable `v1.0.0` release.
+> 
+> **Do NOT use TypePHP in high-stakes, mission-critical production applications yet.**
+> 
+> TypePHP is strongly recommended for local development, Pest/PHPUnit test suites, and CI/CD build pipelines. If you choose to run TypePHP in non-critical live applications, staging servers, or internal web tools, install it as a main dependency, but be aware of its pre-1.0 status:
 
 ```bash
 composer require typephp/typephp
@@ -58,7 +62,7 @@ require 'vendor/autoload.php';
 // TypePHP is booted and active
 ```
 
-This means that if you run your application that uses entry point like web frameworks via public index.php file where the `require 'vendor/autoload';` is declared. TypePHP can now transform and typecheck a php file that is included in your configuration.
+This means that if you run your application through an entry point like a web framework's `public/index.php` file where `require 'vendor/autoload.php';` is declared, TypePHP automatically transforms and type-checks any PHP files that are whitelisted in your `typephp.php` configuration.
 
 ---
 
