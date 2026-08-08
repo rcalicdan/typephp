@@ -133,7 +133,6 @@ return [
     'include' => [
         'src/**',
         'app/**',
-        'internals/**',
         'tests/**',
         // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
