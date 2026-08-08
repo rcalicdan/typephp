@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80400) {
+    return;
+}
+
 use TypePHP\Internal\Config;
 use TypePHP\Tests\Fixtures\Domain\User;
 use TypePHP\Tests\Fixtures\Types\HookedInterfaceImplementation;
@@ -63,6 +67,13 @@ describe('PHP 8.4 Property Hooks Validation', function () {
         expect(fn () => $fixture->blockSetNumber = -10)
             ->toThrow(TypeError::class, "Property TypePHP\Tests\Fixtures\Types\PropertyHooks::\$blockSetNumber must be of type positive-int, negative int (-10) given")
         ;
+    });
+
+    test('skips type-checking on PHP 8.4 property hook marked with @typephp-ignore', function () {
+        $fixture = new PropertyHooks();
+        
+        $fixture->unvalidatedHook = -50;
+        expect($fixture->unvalidatedHook)->toBe(-50);
     });
 
     test('validates asymmetric visibility properties combined with property hooks', function () {

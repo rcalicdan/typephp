@@ -22,28 +22,14 @@ class IgnoredMethod
      */
     public int $ignoredProperty = 10;
 
-    /**
-     * Ignored property hook -> Property hook checks skipped!
-     *
-     * @typephp-ignore
-     *
-     * @var positive-int
-     */
-    public int $ignoredHook {
-        get => $this->_hookVal;
-        set => $this->_hookVal = $value;
-    }
-
-    public int $_hookVal = 10;
-
     public function setNormalProperty(int $val): void
     {
-        $this->normalProperty = $val; // TypePHP intercepts this!
+        $this->normalProperty = $val;
     }
 
     public function setIgnoredProperty(int $val): void
     {
-        $this->ignoredProperty = $val; // TypePHP intercepts this, but parser ignores it!
+        $this->ignoredProperty = $val;
     }
 
     /**
