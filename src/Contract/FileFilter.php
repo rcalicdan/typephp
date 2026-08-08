@@ -15,7 +15,7 @@ final class FileFilter
      * Determines whether a given file path is excluded from contract inheritance.
      * Non-PHP files and excluded paths return true.
      */
-    public static function isFileExcluded(?string $fileName): bool
+    public static function isFileExcluded(string|false|null $fileName): bool
     {
         if ($fileName === null || $fileName === false || $fileName === '') {
             return false;
@@ -29,7 +29,9 @@ final class FileFilter
         }
 
         $config = Config::get();
+        /** @var array<mixed> $includes */
         $includes = \is_array($config['include'] ?? null) ? $config['include'] : ['**'];
+        /** @var array<mixed> $excludes */
         $excludes = \is_array($config['exclude'] ?? null) ? $config['exclude'] : ['vendor/**', 'storage/**', 'var/**', 'cache/**'];
 
         $cwd = getcwd();
@@ -37,17 +39,23 @@ final class FileFilter
 
         $longestIncludeMatch = 0;
         foreach ($includes as $pattern) {
-            $regex = self::compileGlobToRegex((string) $pattern, $baseDir);
+            if (! \is_string($pattern)) {
+                continue;
+            }
+            $regex = self::compileGlobToRegex($pattern, $baseDir);
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestIncludeMatch = max($longestIncludeMatch, \strlen(trim((string) $pattern)));
+                $longestIncludeMatch = max($longestIncludeMatch, \strlen(trim($pattern)));
             }
         }
 
         $longestExcludeMatch = 0;
         foreach ($excludes as $pattern) {
-            $regex = self::compileGlobToRegex((string) $pattern, $baseDir);
+            if (! \is_string($pattern)) {
+                continue;
+            }
+            $regex = self::compileGlobToRegex($pattern, $baseDir);
             if (preg_match($regex, $normalizedPath) === 1) {
-                $longestExcludeMatch = max($longestExcludeMatch, \strlen(trim((string) $pattern)));
+                $longestExcludeMatch = max($longestExcludeMatch, \strlen(trim($pattern)));
             }
         }
 

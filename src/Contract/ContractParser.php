@@ -114,7 +114,7 @@ final class ContractParser
             }
 
             // Skip property type checks if docblock contains @typephp-ignore
-            $shouldRespectIgnore = (Config::get()['respect_ignore_tags'] ?? true);
+            $shouldRespectIgnore = (bool) (Config::get()['respect_ignore_tags'] ?? true);
             if ($shouldRespectIgnore && (str_contains($doc, '@typephp-ignore') || str_contains($doc, '@typephp-disable'))) {
                 return self::$propertyCache[$cacheKey] = null;
             }
@@ -230,6 +230,7 @@ final class ContractParser
     /**
      * Resolves class-level docblocks (templates and aliases) up the class inheritance chain.
      *
+     * @param \ReflectionClass<object> $declaringClass
      * @param array<string, TemplateTagValueNode> $templates
      * @param array<string, TypeNode> $aliases
      */
@@ -238,7 +239,8 @@ final class ContractParser
         $classHierarchy = HierarchyResolver::getClassHierarchy($declaringClass);
 
         foreach ($classHierarchy as $hierClass) {
-            if (FileFilter::isFileExcluded($hierClass->getFileName())) {
+            $fileName = $hierClass->getFileName();
+            if (FileFilter::isFileExcluded($fileName !== false ? $fileName : null)) {
                 continue;
             }
 
@@ -283,7 +285,8 @@ final class ContractParser
         foreach ($hierarchy as $hierRef) {
             $isOriginal = ($hierRef === $ref);
 
-            if (! $isOriginal && FileFilter::isFileExcluded($hierRef->getFileName())) {
+            $fileName = $hierRef->getFileName();
+            if (! $isOriginal && FileFilter::isFileExcluded($fileName !== false ? $fileName : null)) {
                 continue;
             }
 

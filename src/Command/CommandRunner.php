@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace TypePHP\Command;
 
-/**
- * @internal Executes TypePHP CLI commands.
- */
 final class CommandRunner
 {
     /**
-     * @internal Parses CLI arguments and routes execution to the corresponding command class.
+     * Parses CLI arguments and routes execution to the corresponding command class.
      *
      * @param array<int, string> $args
      * @param resource $outputStream
@@ -20,8 +17,12 @@ final class CommandRunner
     {
         $showHelp = \in_array('help', $args, true) || \in_array('typephp:help', $args, true) || \in_array('--help', $args, true) || \in_array('-h', $args, true);
 
-        if ($showHelp || empty($args)) {
+        if ($showHelp || $args === []) {
             return (new HelpCommand())->execute($args, $outputStream, $errorStream);
+        }
+
+        if (\in_array('config:init', $args, true) || \in_array('init', $args, true)) {
+            return (new ConfigInitCommand())->execute($args, $outputStream, $errorStream);
         }
 
         if (\in_array('cache:rebuild', $args, true)) {

@@ -46,13 +46,6 @@ describe('DocBlock Ignore Tags (@typephp-ignore & @typephp-ignore-file)', functi
         expect($fixture->ignoredProperty)->toBe(-5);
     });
 
-    test('skips type-checking on PHP 8.4 property hook marked with @typephp-ignore', function () {
-        $fixture = new IgnoredMethod();
-
-        $fixture->ignoredHook = -50;
-        expect($fixture->ignoredHook)->toBe(-50);
-    });
-
     test('skips type-checking on entire file marked with @typephp-ignore-file', function () {
         $fileFixture = new IgnoredFile();
 

@@ -4,7 +4,35 @@ declare(strict_types=1);
 
 namespace TypePHP\Tests\Unit;
 
+use TypePHP\Tests\Fixtures\Domain\Cat;
+use TypePHP\Tests\Fixtures\Domain\Dog;
+use TypePHP\Tests\Fixtures\Generics\DogRepository;
+use TypePHP\Tests\Fixtures\Generics\GenericCollection;
+use TypePHP\Tests\Fixtures\Generics\Producer;
 use TypePHP\TypePHP;
+
+/**
+ * @template ItemType
+ */
+class CustomTemplateNameBox
+{
+    /**
+     * @var ItemType
+     */
+    public mixed $item = null;
+}
+
+/**
+ * @template K
+ * @template V
+ */
+class MultiTemplateDictionary
+{
+    /**
+     * @var array<K, V>
+     */
+    public array $map = [];
+}
 
 describe('TypePHP Public Facade Unit Tests', function () {
     afterEach(function () {
@@ -38,5 +66,65 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         TypePHP::resetConfig();
         expect(TypePHP::getConfig()['cache'])->toBeTrue();
+    });
+
+    test('inspects runtime reified generic types across single, custom, multi, and inherited template instances', function () {
+        // Standard Single Template (GenericCollection<Dog> vs GenericCollection<Cat>)
+        /** @var GenericCollection<Dog> $dogCollection */
+        $dogCollection = new GenericCollection();
+
+        /** @var GenericCollection<Cat> $catCollection */
+        $catCollection = new GenericCollection();
+
+        expect(TypePHP::getGenericType($dogCollection))->toBe(Dog::class)
+            ->and(TypePHP::getGenericType($catCollection))->toBe(Cat::class)
+            ->and(TypePHP::getGenericTypes($dogCollection))->toBe(['T' => Dog::class])
+        ;
+
+        // Custom Named Single Template (@template ItemType)
+        /** @var CustomTemplateNameBox<Dog> $box */
+        $box = new CustomTemplateNameBox();
+
+        expect(TypePHP::getGenericType($box))->toBe(Dog::class)
+            ->and(TypePHP::getGenericType($box, 'ItemType'))->toBe(Dog::class)
+            ->and(TypePHP::getGenericTypes($box))->toBe(['ItemType' => Dog::class])
+        ;
+
+        // Multiple Templates (@template K, @template V)
+        /** @var MultiTemplateDictionary<string, Dog> $dict */
+        $dict = new MultiTemplateDictionary();
+
+        expect(TypePHP::getGenericType($dict, 'K'))->toBe('string')
+            ->and(TypePHP::getGenericType($dict, 'V'))->toBe(Dog::class)
+            ->and(TypePHP::getGenericTypes($dict))->toBe(['K' => 'string', 'V' => Dog::class])
+        ;
+
+        // Inherited Generic Class (@extends Repository<Dog>)
+        $dogRepo = new DogRepository();
+
+        expect(TypePHP::getGenericType($dogRepo))->toBe(Dog::class)
+            ->and(TypePHP::getGenericTypes($dogRepo))->toBe(['T' => Dog::class])
+        ;
+
+        // Unannotated Instance before and after first-use type inference
+        $mystery = new GenericCollection();
+
+        expect(TypePHP::getGenericType($mystery))->toBeNull()
+            ->and(TypePHP::getGenericTypes($mystery))->toBeEmpty()
+        ;
+
+        $mystery->add(new Dog()); // First method call infers T = Dog!
+
+        expect(TypePHP::getGenericType($mystery))->toBe(Dog::class)
+            ->and(TypePHP::getGenericTypes($mystery))->toBe(['T' => Dog::class])
+        ;
+    });
+
+    test('inspects declared template variances on object instances', function () {
+        /** @var Producer<Dog> $producer */
+        $producer = new Producer(new Dog());
+
+        expect(TypePHP::getGenericVariance($producer))->toBe('covariant')
+            ->and(TypePHP::getGenericVariances($producer))->toBe(['T' => 'covariant']);
     });
 });

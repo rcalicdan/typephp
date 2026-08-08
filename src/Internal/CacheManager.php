@@ -14,7 +14,7 @@ final class CacheManager
     /**
      * Cache version prefix string. Bump this whenever AST printer/transformation rules change.
      */
-    public const VERSION_PREFIX = 'v38_';
+    public const VERSION_PREFIX = 'v0.1_';
 
     /**
      * Returns the absolute path to the cache directory.
@@ -98,7 +98,7 @@ final class CacheManager
     public static function warmUp(?callable $progressCallback = null): array
     {
         $config = Config::get();
-        if (! ($config['enabled'] ?? true)) {
+        if (! (bool) ($config['enabled'] ?? true)) {
             return ['total' => 0, 'cached' => 0, 'skipped' => 0];
         }
 
@@ -161,10 +161,13 @@ final class CacheManager
             );
 
             foreach ($iterator as $fileInfo) {
-                if ($fileInfo->isFile() && strtolower($fileInfo->getExtension()) === 'php') {
-                    $path = str_replace('\\', '/', $fileInfo->getRealPath());
-                    if (! FileFilter::isFileExcluded($path)) {
-                        $files[] = $path;
+                if ($fileInfo instanceof \SplFileInfo && $fileInfo->isFile() && strtolower($fileInfo->getExtension()) === 'php') {
+                    $realPath = $fileInfo->getRealPath();
+                    if ($realPath !== false) {
+                        $path = str_replace('\\', '/', $realPath);
+                        if (! FileFilter::isFileExcluded($path)) {
+                            $files[] = $path;
+                        }
                     }
                 }
             }

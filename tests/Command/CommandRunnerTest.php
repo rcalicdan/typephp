@@ -20,6 +20,19 @@ describe('CommandRunner Unit Tests', function () {
         ;
     });
 
+    test('routes config:init command successfully', function () {
+        $stream = fopen('php://memory', 'r+');
+        $exitCode = CommandRunner::run(['config:init'], $stream, $stream);
+
+        rewind($stream);
+        $output = stream_get_contents($stream);
+        fclose($stream);
+
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Configuration')
+        ;
+    });
+
     test('routes cache:clear command successfully', function () {
         $stream = fopen('php://memory', 'r+');
         $exitCode = CommandRunner::run(['cache:clear'], $stream, $stream);

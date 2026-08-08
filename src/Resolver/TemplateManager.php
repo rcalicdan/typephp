@@ -42,6 +42,22 @@ final class TemplateManager
     private static array $callStackBindings = [];
 
     /**
+     * Temporary storage for an original object instance being cloned.
+     */
+    public static ?object $pendingCloneSource = null;
+
+    /**
+     * Copies bound generic template types from a source object to a cloned target object.
+     */
+    public static function copyInstanceBindings(object $source, object $target): void
+    {
+        if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$source])) {
+            $bindings = self::$instanceTemplateBindings[$source];
+            self::$instanceTemplateBindings[$target] = $bindings;
+        }
+    }
+
+    /**
      * Pushes a new empty call frame onto the stack for a function execution.
      */
     public static function pushCallFrame(string $function): void
@@ -71,6 +87,7 @@ final class TemplateManager
 
     /**
      * Retrieves currently bound template types for a function call or object instance.
+     * Automatically resolves pending clone sources.
      *
      * @param array<string, TemplateTagValueNode> $templates
      *
@@ -78,8 +95,18 @@ final class TemplateManager
      */
     public static function getBoundTemplates(string $function, ?object $thisObj, array $templates): array
     {
-        if ($thisObj !== null && isset(self::$instanceTemplateBindings[$thisObj])) {
-            return self::$instanceTemplateBindings[$thisObj];
+        if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
+            }
+
+            if (isset(self::$instanceTemplateBindings[$thisObj])) {
+                return self::$instanceTemplateBindings[$thisObj];
+            }
         }
 
         if (self::hasCallFrame($function)) {
@@ -92,11 +119,86 @@ final class TemplateManager
     }
 
     /**
+     * Retrieves all bound template TypeNodes for a specific object instance.
+     * Automatically resolves @extends and @implements template mappings if unbound.
+     *
+     * @return array<string, TypeNode>
+     */
+    public static function getBoundTemplatesForInstance(object $instance): array
+    {
+        if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$instance])) {
+            self::copyInstanceBindings(self::$pendingCloneSource, $instance);
+        }
+
+        // Auto-resolve @extends and @implements generic template mappings
+        if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$instance])) {
+            self::resolveInheritedTemplates($instance, \get_class($instance));
+        }
+
+        if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$instance])) {
+            return self::$instanceTemplateBindings[$instance];
+        }
+
+        return [];
+    }
+
+    /**
+     * Retrieves all declared template variances ('covariant', 'contravariant', 'invariant') for an object instance.
+     *
+     * @return array<string, string>
+     */
+    public static function getTemplateVariances(object $instance): array
+    {
+        $className = \get_class($instance);
+
+        try {
+            $ref = new \ReflectionClass($className);
+            $classDoc = $ref->getDocComment();
+
+            if ($classDoc !== false) {
+                [$phpDocParser, $lexer] = self::getPhpDocParserComponents();
+
+                $classTokens = new TokenIterator($lexer->tokenize($classDoc));
+                $classPhpDocNode = $phpDocParser->parse($classTokens);
+
+                $variances = [];
+                foreach ($classPhpDocNode->getTags() as $tagNode) {
+                    if ($tagNode->value instanceof TemplateTagValueNode) {
+                        $tagName = strtolower($tagNode->name);
+
+                        if (str_contains($tagName, 'covariant')) {
+                            $variances[$tagNode->value->name] = 'covariant';
+                        } elseif (str_contains($tagName, 'contravariant')) {
+                            $variances[$tagNode->value->name] = 'contravariant';
+                        } else {
+                            $variances[$tagNode->value->name] = 'invariant';
+                        }
+                    }
+                }
+
+                return $variances;
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore reflection errors
+        }
+
+        return [];
+    }
+
+    /**
      * Checks if a template name is bound in the current instance or call stack frame.
      */
     public static function isBound(string $function, ?object $thisObj, string $templateName): bool
     {
         if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
+            }
+
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
         }
 
@@ -115,6 +217,14 @@ final class TemplateManager
     public static function getBoundType(string $function, ?object $thisObj, string $templateName): ?TypeNode
     {
         if ($thisObj !== null) {
+            if (self::$pendingCloneSource !== null && ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::copyInstanceBindings(self::$pendingCloneSource, $thisObj);
+            }
+
+            if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
+            }
+
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
         }
 
@@ -268,7 +378,8 @@ final class TemplateManager
                     if ($genericTypeNode instanceof GenericTypeNode) {
                         $parentName = SpecialTypeResolver::resolveFqcn($genericTypeNode->type->name, $ref);
 
-                        if (ClassNameValidator::isValid($parentName) && ($parentName === $targetClassName || is_a($parentName, $targetClassName, true))) {
+                        // Fixed inverted is_a check: Checks if actual class extends/implements parentName!
+                        if (ClassNameValidator::isValid($parentName) && is_a($actualClassName, $parentName, true)) {
                             if (! class_exists($parentName) && ! interface_exists($parentName)) {
                                 continue;
                             }

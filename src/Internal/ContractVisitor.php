@@ -25,8 +25,10 @@ final class ContractVisitor extends NodeVisitorAbstract
 
     /**
      * Traverses and transforms AST nodes during entry.
+     *
+     * @return array<Node>|null
      */
-    public function enterNode(Node $node): int|array|null
+    public function enterNode(Node $node): array|null
     {
         if ($node instanceof Node\Stmt\Function_
             || $node instanceof Node\Stmt\ClassMethod
@@ -85,7 +87,7 @@ final class ContractVisitor extends NodeVisitorAbstract
                         }
                     }
 
-                    if (! empty($checkStmts)) {
+                    if ($checkStmts !== []) {
                         return array_merge([$node], $checkStmts);
                     }
                 }
@@ -131,10 +133,33 @@ final class ContractVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Pops the current lexical scope stack frame when leaving a function, method, closure, or control block.
+     * Pops the current lexical scope stack frame or replaces transformed expressions upon leaving a node.
      */
-    public function leaveNode(Node $node): ?int
+    public function leaveNode(Node $node): Node|null
     {
+        if ($node instanceof Node\Expr\Clone_) {
+            if ($node->getAttribute('typephp_wrapped') === true) {
+                return null;
+            }
+
+            $node->setAttribute('typephp_wrapped', true);
+
+            return new Node\Expr\FuncCall(
+                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::cloneInstance'),
+                [
+                    new Node\Arg(
+                        new Node\Expr\Clone_(
+                            new Node\Expr\FuncCall(
+                                new Node\Name('\TypePHP\Internal\RuntimeTypeChecker::prepareClone'),
+                                [new Node\Arg($node->expr)]
+                            )
+                        )
+                    ),
+                    new Node\Arg($node->expr),
+                ]
+            );
+        }
+
         if ($node instanceof Node\Stmt\Function_
             || $node instanceof Node\Stmt\ClassMethod
             || $node instanceof Node\Expr\Closure

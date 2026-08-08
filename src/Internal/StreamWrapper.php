@@ -113,7 +113,7 @@ final class StreamWrapper implements StreamWrapperInterface
     public static function transformSource(string $source, string $filePath = ''): string
     {
         // Respect per-file suppression tag unless respect_ignore_tags is false
-        if ((Config::get()['respect_ignore_tags'] ?? true) && (str_contains($source, '@typephp-ignore-file') || str_contains($source, '@typephp-disable-file'))) {
+        if ((bool) (Config::get()['respect_ignore_tags'] ?? true) && (str_contains($source, '@typephp-ignore-file') || str_contains($source, '@typephp-disable-file'))) {
             return $source;
         }
 
@@ -225,6 +225,17 @@ final class StreamWrapper implements StreamWrapperInterface
             return true;
         }
 
+        // CRITICAL: PHPStan's internal stub narrows flock's $operation parameter to int<0, 7>.
+        // At PHP runtime, valid bitwise lock operations (such as LOCK_UN = 8 or LOCK_UN | LOCK_NB = 12)
+        // range from 1 to 15. Passing 0 to flock() causes PHP to throw a warning ("must be one of LOCK_SH,
+        // LOCK_EX, or LOCK_UN").
+        //
+        // CONSEQUENCE OF IGNORING: if it bypass PHPStan's narrow stub check here.
+        // RUNTIME SAFETY: The guard clause above ($operation < 1 || $operation > 15) guarantees that invalid
+        // operations (like 0) never reach flock(), preserving full runtime safety and compatibility
+        // with Pest/PHPUnit result-caching (file_put_contents).
+        //
+        // @phpstan-ignore argument.type
         return @flock($this->handle, $operation);
     }
 
@@ -458,7 +469,7 @@ final class StreamWrapper implements StreamWrapperInterface
      */
     private static function isApplicationFile(string $path, string|false $resolvedPath): bool
     {
-        if (! (Config::get()['enabled'] ?? true)) {
+        if (! (bool) (Config::get()['enabled'] ?? true)) {
             return false; // TypePHP is globally disabled!
         }
 

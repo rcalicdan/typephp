@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80400) {
+    return;
+}
+
 use TypePHP\Tests\Fixtures\Generics\HookedCollection;
 
 describe('Generic Template Substitution in PHP 8.4 Property Hooks', function () {

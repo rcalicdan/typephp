@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use TypePHP\Tests\Fixtures\Oop\ChildClassInheritingTraitParent;
 use TypePHP\Tests\Fixtures\Oop\ClassUsingTraitProperties;
 use TypePHP\Tests\Fixtures\Oop\ConcreteChildService;
 use TypePHP\Tests\Fixtures\Oop\TraitImplementation;
@@ -51,5 +52,14 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect(fn () => ClassUsingTraitProperties::setTraitStaticProp(''))
             ->toThrow(TypeError::class, 'non-empty-string')
         ;
+    });
+
+    test('inherits trait docblock contracts across parent-child class inheritance', function () {
+        $child = new ChildClassInheritingTraitParent();
+
+        expect($child->logMessage(10, 'boot'))->toBe('log_10_boot');
+
+        expect(fn () => $child->logMessage(-5, 'boot'))
+            ->toThrow(TypeError::class, 'positive-int');
     });
 });

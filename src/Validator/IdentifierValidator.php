@@ -29,7 +29,7 @@ final class IdentifierValidator implements TypeValidatorInterface
             'array' => \is_array($value),
             'list' => \is_array($value) && (\count($value) === 0 || array_is_list($value)),
             'object', 'self', 'static', 'parent', '$this' => \is_object($value),
-            'callable' => \is_callable($value),
+            'callable', 'pure-callable' => \is_callable($value),
             'iterable' => is_iterable($value),
             'resource' => \is_resource($value),
             'null' => $value === null,
@@ -49,7 +49,7 @@ final class IdentifierValidator implements TypeValidatorInterface
             'negative-float' => (\is_float($value) || \is_int($value)) && $value < 0,
             'non-positive-float' => (\is_float($value) || \is_int($value)) && $value <= 0,
             'non-negative-float' => (\is_float($value) || \is_int($value)) && $value >= 0,
-            'non-zero-float' => (\is_float($value) || \is_int($value)) && $value != 0,
+            'non-zero-float' => (\is_float($value) || \is_int($value)) && $value !== 0 && $value !== 0.0,
             'class-string' => \is_string($value)
                 && preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\\\\]*$/', $value) === 1
                 && (class_exists($value) || interface_exists($value) || trait_exists($value) || enum_exists($value)),
@@ -62,7 +62,7 @@ final class IdentifierValidator implements TypeValidatorInterface
             'lowercase-string' => \is_string($value) && strtolower($value) === $value,
             'non-empty-lowercase-string' => \is_string($value) && $value !== '' && strtolower($value) === $value,
             'literal-string' => \is_string($value),
-            'truthy-string' => \is_string($value) && (bool) $value === true,
+            'truthy-string', 'non-falsy-string' => \is_string($value) && (bool) $value === true,
             'non-empty-array' => \is_array($value) && \count($value) > 0,
             'non-empty-list' => \is_array($value) && \count($value) > 0 && array_is_list($value),
             'number', 'numeric' => \is_int($value) || \is_float($value) || (\is_string($value) && is_numeric($value)),

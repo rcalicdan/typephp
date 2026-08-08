@@ -44,4 +44,18 @@ class PropertyHooks
     }
 
     public int $_blockSetNumber = 10;
+
+    /**
+     * Ignored property hook - Hook validation skipped
+     *
+     * @typephp-ignore
+     *
+     * @var positive-int
+     */
+    public int $unvalidatedHook {
+        get => $this->_unvalidatedVal;
+        set => $this->_unvalidatedVal = $value;
+    }
+
+    public int $_unvalidatedVal = 10;
 }
