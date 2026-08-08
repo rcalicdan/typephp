@@ -80,6 +80,7 @@ return [
     | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
+    | Note: you can just specify "*" glob pattern to include all files including in the root folder.
     */
     'include' => [
         'src/**',
