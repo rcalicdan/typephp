@@ -142,7 +142,6 @@ $variances = TypePHP::getGenericVariances(object: $producer); // Returns ['T' =>
 * **Single-Template Smart Fallback:** If a class has only 1 template parameter (e.g. `@template ItemType`), `TypePHP::getGenericType($object)` automatically returns that template's bound type without requiring you to guess whether the author named it `T`, `E`, or `ItemType`.
 * **Inherited Template Resolution:** Automatically resolves generic types declared on parent classes (`@extends BaseRepository<User>`) or interfaces (`@implements ProcessorInterface<Cat>`).
 * **First-Use Inference:** On un-annotated generic instances (`$collection = new Collection()`), `getGenericType()` returns `null` before first use, and returns the inferred type (e.g. `User`) immediately after the first method call!
-```
 
 ---
 

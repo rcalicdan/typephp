@@ -10,7 +10,7 @@ TypePHP provides surgical control over which files are intercepted and type-chec
 
 When a file path matches both an `include` pattern and an `exclude` pattern, TypePHP determines the outcome by calculating **pattern specificity length** (`strlen($pattern)`):
 
-$$\text{Winning Pattern} = \max(\text{Specificity Length})$$
+**`Winning Pattern = max(Specificity Length)`**
 
 * **Longer Pattern Wins:** A more specific pattern like `'vendor/acme/package/**'` (length 25) takes precedence over a broader glob like `'vendor/**'` (length 8).
 * **Single File Override:** A specific file path like `'src/Legacy/UnsafeFile.php'` (length 25) takes precedence over a directory glob like `'src/**'` (length 6).
@@ -45,7 +45,7 @@ return [
 * **`vendor/acme/domain-models/src/User.php`**:
   * Matches `include`: `'vendor/acme/domain-models/**'` (Length: 29)
   * Matches `exclude`: `'vendor/**'` (Length: 8)
-  * **Result:** `29 > 8` $\rightarrow$ **Included and Type-Checked!**
+  * **Result:** `29 > 8` -> **Included and Type-Checked!**
 
 * **`vendor/guzzlehttp/guzzle/src/Client.php`**:
   * Matches `include`: None

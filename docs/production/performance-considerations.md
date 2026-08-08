@@ -1,6 +1,6 @@
 # Performance Considerations
 
-TypePHP is engineered for sub-second CLI test runs and $O(1)$ memory lookups during web request execution. This document explains the internal performance architecture, OPCache interactions, JIT realities, and benchmarking guidelines.
+TypePHP is engineered for sub-second CLI test runs and O(1) memory lookups during web request execution. This document explains the internal performance architecture, OPCache interactions, JIT realities, and benchmarking guidelines.
 
 ---
 
@@ -28,14 +28,14 @@ TypePHP minimizes execution overhead through 4 core architectural optimizations:
 
 When an inline variable assignment runs (`/** @var positive-int $age */`), TypePHP tokenizes and parses the string `'positive-int'` using PHPStan's `TypeParser` **only once per PHP process**.
 
-On all subsequent assignments or loop iterations, TypePHP retrieves the pre-parsed `TypeNode` directly from static RAM in $O(1)$ constant time, completely eliminating lexer and parser overhead during execution.
+On all subsequent assignments or loop iterations, TypePHP retrieves the pre-parsed `TypeNode` directly from static RAM in O(1) constant time, completely eliminating lexer and parser overhead during execution.
 
-### 2. Massive Array Validation Overhead ($O(N)$ Complexity)
+### 2. Massive Array Validation Overhead (O(N) Complexity)
 
 Validating array shapes (`array{id: int}`), sequential lists (`list<T>`), or typed arrays (`User[]`) requires iterating every individual array element:
 
 * **Small to Medium Arrays (10–500 items):** Validated in microseconds with negligible CPU impact.
-* **Massive Datasets (5,000–50,000+ items):** Carrying $O(N)$ iteration complexity, validating massive arrays synchronously introduces **significant CPU performance overhead**.
+* **Massive Datasets (5,000–50,000+ items):** Carrying O(N) iteration complexity, validating massive arrays synchronously introduces **significant CPU performance overhead**.
 
 > **Production Warning:** Synchronously validating massive, multi-thousand element array datasets at runtime is **NOT recommended in live production applications**. 
 > 
@@ -46,7 +46,7 @@ Validating array shapes (`array{id: int}`), sequential lists (`list<T>`), or typ
 When validating large collections or arrays of objects (such as `User[]` or `list<Producer<Dog>>`), re-validating identical object instances repeatedly is CPU-intensive.
 
 `TypeValidatorRegistry` memoizes previously validated object instances against type signatures using PHP's native `WeakMap`. 
-* **$O(1)$ Validation:** If an object instance has already been checked against `User`, subsequent checks on the same object return `true` instantly.
+* **O(1) Validation:** If an object instance has already been checked against `User`, subsequent checks on the same object return `true` instantly.
 * **Zero Memory Leaks:** The moment an object instance is garbage-collected by PHP, its `WeakMap` cache entry is automatically deleted from RAM.
 
 ### 4. In-Memory Reflection Hierarchy Caching (`HierarchyResolver`)

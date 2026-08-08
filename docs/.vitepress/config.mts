@@ -55,6 +55,7 @@ export default defineConfig({
           { text: 'Ignore Annotations', link: '/advanced/ignore-annotations' },
           { text: 'Extensions', link: '/advanced/extensions' },
           { text: 'Exception Handling', link: '/advanced/exception-handling' },
+          { text: 'Troubleshooting & FAQ', link: '/advanced/troubleshooting' } 
         ]
       },
       {

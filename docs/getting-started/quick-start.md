@@ -7,19 +7,44 @@ TypePHP enforces PHPDoc type contracts at runtime. Below is an overview of core 
 > 
 > It is highly recommended to use any static analyzer alongside TypePHP:
 > * **PHPStan / Psalm / Mago / Phan (Compile-Time):** Lints your PHPDoc syntax, validates complex intersection rules, and catches static type errors in your IDE before code executes.
-> * **TypePHP (Runtime):** Enforces those PHPDoc contracts during actual execution, ensuring your application against invalid API payloads, database records, and dynamic runtime data or make sure the doctypes will not lie to you at runtime, this is the case when you dont use static analyzers or only allow linient level on static type checking.
+> * **TypePHP (Runtime):** Enforces those PHPDoc contracts during actual execution, ensuring your application against invalid API payloads, database records, and dynamic runtime data or making sure the doctypes will not lie to you at runtime.
 
 ---
 
-## Executing Standalone Scripts via CLI
+## Execution & Framework Entry Points
 
-Run any standalone PHP script with active runtime type enforcement using the `vendor/bin/typephp` binary:
+Because TypePHP automatically integrates with Composer's autoloader (`vendor/autoload.php`), you don't always need to use the custom CLI runner.
 
-```bash
-vendor/bin/typephp index.php
+If your application executes through an explicit, standard entry point like a web framework's **`public/index.php`**, Laravel's **`artisan`** console, or test runners like **`vendor/bin/pest`** and **`phpunit`**, TypePHP boots naturally out of the box. 
+
+Once booted, TypePHP transparently intercepts, transforms, and enforces types on any PHP file that is whitelisted in your `typephp.php` configuration file (`include` paths).
+
+*(For standalone single-file scripts without an autoloader, you can still use `vendor/bin/typephp index.php` to run them with type checking enabled).*
+
+---
+
+## Namespace & Import Resolution
+
+TypePHP is fully aware of your file's namespace context and `use` import statements. You can write your docblocks using short imported names, relative names, aliased imports, or Fully Qualified Class Names (FQCN), and TypePHP will resolve them perfectly at runtime:
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Services\Billing as BillingService;
+
+/**
+ * @param User $user                       // Resolved via use import
+ * @param BillingService\Invoice $invoice  // Resolved via aliased import
+ * @param \DateTimeImmutable $date         // Resolved via FQCN
+ */
+function processPayment(object $user, object $invoice, object $date): void 
+{
+    // ...
+}
 ```
-
-Your script executes naturally using your system's native PHP engine while TypePHP actively validates type contracts on every function call, return value, and local variable assignment.
 
 ---
 
