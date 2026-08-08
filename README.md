@@ -2,10 +2,11 @@
 
 <p align="center">
 	<a href="https://github.com/typephp-php/typephp/actions"><img src="https://github.com/typephp-php/typephp/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
-	<a href="https://packagist.org/packages/typephp/typephp"><img src="https://poser.pugx.org/typephp/typephp/v/stable" alt="Latest Stable Version"></a>
-	<a href="https://packagist.org/packages/typephp/typephp/stats"><img src="https://poser.pugx.org/typephp/typephp/downloads" alt="Total Downloads"></a>
-	<a href="https://choosealicense.com/licenses/mit/"><img src="https://poser.pugx.org/typephp/typephp/license" alt="License"></a>
-	<a href="https://packagist.org/packages/typephp/typephp"><img src="https://img.shields.io/packagist/php-v/typephp/typephp.svg" alt="PHP Version"></a>
+	<a href="https://packagist.org/packages/typephp/typephp"><img src="https://img.shields.io/packagist/v/typephp/typephp.svg?style=flat&color=blue" alt="Latest Stable Version"></a>
+	<a href="https://packagist.org/packages/typephp/typephp"><img src="https://img.shields.io/packagist/dt/typephp/typephp.svg?style=flat&color=green" alt="Total Downloads"></a>
+	<a href="https://choosealicense.com/licenses/mit/"><img src="https://img.shields.io/packagist/l/typephp/typephp.svg?style=flat" alt="License"></a>
+	<a href="https://packagist.org/packages/typephp/typephp"><img src="https://img.shields.io/packagist/php-v/typephp/typephp.svg?style=flat" alt="PHP Version"></a>
+	<a href="https://phpstan.org/"><img src="https://img.shields.io/badge/PHPStan-Level%20MAX-brightgreen.svg?style=flat" alt="PHPStan Level MAX"></a>
 </p>
 
 ------
@@ -35,7 +36,7 @@ TypePHP is conceptually inspired by Python's [Beartype](https://github.com/beart
 
 ## Sponsors
 
-Want to support the open-source development and maintenance of TypePHP? [Sponsor TypePHP on GitHub »](https://github.com/sponsors/typephp-php)
+Want to support the open-source development and maintenance of TypePHP? [Sponsor TypePHP me on GitHub »](https://github.com/sponsors/rcalicdan)
 
 ## Contributing
 
