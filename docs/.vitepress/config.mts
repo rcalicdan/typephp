@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "TypePHP",
   description: "Runtime Type Enforcement for PHP.",
+  base: '/typephp/',
   themeConfig: {
     siteTitle: "TypePHP",
     nav: [
