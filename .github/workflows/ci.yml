@@ -33,19 +33,10 @@ jobs:
           extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
           coverage: none
 
-      - name: Install Dependencies (baseline)
-        if: matrix.php == '8.1'
-        run: composer update --prefer-stable --no-interaction --no-progress --ansi
-
-      - name: Downgrade runtime deps to lowest supported
-        if: matrix.php == '8.1'
-        run: composer update phpstan/phpdoc-parser nikic/php-parser --prefer-lowest --prefer-stable --no-interaction --no-progress --ansi
-
       - name: Install Dependencies
-        if: matrix.php != '8.1'
         uses: ramsey/composer-install@v3
         with:
-          dependency-versions: highest
+          dependency-versions: ${{ matrix.php == '8.1' && 'lowest' || 'highest' }}
 
       - name: Check Code Style (Pint)
         run: ./vendor/bin/pint --test

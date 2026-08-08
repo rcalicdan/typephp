@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-if (PHP_VERSION_ID < 80400) {   
+if (PHP_VERSION_ID < 80400) {
     return;
 }
-
 
 use TypePHP\Tests\Fixtures\Generics\HookedCollection;
 

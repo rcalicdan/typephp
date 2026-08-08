@@ -71,7 +71,7 @@ describe('PHP 8.4 Property Hooks Validation', function () {
 
     test('skips type-checking on PHP 8.4 property hook marked with @typephp-ignore', function () {
         $fixture = new PropertyHooks();
-        
+
         $fixture->unvalidatedHook = -50;
         expect($fixture->unvalidatedHook)->toBe(-50);
     });
