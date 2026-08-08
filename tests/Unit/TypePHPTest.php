@@ -125,6 +125,7 @@ describe('TypePHP Public Facade Unit Tests', function () {
         $producer = new Producer(new Dog());
 
         expect(TypePHP::getGenericVariance($producer))->toBe('covariant')
-            ->and(TypePHP::getGenericVariances($producer))->toBe(['T' => 'covariant']);
+            ->and(TypePHP::getGenericVariances($producer))->toBe(['T' => 'covariant'])
+        ;
     });
 });

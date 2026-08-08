@@ -60,6 +60,7 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect($child->logMessage(10, 'boot'))->toBe('log_10_boot');
 
         expect(fn () => $child->logMessage(-5, 'boot'))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 });
