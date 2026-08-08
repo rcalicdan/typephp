@@ -1,6 +1,6 @@
 {
     "name": "typephp/typephp",
-    "description": "Zero-cost runtime type checker for PHP. Enforces PHPDoc annotations including generics, typed arrays, array shapes, and advanced types at runtime in development and testing.",
+    "description": "Zero-cost runtime type checker for PHP. Enforces PHPDoc annotations including generics, typed arrays, array shapes, and advanced types at runtime in development and production.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -31,7 +31,7 @@
     },
     "require-dev": {
         "laravel/pint": "^1.10",
-        "pestphp/pest": "^2.34 || ^3.0 || ^4.0",
+        "pestphp/pest": "^2.0 || ^3.0 || ^4.0",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpstan/extension-installer": "^1.4"
