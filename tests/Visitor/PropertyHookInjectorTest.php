@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace TypePHP\Tests\Unit\Visitor;
+if (PHP_VERSION_ID < 80400) {
+    return;
+}
 
 use PhpParser\Node;
 use TypePHP\Internal\Visitor\PropertyHookInjector;
