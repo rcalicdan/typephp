@@ -36,6 +36,9 @@
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpstan/extension-installer": "^1.4"
     },
+    "bin": [
+        "bin/typephp"
+    ],
     "autoload": {
         "psr-4": {
             "TypePHP\\": "src/"
@@ -53,9 +56,15 @@
         ]
     },
     "scripts": {
-        "format": ["./vendor/bin/pint"],
-        "test": ["./vendor/bin/pest --colors"],
-        "analyse": ["./vendor/bin/phpstan analyse"]
+        "format": [
+            "./vendor/bin/pint"
+        ],
+        "test": [
+            "./vendor/bin/pest --colors"
+        ],
+        "analyse": [
+            "./vendor/bin/phpstan analyse"
+        ]
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
