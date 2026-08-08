@@ -33,19 +33,10 @@ jobs:
           extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
           coverage: none
 
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
-          restore-keys: ${{ runner.os }}-php-${{ matrix.php }}-
-
       - name: Install Dependencies
-        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+        uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: ${{ matrix.php == '8.1' && 'lowest' || 'highest' }}
 
       - name: Check Code Style (Pint)
         run: ./vendor/bin/pint --test
