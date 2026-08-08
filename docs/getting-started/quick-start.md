@@ -1,13 +1,46 @@
 # Quick Start Guide
 
-TypePHP enforces PHPDoc type contracts at runtime. Below is an overview of core features and code examples.
+TypePHP enforces PHPDoc type contracts at runtime during execution. Below is an overview of core concepts, framework setup, and code examples.
 
-> **Recommended Workflow: PHPStan / Psalm / Mago / Phan + TypePHP**
-> By design, TypePHP is a **runtime type enforcer, not a docblock linter or static analyzer**. For maximum execution performance, TypePHP gracefully ignores malformed docblock syntax and duplicate type alias declarations, focusing strictly on validating runtime data.
-> 
-> It is highly recommended to use any static analyzer alongside TypePHP:
-> * **PHPStan / Psalm / Mago / Phan (Compile-Time):** Lints your PHPDoc syntax, validates complex intersection rules, and catches static type errors in your IDE before code executes.
-> * **TypePHP (Runtime):** Enforces those PHPDoc contracts during actual execution, ensuring your application against invalid API payloads, database records, and dynamic runtime data or making sure the doctypes will not lie to you at runtime.
+---
+
+## What is TypePHP?
+
+TypePHP is a transparent, pure-PHP runtime type checker that enforces extended PHPDoc type contracts (`@param`, `@return`, `@var`, `@template`, array shapes, integer ranges, and scalar refinements) during actual execution. 
+
+Unlike traditional assertion libraries that force you to write repetitive manual check calls inside every function, or validation frameworks that require custom PHP attributes and base classes, TypePHP requires **zero manual checks** and **zero new syntax**. It works transparently using your existing PHPDoc annotations.
+
+---
+
+## What Problem Does It Solve?
+
+While native PHP type hints (such as `int $id` or `string $name`) enforce basic scalar types, PHP's C-engine ignores PHPDoc annotations at runtime. This creates a dangerous safety gap at application boundaries:
+
+1. **Un-sanitized Dynamic Payloads:** HTTP API requests, Stripe webhooks, database query results, and JSON inputs frequently contain data that native PHP type hints allow through (such as passing a negative integer `-50` into a parameter expecting a `positive-int`).
+2. **The "DocBlock Lie" Problem:** Developers write DocBlocks assuming they are accurate, but dynamic runtime callers can pass invalid data that bypasses native PHP type hints, polluting database state or causing silent bugs.
+3. **Manual Validation Boilerplate:** Traditional runtime checkers force you to write imperative assertion calls (`Assert::positiveInteger($id)`) inside every function body or introduce custom attributes (`#[Validate]`). TypePHP removes all manual boilerplate by reading standard PHPDocs automatically.
+4. **Boundary Testing in Pest & PHPUnit:** TypePHP physically verifies that your application boundaries withstand real-world dynamic data during local testing and CI/CD runs.
+
+---
+
+## Progressive Adoption (Not All-or-Nothing)
+
+TypePHP does not force you into an "all-or-nothing" paradigm. You do not have to type-check your entire codebase or refactor legacy modules overnight. You can adopt TypePHP progressively at whatever granularity fits your project:
+
+1. **Path-Level Whitelisting:** Use `include` patterns in `typephp.php` to target specific mission-critical domain modules (such as `app/Domain/Billing/**`) while completely bypassing legacy directories.
+2. **Method-Level Suppression:** Add `@typephp-ignore` to specific legacy methods or un-refactored functions without removing their PHPDoc annotations.
+3. **Category-Level Feature Toggles:** Granularly enable or disable specific check categories (`inline_vars.scalars`, `inline_vars.arrays`, `params`, `returns`) in `typephp.php` depending on performance or migration needs.
+
+---
+
+## Runtime Enforcement vs. Static Analysis (Partners, Not Replacements)
+
+TypePHP is **not a replacement** for static analysis tools like PHPStan, Psalm, Mago, or Phan. They are complementary partners designed to work together:
+
+* **Static Analysis (Compile-Time & IDE):** Lints your source code structure offline in your IDE and CI pipeline, catching static logic errors before your code ever runs.
+* **TypePHP (Runtime & Execution):** Validates actual dynamic data in RAM during execution, ensuring that incoming API payloads, database results, and test suite inputs strictly satisfy your PHPDoc contracts.
+
+> **Recommended Workflow:** Use PHPStan or Psalm in your IDE to lint code syntax, and use TypePHP during Pest/PHPUnit test runs and CI pipelines to guarantee runtime data integrity.
 
 ---
 
@@ -226,4 +259,3 @@ namespace App\Legacy;
 
 > **Technical Note & Coding Convention:**
 > Under the hood, TypePHP scans the raw file contents for `@typephp-ignore-file` before performing AST transformations, meaning the tag will function regardless of its position in the file. However, you should always place `@typephp-ignore-file` at the very top of the file (right after `<?php`) as a clean coding convention.
-```
