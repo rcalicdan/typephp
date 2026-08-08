@@ -1,6 +1,6 @@
 # Primitives & Scalars
 
-TypePHP provides runtime enforcement for all native PHP primitives, extended integer ranges, string refinements, class-string subtypes, float constraints, resources, and special return control types.
+TypePHP provides runtime enforcement for all native PHP primitives, literal scalar values, extended integer ranges, string refinements, class-string subtypes, float constraints, resources, and special return control types.
 
 ---
 
@@ -32,18 +32,60 @@ function processPrimitive(int $id, string $name, bool $active): void
 
 ---
 
+## Literal Scalar Values
+
+TypePHP supports enforcing exact literal scalar values in DocBlock types. The incoming value must strictly match the declared literal:
+
+| Literal Category | Example Syntax | Valid Value | Invalid Example |
+| :--- | :--- | :--- | :--- |
+| **String Literals** | `'active'`, `'admin'` | `'active'` | `'inactive'`, `'user'` |
+| **Integer Literals** | `42`, `200` | `42` | `43`, `'42'` |
+| **Float Literals** | `3.14`, `0.01` | `3.14`, `3` | `3.15`, `'3.14'` |
+| **Boolean Literals** | `true`, `false` | `true` | `false`, `1` |
+
+```php
+/**
+ * @param 'active' $status      // Requires exact string 'active'
+ * @param 200 $code             // Requires exact integer 200
+ * @param true $debug           // Requires exact boolean true
+ * @param 0.3 $threshold        // Requires float literal 0.3
+ */
+function setEnvironment(string $status, int $code, bool $debug, float $threshold): void
+{
+    // ...
+}
+
+// Valid Call
+setEnvironment('active', 200, true, 0.3);
+
+// Invalid Call ('inactive' is not literal 'active')
+setEnvironment('inactive', 200, true, 0.3);
+// Throws: TypeError: setEnvironment(): Argument $status must be literal 'active', string 'inactive' given
+```
+
+### Floating-Point Precision & Epsilon Comparison
+
+Floating-point arithmetic in computers uses IEEE 754 representation, where mathematical operations like `0.1 + 0.2` evaluate to `0.30000000000000004`.
+
+To prevent rounding artifacts from causing unexpected type failures, TypePHP evaluates float literals using **Epsilon Tolerance (`1e-9`)**:
+
+1. **IEEE 754 Arithmetic Handling:** Floating-point calculations evaluating to `0.30000000000000004` safely satisfy `@param 0.3`.
+2. **Integer Coercion Support:** Integer values like `10` safely satisfy float literal types like `@param 10.0` in accordance with PHP scalar coercion rules.
+
+---
+
 ## Integer Refinements and Ranges
 
 TypePHP enforces exact value constraints and bounds on integer parameters:
 
 | Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
-| **`positive-int`** | Integer $> 0$ | `1`, `42`, `100` | `0`, `-5` |
-| **`negative-int`** | Integer $< 0$ | `-1`, `-42` | `0`, `5` |
-| **`non-positive-int`** | Integer $\le 0$ | `0`, `-1`, `-10` | `1`, `5` |
-| **`non-negative-int`** | Integer $\ge 0$ | `0`, `1`, `100` | `-1`, `-5` |
-| **`non-zero-int`** | Integer $\ne 0$ | `1`, `-1`, `100` | `0` |
-| **`unsigned-int`** | Integer $\ge 0$ | `0`, `10`, `50` | `-10` |
+| **`positive-int`** | Integer > 0 | `1`, `42`, `100` | `0`, `-5` |
+| **`negative-int`** | Integer < 0 | `-1`, `-42` | `0`, `5` |
+| **`non-positive-int`** | Integer <= 0 | `0`, `-1`, `-10` | `1`, `5` |
+| **`non-negative-int`** | Integer >= 0 | `0`, `1`, `100` | `-1`, `-5` |
+| **`non-zero-int`** | Integer != 0 | `1`, `-1`, `100` | `0` |
+| **`unsigned-int`** | Integer >= 0 | `0`, `10`, `50` | `-10` |
 
 ### Integer Bounds (`int<min, max>`)
 
@@ -76,7 +118,7 @@ Validate string lengths, formatting, character casing, and truthiness at runtime
 
 | Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
-| **`non-empty-string`** | String length $> 0$ | `'hello'`, `'1'` | `''` (empty string) |
+| **`non-empty-string`** | String length > 0 | `'hello'`, `'1'` | `''` (empty string) |
 | **`numeric-string`** | `is_numeric($val) === true` | `'123'`, `'45.67'`, `'-10'` | `'abc'`, `''` |
 | **`lowercase-string`** | `strtolower($val) === $val` | `'hello'`, `'user_100'` | `'Hello'`, `'ADMIN'` |
 | **`non-empty-lowercase-string`** | Non-empty & lowercase | `'hello'`, `'abc'` | `''`, `'Hello'` |
@@ -154,11 +196,11 @@ TypePHP enforces signs and bounds on floating-point parameters:
 
 | Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
-| **`positive-float`** | Float $> 0.0$ | `12.34`, `0.01` | `0.0`, `-5.5` |
-| **`negative-float`** | Float $< 0.0$ | `-12.34`, `-0.01` | `0.0`, `5.5` |
-| **`non-positive-float`** | Float $\le 0.0$ | `0.0`, `-1.5` | `1.5` |
-| **`non-negative-float`** | Float $\ge 0.0$ | `0.0`, `1.5` | `-1.5` |
-| **`non-zero-float`** | Float $\ne 0.0$ | `1.5`, `-1.5` | `0.0` |
+| **`positive-float`** | Float > 0.0 | `12.34`, `0.01` | `0.0`, `-5.5` |
+| **`negative-float`** | Float < 0.0 | `-12.34`, `-0.01` | `0.0`, `5.5` |
+| **`non-positive-float`** | Float <= 0.0 | `0.0`, `-1.5` | `1.5` |
+| **`non-negative-float`** | Float >= 0.0 | `0.0`, `1.5` | `-1.5` |
+| **`non-zero-float`** | Float != 0.0 | `1.5`, `-1.5` | `0.0` |
 
 ```php
 /**

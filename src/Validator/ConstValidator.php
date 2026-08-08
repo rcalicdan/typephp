@@ -54,6 +54,15 @@ final class ConstValidator implements TypeValidatorInterface
             $expected = (string) $constExpr;
         }
 
+        // Float Epsilon Comparison: Handles IEEE 754 precision artifacts and int-to-float coercion
+        if (\is_float($expected)) {
+            if ((! \is_float($value) && ! \is_int($value)) || abs((float) $value - $expected) > 1e-9) {
+                return ErrorFactory::createError($context . ' must be literal ' . (string) $constExpr . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
+            }
+
+            return null;
+        }
+
         if ($value !== $expected) {
             return ErrorFactory::createError($context . ' must be literal ' . (string) $constExpr . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }

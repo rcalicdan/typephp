@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "TypePHP"
   text: "Transparent Runtime Type Enforcement"
-  tagline: "Enforces DocBlock types at runtime transparently without introducing any new syntax. Written in pure PHP requiring absolutely zero C-extensions or FFI."
+  tagline: "The first pure PHP library to enforce DocBlock types at runtime transparently without introducing any new syntax. Validates generics, array shapes, and advanced type contracts during execution."
   actions:
     - theme: brand
       text: "Get Started →"
@@ -26,7 +26,7 @@ features:
 
 ## See It In Action
 
-TypePHP operates entirely in user-land using native PHP stream wrappers and AST transformations. Because it is written in pure PHP and requires no C-extensions or FFI, you can drop it into any project effortlessly. It parses your standard PHPDoc annotations and enforces them the moment your code runs.
+TypePHP is the first pure PHP library that operates entirely in user-land using native stream wrappers and AST transformations. Because it requires no C-extensions or FFI, you can drop it into any PHP 8.1+ project effortlessly. It parses your standard PHPDoc annotations and enforces them the moment your code runs.
 
 ### True Runtime Generics
 Define generic templates and TypePHP will track their state in memory per object instance:
@@ -48,7 +48,7 @@ $users = new Collection();
 $users->add(new User('Alice')); // Valid
 
 $users->add(new Product('SKU-100')); 
-// TypeError: Argument $item (template T = User) must be of type User, Product given
+// Throws TypeError: Argument $item (template T = User) must be of type User, Product given
 ```
 
 ### Array Shapes & Typed Arrays
@@ -73,7 +73,7 @@ processBatch(
     options: ['status' => 'archived', 'tags' => ['php']], 
     collaborators: []
 );
-// TypeError: Argument $options['status'] must be of type ('active' | 'pending')
+// Throws TypeError: Argument $options['status'] must be of type ('active' | 'pending')
 ```
 
 ### Scalar Refinements & Function Boundaries
@@ -86,11 +86,11 @@ Catch invalid parameters before your function executes, and invalid return value
  */
 function generateUserToken(int $id): string 
 {
-    return ""; // TypeError: Return value must be of type non-empty-string
+    return ""; // Throws TypeError: Return value must be of type non-empty-string
 }
 
 generateUserToken(-5); 
-// TypeError: Argument $id must be of type positive-int, negative int (-5) given
+// Throws TypeError: Argument $id must be of type positive-int, negative int (-5) given
 ```
 
 ---
