@@ -42,8 +42,25 @@ final class RunCommand implements CommandInterface
             return 1;
         }
 
-        TypePHP::boot();
-        require realpath($target);
+        try {
+            TypePHP::boot();
+            $realTarget = realpath($target);
+            if ($realTarget !== false) {
+                require $realTarget;
+            }
+        } catch (\Throwable $e) {
+            $class = \get_class($e);
+            $file = $e->getFile();
+            $line = $e->getLine();
+            $msg = $e->getMessage();
+
+            fwrite($errorStream, "PHP Fatal error:  Uncaught {$class}: {$msg} in {$file} on line {$line}\n");
+            fwrite($errorStream, "Stack trace:\n");
+            fwrite($errorStream, "#0 {main}\n");
+            fwrite($errorStream, "  thrown in {$file} on line {$line}\n");
+
+            return 255;
+        }
 
         return 0;
     }
