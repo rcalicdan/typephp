@@ -7,7 +7,8 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/deploy-docs.yml'
-
+  workflow_dispatch:
+    
 permissions:
   contents: read
   pages: write
