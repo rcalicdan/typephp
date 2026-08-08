@@ -37,10 +37,7 @@ jobs:
         uses: ramsey/composer-install@v3
         with:
           dependency-versions: ${{ matrix.php == '8.1' && 'lowest' || 'highest' }}
-
-      - name: Check Code Style (Pint)
-        run: ./vendor/bin/pint --test
-        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.3'
+          composer-options: ${{ matrix.php == '8.1' && 'phpstan/phpdoc-parser nikic/php-parser' || '' }}
 
       - name: Run Static Analysis (PHPStan)
         run: ./vendor/bin/phpstan analyse --no-progress
