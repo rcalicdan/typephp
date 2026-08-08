@@ -26,7 +26,7 @@ final class ReturnChecker
      */
     public static function checkReturn(string $function, mixed $value, ?object $thisObj, array $vars, TypeValidatorRegistry $registry, callable $wrapIterableCallback): mixed
     {
-        if (! (Config::get()['returns'] ?? true)) {
+        if (! (bool) (Config::get()['returns'] ?? true)) {
             return $value;
         }
 

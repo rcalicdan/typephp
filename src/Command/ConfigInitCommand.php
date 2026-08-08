@@ -12,10 +12,10 @@ final class ConfigInitCommand implements CommandInterface
         $cwd = getcwd();
         $targetFile = ($cwd !== false ? $cwd : '.') . '/typephp.php';
 
-        fwrite($outputStream, "\n  " . $c(' TYPEPHP ', 'badge') . " " . $c('Configuration Initializer', 'bold') . "\n\n");
+        fwrite($outputStream, "\n  " . $c(' TYPEPHP ', 'badge') . ' ' . $c('Configuration Initializer', 'bold') . "\n\n");
 
         if (file_exists($targetFile)) {
-            fwrite($outputStream, "  " . $c('•', 'cyan') . " Configuration file " . $c('"typephp.php"', 'bold') . " already exists.\n\n");
+            fwrite($outputStream, '  ' . $c('•', 'cyan') . ' Configuration file ' . $c('"typephp.php"', 'bold') . " already exists.\n\n");
 
             return 0;
         }
@@ -23,7 +23,7 @@ final class ConfigInitCommand implements CommandInterface
         $template = self::getTemplate();
         file_put_contents($targetFile, $template);
 
-        fwrite($outputStream, "  " . $c('✓', 'green') . " Created " . $c('"typephp.php"', 'bold') . " in project root directory.\n\n");
+        fwrite($outputStream, '  ' . $c('✓', 'green') . ' Created ' . $c('"typephp.php"', 'bold') . " in project root directory.\n\n");
 
         return 0;
     }

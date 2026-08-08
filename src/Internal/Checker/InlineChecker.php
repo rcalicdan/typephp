@@ -22,7 +22,6 @@ use PHPStan\PhpDocParser\ParserConfig;
 use TypePHP\Contract\ContractParser;
 use TypePHP\Internal\Config;
 use TypePHP\Internal\DocblockNormalizer;
-use TypePHP\Internal\ErrorMessage;
 use TypePHP\Resolver\SpecialTypeResolver;
 use TypePHP\Resolver\TemplateManager;
 use TypePHP\Resolver\TemplateSubstitutor;
@@ -88,9 +87,7 @@ final class InlineChecker
                 return $err;
             }
         } catch (\Throwable $e) {
-            if ($e instanceof ErrorMessage) {
-                return $e;
-            }
+            // Silently ignore unexpected execution exceptions
         }
 
         return $value;
@@ -135,11 +132,13 @@ final class InlineChecker
             if (\count($boundTemplates) > 0 || \count($declaredTemplates) > 0) {
                 $typeNode = TemplateSubstitutor::substitute($typeNode, $boundTemplates, $declaredTemplates);
 
-                try {
-                    $refClass = new \ReflectionClass($className);
-                    $typeNode = SpecialTypeResolver::resolve($typeNode, $refClass);
-                } catch (\ReflectionException $e) {
-                    // Silently continue if reflection fails
+                if (class_exists($className) || interface_exists($className) || trait_exists($className)) {
+                    try {
+                        $refClass = new \ReflectionClass($className);
+                        $typeNode = SpecialTypeResolver::resolve($typeNode, $refClass);
+                    } catch (\ReflectionException $e) {
+                        // Silently continue if reflection fails
+                    }
                 }
             }
         }
@@ -150,9 +149,7 @@ final class InlineChecker
                 return $err;
             }
         } catch (\Throwable $e) {
-            if ($e instanceof ErrorMessage) {
-                return $e;
-            }
+            // Silently ignore unexpected execution exceptions
         }
 
         return $value;

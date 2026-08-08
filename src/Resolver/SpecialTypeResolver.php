@@ -24,7 +24,7 @@ use TypePHP\Internal\ErrorMessage;
 use TypePHP\Internal\TypeFormatter;
 
 /**
- * @internal Resolves special type identifiers (self, static, parent, $this, FQCNs) against Reflection or file contexts.
+ * @internal Resolves special type identifiers (self, static, parent, FQCNs) against Reflection or file contexts.
  */
 final class SpecialTypeResolver
 {
@@ -59,6 +59,8 @@ final class SpecialTypeResolver
 
     /**
      * Recursively resolves special type identifiers (self, static, parent, FQCNs, ConstFetch class names) in a TypeNode AST using Reflection context.
+     *
+     * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod|string $context
      */
     public static function resolve(TypeNode $node, \ReflectionClass|\ReflectionFunction|\ReflectionMethod|string $context, ?object $thisObj = null): TypeNode
     {
@@ -344,14 +346,6 @@ final class SpecialTypeResolver
 
     /**
      * Resolves a short class name to its fully qualified class name (FQCN) using Reflection context.
-     *
-     * Performs the following steps:
-     * 1. Returns built-in primitive and pseudo-type keywords directly.
-     * 2. Handles fully-qualified names with leading backslashes.
-     * 3. Validates class syntax.
-     * 4. Checks use imports in the declaring file.
-     * 5. Checks the declaring namespace.
-     * 6. Checks global scope.
      *
      * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      */

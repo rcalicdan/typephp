@@ -14,10 +14,12 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect($service->process(10))->toBe('item_10');
 
         expect(fn () => $service->process(-50))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         expect(fn () => $service->process(999))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 
     test('inherits interface docblock contracts when method is fulfilled via Trait', function () {
@@ -26,10 +28,12 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect($app->execute(100))->toBe('code_100');
 
         expect(fn () => $app->execute(-5))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         expect(fn () => $app->execute(999))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 
     test('inherits instance and static property @var docblocks from Traits', function () {
@@ -39,13 +43,15 @@ describe('OOP Inheritance (Traits, Abstract Methods & Interface Traits)', functi
         expect($app->traitInstanceProp)->toBe(100);
 
         expect(fn () => $app->setTraitInstanceProp(-50))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         ClassUsingTraitProperties::setTraitStaticProp('v2.0');
         expect(ClassUsingTraitProperties::$traitStaticProp)->toBe('v2.0');
 
         expect(fn () => ClassUsingTraitProperties::setTraitStaticProp(''))
-            ->toThrow(TypeError::class, 'non-empty-string');
+            ->toThrow(TypeError::class, 'non-empty-string')
+        ;
     });
 
     test('inherits trait docblock contracts across parent-child class inheritance', function () {

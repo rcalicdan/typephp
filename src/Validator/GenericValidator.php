@@ -202,7 +202,6 @@ final class GenericValidator implements TypeValidatorInterface
             return ErrorFactory::createError($context . ' must be an instance of ' . $node->type->name . ', ' . TypeFormatter::formatGivenValue($value) . ' given');
         }
 
-        // @phpstan-ignore-next-line
         return RuntimeTypeChecker::bindInstanceFromNode($value, $node, $context);
     }
 }

@@ -20,7 +20,8 @@ describe('Clone Keyword & Generic Prebinding Preservation', function () {
         expect($clonedBox->item)->toBeInstanceOf(Dog::class);
 
         expect(fn () => $clonedBox->set(new Car()))
-            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('preserves generic template bindings when an object with __clone() is cloned', function () {
@@ -32,7 +33,8 @@ describe('Clone Keyword & Generic Prebinding Preservation', function () {
         expect($clonedMagicBox->item)->toBeInstanceOf(Dog::class);
 
         expect(fn () => $clonedMagicBox->set(new Car()))
-            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('isolates generic template bindings and object state between original and cloned instances in WeakMap', function () {
@@ -50,14 +52,17 @@ describe('Clone Keyword & Generic Prebinding Preservation', function () {
 
         // Verify WeakMap and property state isolation
         expect($box2->item)->toBe($dog2)
-            ->and($box1->item)->toBe($dog1); // $box1's item remains unchanged!
+            ->and($box1->item)->toBe($dog1) // $box1's item remains unchanged!
+        ;
 
         //  Both $box1 and $box2 independently enforce T = Dog and reject Car!
         expect(fn () => $box1->set(new Car()))
-            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
 
         expect(fn () => $box2->set(new Car()))
-            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog');
+            ->toThrow(TypeError::class, 'template T = TypePHP\Tests\Fixtures\Domain\Dog')
+        ;
     });
 
     test('enforces invariant generic type matching when assigning a cloned instance to an incompatible variable annotation', function () {

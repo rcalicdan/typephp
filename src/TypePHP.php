@@ -29,12 +29,11 @@ final class TypePHP
             return null;
         }
 
-
         if ($templateName !== null && isset($types[$templateName])) {
             return $types[$templateName];
         }
 
-        if (count($types) === 1) {
+        if (\count($types) === 1) {
             return reset($types);
         }
 
@@ -64,7 +63,7 @@ final class TypePHP
     public static function getGenericVariance(object $instance, ?string $templateName = null): string
     {
         $variances = self::getGenericVariances($instance);
-        if (count($variances) === 0) {
+        if (\count($variances) === 0) {
             return 'invariant';
         }
 
@@ -72,7 +71,7 @@ final class TypePHP
             return $variances[$templateName];
         }
 
-        if (count($variances) === 1) {
+        if (\count($variances) === 1) {
             return reset($variances);
         }
 

@@ -101,7 +101,7 @@ final class TemplateManager
             }
 
             if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
-                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
             }
 
             if (isset(self::$instanceTemplateBindings[$thisObj])) {
@@ -132,7 +132,7 @@ final class TemplateManager
 
         // Auto-resolve @extends and @implements generic template mappings
         if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$instance])) {
-            self::resolveInheritedTemplates($instance, get_class($instance));
+            self::resolveInheritedTemplates($instance, \get_class($instance));
         }
 
         if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$instance])) {
@@ -149,7 +149,7 @@ final class TemplateManager
      */
     public static function getTemplateVariances(object $instance): array
     {
-        $className = get_class($instance);
+        $className = \get_class($instance);
 
         try {
             $ref = new \ReflectionClass($className);
@@ -196,7 +196,7 @@ final class TemplateManager
             }
 
             if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
-                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
             }
 
             return isset(self::$instanceTemplateBindings[$thisObj][$templateName]);
@@ -222,7 +222,7 @@ final class TemplateManager
             }
 
             if (self::$instanceTemplateBindings === null || ! isset(self::$instanceTemplateBindings[$thisObj])) {
-                self::resolveInheritedTemplates($thisObj, get_class($thisObj));
+                self::resolveInheritedTemplates($thisObj, \get_class($thisObj));
             }
 
             return self::$instanceTemplateBindings[$thisObj][$templateName] ?? null;
@@ -253,7 +253,7 @@ final class TemplateManager
             if (! self::hasCallFrame($function)) {
                 self::$callStackBindings[$function][] = [];
             }
-            $lastIndex = count(self::$callStackBindings[$function]) - 1;
+            $lastIndex = \count(self::$callStackBindings[$function]) - 1;
             self::$callStackBindings[$function][$lastIndex][$templateName] = $inferredType;
         }
     }
@@ -264,8 +264,8 @@ final class TemplateManager
     public static function bindInstanceFromNode(object $instance, GenericTypeNode $typeNode, string $context = '', bool $forceBind = false): ?ErrorMessage
     {
         $className = $typeNode->type->name;
-        if (in_array(strtolower($className), ['self', 'static', '$this'], true)) {
-            $className = get_class($instance);
+        if (\in_array(strtolower($className), ['self', 'static', '$this'], true)) {
+            $className = \get_class($instance);
         }
 
         if (! is_a($instance, $className)) {
@@ -356,7 +356,7 @@ final class TemplateManager
      */
     public static function resolveInheritedTemplates(object $instance, string $targetClassName): void
     {
-        $actualClassName = get_class($instance);
+        $actualClassName = \get_class($instance);
 
         try {
             $ref = new \ReflectionClass($actualClassName);
@@ -589,25 +589,25 @@ final class TemplateManager
      */
     public static function inferTypeFromValue(mixed $value): TypeNode
     {
-        if (is_int($value)) {
+        if (\is_int($value)) {
             return new IdentifierTypeNode('int');
         }
-        if (is_string($value)) {
+        if (\is_string($value)) {
             return new IdentifierTypeNode('string');
         }
-        if (is_float($value)) {
+        if (\is_float($value)) {
             return new IdentifierTypeNode('float');
         }
-        if (is_bool($value)) {
+        if (\is_bool($value)) {
             return new IdentifierTypeNode('bool');
         }
-        if (is_array($value)) {
+        if (\is_array($value)) {
             return new IdentifierTypeNode(array_is_list($value) ? 'list' : 'array');
         }
 
-        if (is_object($value)) {
-            $className = get_class($value);
-            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && count(self::$instanceTemplateBindings[$value]) > 0) {
+        if (\is_object($value)) {
+            $className = \get_class($value);
+            if (self::$instanceTemplateBindings !== null && isset(self::$instanceTemplateBindings[$value]) && \count(self::$instanceTemplateBindings[$value]) > 0) {
                 $genericTypes = array_values(self::$instanceTemplateBindings[$value]);
 
                 return new GenericTypeNode(new IdentifierTypeNode($className), $genericTypes);
@@ -628,7 +628,7 @@ final class TemplateManager
      */
     private static function hasCallFrame(string $function): bool
     {
-        return isset(self::$callStackBindings[$function]) && count(self::$callStackBindings[$function]) > 0;
+        return isset(self::$callStackBindings[$function]) && \count(self::$callStackBindings[$function]) > 0;
     }
 
     /**
@@ -643,7 +643,7 @@ final class TemplateManager
         }
         if ($n instanceof GenericTypeNode) {
             $base = new IdentifierTypeNode(SpecialTypeResolver::resolveFqcn($n->type->name, $ref));
-            $generics = array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
+            $generics = array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->genericTypes);
 
             return new GenericTypeNode($base, $generics, $n->variances);
         }
@@ -654,10 +654,10 @@ final class TemplateManager
             return new NullableTypeNode(self::resolveTypeNodeAst($n->type, $ref));
         }
         if ($n instanceof UnionTypeNode) {
-            return new UnionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new UnionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
         if ($n instanceof IntersectionTypeNode) {
-            return new IntersectionTypeNode(array_map(fn($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
+            return new IntersectionTypeNode(array_map(fn ($t) => self::resolveTypeNodeAst($t, $ref), $n->types));
         }
 
         return $n;

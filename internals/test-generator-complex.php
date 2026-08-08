@@ -3,17 +3,27 @@
 declare(strict_types=1);
 
 // Standalone Domain Classes
-class Animal {}
-class Dog extends Animal {}
-class Car {}
+class Animal
+{
+}
+class Dog extends Animal
+{
+}
+class Car
+{
+}
 
 /**
  * @template T
  */
 class Producer
 {
-    /** @param T $item */
-    public function __construct(public mixed $item) {}
+    /**
+     * @param T $item
+     */
+    public function __construct(public mixed $item)
+    {
+    }
 }
 
 /**
@@ -44,12 +54,12 @@ echo "=== Testing Complex Generator Type Enforcement ===\n\n";
 echo "1. Testing Generator Yielding Array Shapes:\n";
 $gen1 = testShapeGenerator();
 $firstItem = $gen1->current();
-echo "   ✅ Success: Yielded valid shape: " . json_encode($firstItem) . "\n\n";
+echo '   ✅ Success: Yielded valid shape: ' . json_encode($firstItem) . "\n\n";
 
 // 2. Sending Valid Shape into Generator (TSend)
 echo "2. Testing \$gen->send() with Valid TSend Shape ('action' => 'approve'):\n";
 $secondItem = $gen1->send(['action' => 'approve']);
-echo "   ✅ Success: Yielded second shape: " . json_encode($secondItem) . "\n\n";
+echo '   ✅ Success: Yielded second shape: ' . json_encode($secondItem) . "\n\n";
 
 // 3. Sending Invalid Shape into Generator (TSend)
 echo "3. Testing \$gen->send() with Invalid TSend Shape ('action' => 'delete'):\n";
@@ -61,7 +71,7 @@ try {
     echo "   ❌ FAIL: Generator accepted invalid TSend action 'delete'!\n";
 } catch (TypeError $e) {
     echo "   ✅ SUCCESS: Caught expected TypeError on TSend!\n";
-    echo "      Message: " . $e->getMessage() . "\n\n";
+    echo '      Message: ' . $e->getMessage() . "\n\n";
 }
 
 // 4. Yielding Invalid Generic Object
@@ -70,10 +80,10 @@ $gen3 = testGenericGenerator();
 
 try {
     foreach ($gen3 as $key => $producer) {
-        echo "   Yielded item #{$key}: " . get_class($producer->item) . "\n";
+        echo "   Yielded item #{$key}: " . \get_class($producer->item) . "\n";
     }
     echo "   ❌ FAIL: Generator yielded Producer<Car> without throwing TypeError!\n";
 } catch (TypeError $e) {
     echo "   ✅ SUCCESS: Caught expected TypeError on yield!\n";
-    echo "      Message: " . $e->getMessage() . "\n";
+    echo '      Message: ' . $e->getMessage() . "\n";
 }

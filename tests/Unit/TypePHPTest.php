@@ -16,7 +16,9 @@ use TypePHP\TypePHP;
  */
 class CustomTemplateNameBox
 {
-    /** @var ItemType */
+    /**
+     * @var ItemType
+     */
     public mixed $item = null;
 }
 
@@ -26,7 +28,9 @@ class CustomTemplateNameBox
  */
 class MultiTemplateDictionary
 {
-    /** @var array<K, V> */
+    /**
+     * @var array<K, V>
+     */
     public array $map = [];
 }
 
@@ -40,7 +44,8 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         expect($config)->toBeArray()
             ->and($config)->toHaveKey('cache')
-            ->and($config)->toHaveKey('inline_vars');
+            ->and($config)->toHaveKey('inline_vars')
+        ;
     });
 
     test('dynamically overrides configuration settings using setConfig', function () {
@@ -73,7 +78,8 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         expect(TypePHP::getGenericType($dogCollection))->toBe(Dog::class)
             ->and(TypePHP::getGenericType($catCollection))->toBe(Cat::class)
-            ->and(TypePHP::getGenericTypes($dogCollection))->toBe(['T' => Dog::class]);
+            ->and(TypePHP::getGenericTypes($dogCollection))->toBe(['T' => Dog::class])
+        ;
 
         // Custom Named Single Template (@template ItemType)
         /** @var CustomTemplateNameBox<Dog> $box */
@@ -81,7 +87,8 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         expect(TypePHP::getGenericType($box))->toBe(Dog::class)
             ->and(TypePHP::getGenericType($box, 'ItemType'))->toBe(Dog::class)
-            ->and(TypePHP::getGenericTypes($box))->toBe(['ItemType' => Dog::class]);
+            ->and(TypePHP::getGenericTypes($box))->toBe(['ItemType' => Dog::class])
+        ;
 
         // Multiple Templates (@template K, @template V)
         /** @var MultiTemplateDictionary<string, Dog> $dict */
@@ -89,24 +96,28 @@ describe('TypePHP Public Facade Unit Tests', function () {
 
         expect(TypePHP::getGenericType($dict, 'K'))->toBe('string')
             ->and(TypePHP::getGenericType($dict, 'V'))->toBe(Dog::class)
-            ->and(TypePHP::getGenericTypes($dict))->toBe(['K' => 'string', 'V' => Dog::class]);
+            ->and(TypePHP::getGenericTypes($dict))->toBe(['K' => 'string', 'V' => Dog::class])
+        ;
 
         // Inherited Generic Class (@extends Repository<Dog>)
         $dogRepo = new DogRepository();
 
         expect(TypePHP::getGenericType($dogRepo))->toBe(Dog::class)
-            ->and(TypePHP::getGenericTypes($dogRepo))->toBe(['T' => Dog::class]);
+            ->and(TypePHP::getGenericTypes($dogRepo))->toBe(['T' => Dog::class])
+        ;
 
         // Unannotated Instance before and after first-use type inference
         $mystery = new GenericCollection();
 
         expect(TypePHP::getGenericType($mystery))->toBeNull()
-            ->and(TypePHP::getGenericTypes($mystery))->toBeEmpty();
+            ->and(TypePHP::getGenericTypes($mystery))->toBeEmpty()
+        ;
 
         $mystery->add(new Dog()); // First method call infers T = Dog!
 
         expect(TypePHP::getGenericType($mystery))->toBe(Dog::class)
-            ->and(TypePHP::getGenericTypes($mystery))->toBe(['T' => Dog::class]);
+            ->and(TypePHP::getGenericTypes($mystery))->toBe(['T' => Dog::class])
+        ;
     });
 
     test('inspects declared template variances on object instances', function () {

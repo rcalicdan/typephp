@@ -16,12 +16,12 @@ final class PropertyHookInjector
 {
     public static function process(Node\Stmt\Property $node): void
     {
-        if (empty($node->hooks)) {
+        if ($node->hooks === []) {
             return;
         }
 
         $doc = $node->getDocComment();
-        if ((Config::get()['respect_ignore_tags'] ?? true) && $doc !== null && (str_contains($doc->getText(), '@typephp-ignore') || str_contains($doc->getText(), '@typephp-disable'))) {
+        if ((bool) (Config::get()['respect_ignore_tags'] ?? true) && $doc !== null && (str_contains($doc->getText(), '@typephp-ignore') || str_contains($doc->getText(), '@typephp-disable'))) {
             return;
         }
 
@@ -38,7 +38,7 @@ final class PropertyHookInjector
                     $hook->body = self::wrapHookReturnStatements($hook->body, $propertyName);
                 }
             } elseif ($hookName === 'set') {
-                $paramName = ! empty($hook->params) && $hook->params[0]->var instanceof Node\Expr\Variable && \is_string($hook->params[0]->var->name)
+                $paramName = $hook->params !== [] && $hook->params[0]->var instanceof Node\Expr\Variable && \is_string($hook->params[0]->var->name)
                     ? $hook->params[0]->var->name
                     : 'value';
 
@@ -76,7 +76,7 @@ final class PropertyHookInjector
             {
             }
 
-            public function enterNode(Node $n): ?Node
+            public function enterNode(Node $n): int|null
             {
                 if ($n instanceof Node\Expr\Closure || $n instanceof Node\Expr\ArrowFunction || $n instanceof Node\Stmt\Function_ || $n instanceof Node\Stmt\ClassMethod) {
                     return NodeTraverser::DONT_TRAVERSE_CHILDREN;

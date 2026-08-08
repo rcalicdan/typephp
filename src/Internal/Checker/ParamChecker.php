@@ -29,7 +29,7 @@ final class ParamChecker
      */
     public static function checkParams(string $function, array $vars, ?object $thisObj, TypeValidatorRegistry $registry): ?ErrorMessage
     {
-        if (! (Config::get()['params'] ?? true)) {
+        if (! (bool) (Config::get()['params'] ?? true)) {
             return null;
         }
 

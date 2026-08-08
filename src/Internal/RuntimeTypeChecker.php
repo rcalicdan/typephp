@@ -171,7 +171,7 @@ final class RuntimeTypeChecker
      */
     public static function prepareClone(mixed $original): mixed
     {
-        if (is_object($original)) {
+        if (\is_object($original)) {
             TemplateManager::$pendingCloneSource = $original;
         }
 
@@ -183,7 +183,7 @@ final class RuntimeTypeChecker
      */
     public static function cloneInstance(mixed $cloned, mixed $original): mixed
     {
-        if (is_object($cloned) && is_object($original)) {
+        if (\is_object($cloned) && \is_object($original)) {
             TemplateManager::copyInstanceBindings($original, $cloned);
         }
 

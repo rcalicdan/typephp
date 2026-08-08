@@ -5,7 +5,9 @@ declare(strict_types=1);
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class SampleAttribute
 {
-    public function __construct(public string $name = '') {}
+    public function __construct(public string $name = '')
+    {
+    }
 }
 
 class AttributedClassFixture
@@ -21,6 +23,7 @@ class AttributedClassFixture
     #[SampleAttribute('route_method')]
     /**
      * @param positive-int $id
+     *
      * @return non-empty-string
      */
     public function processUser(
@@ -48,14 +51,17 @@ describe('PHP 8.0+ Attributes Coexistence', function () {
         expect($fixture->processUser(42))->toBe('user_42');
 
         expect(fn () => $fixture->processUser(-50))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         expect($fixture->executeWithDocAbove(100))->toBeTrue();
 
         expect(fn () => $fixture->executeWithDocAbove(-5))
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
 
         expect(fn () => $fixture->id = -10)
-            ->toThrow(TypeError::class, 'positive-int');
+            ->toThrow(TypeError::class, 'positive-int')
+        ;
     });
 });

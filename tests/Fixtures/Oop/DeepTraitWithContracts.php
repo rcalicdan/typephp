@@ -8,6 +8,7 @@ trait DeepTraitWithContracts
 {
     /**
      * @param positive-int $level
+     *
      * @return non-empty-string
      */
     public function logMessage(int $level, string $msg): string

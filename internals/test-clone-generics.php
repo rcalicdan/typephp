@@ -2,9 +2,15 @@
 
 declare(strict_types=1);
 
-class Animal {}
-class Dog extends Animal {}
-class Car {}
+class Animal
+{
+}
+class Dog extends Animal
+{
+}
+class Car
+{
+}
 
 /**
  * 1. Standard Generic Class (No __clone)
@@ -68,7 +74,7 @@ try {
     echo "   ❌ FAIL: Standard cloned box accepted Car! T = Dog was lost!\n";
 } catch (TypeError $e) {
     echo "   ✅ SUCCESS: Caught expected TypeError!\n";
-    echo "      Message: " . $e->getMessage() . "\n\n";
+    echo '      Message: ' . $e->getMessage() . "\n\n";
 }
 
 // TEST 2: Class with Magic __clone()
@@ -83,5 +89,5 @@ try {
     echo "   ❌ FAIL: Cloned box with __clone() accepted Car! T = Dog was lost!\n";
 } catch (TypeError $e) {
     echo "   ✅ SUCCESS: Caught expected TypeError!\n";
-    echo "      Message: " . $e->getMessage() . "\n";
+    echo '      Message: ' . $e->getMessage() . "\n";
 }

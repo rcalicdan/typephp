@@ -19,7 +19,7 @@ final class HierarchyResolver
     /**
      * In-memory cache for resolved ReflectionClass hierarchy arrays.
      *
-     * @var array<string, array<int, \ReflectionClass>>
+     * @var array<string, array<int, \ReflectionClass<object>>>
      */
     private static array $classHierarchyCache = [];
 
@@ -55,11 +55,7 @@ final class HierarchyResolver
         $methodName = $ref->getName();
         $targetClassName = $ref->class;
 
-        try {
-            $targetClass = new \ReflectionClass($targetClassName);
-        } catch (\ReflectionException $e) {
-            $targetClass = $ref->getDeclaringClass();
-        }
+        $targetClass = new \ReflectionClass($targetClassName);
 
         $parent = $targetClass->getParentClass();
         while ($parent !== false) {
@@ -93,7 +89,9 @@ final class HierarchyResolver
      * 3. Interfaces: Collects all implemented interfaces.
      * 4. Traits: Collects all used traits.
      *
-     * @return array<int, \ReflectionClass>
+     * @param \ReflectionClass<object> $ref
+     *
+     * @return array<int, \ReflectionClass<object>>
      */
     public static function getClassHierarchy(\ReflectionClass $ref): array
     {

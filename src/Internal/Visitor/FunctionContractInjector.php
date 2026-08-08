@@ -30,7 +30,7 @@ final class FunctionContractInjector
         $docText = $doc !== null ? $doc->getText() : '';
 
         // Per-Function/Method Suppression Tag
-        if ((Config::get()['respect_ignore_tags'] ?? true) && (str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable'))) {
+        if ((bool) (Config::get()['respect_ignore_tags'] ?? true) && (str_contains($docText, '@typephp-ignore') || str_contains($docText, '@typephp-disable'))) {
             return; // Skip injecting contract checks for this specific function/method!
         }
 

@@ -106,6 +106,7 @@ final class DocblockExtractor
      * Extracts local and imported type aliases (@phpstan-type and @phpstan-import-type) from a PHPDoc node.
      *
      * @param array<string, TypeNode> $aliases
+     * @param \ReflectionClass<object>|\ReflectionFunction|\ReflectionMethod $ref
      */
     public static function extractAliases(
         PhpDocNode $phpDocNode,
